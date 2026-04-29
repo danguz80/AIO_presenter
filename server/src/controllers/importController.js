@@ -3,6 +3,7 @@ const path     = require('path');
 const { parseTxt }       = require('../utils/parsers/txtParser');
 const { parseChordPro }  = require('../utils/parsers/chordproParser');
 const { parseFreeShow }  = require('../utils/parsers/showParser');
+const pool               = require('../config/database');
 
 // ─── Multer: almacenamiento en memoria (sin escribir disco) ─────────────────
 const ALLOWED_EXTENSIONS = new Set(['.txt', '.cho', '.chopro', '.chordpro', '.chord', '.show']);
@@ -130,4 +131,79 @@ const previewImport = (req, res) => {
   });
 };
 
-module.exports = { previewImport };
+// ─── POST /api/import/batch ───────────────────────────────────────────────────
+// Acepta hasta 1000 archivos, los parsea y guarda directamente en DB.
+// Response: { total, imported, skipped, errors: [{filename, error}] }
+
+const uploadBatch = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: MAX_SIZE_BYTES },
+}).array('files', 1000);
+
+const batchImport = (req, res) => {
+  uploadBatch(req, res, async (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: err.message });
+    }
+    if (err) return res.status(400).json({ error: err.message });
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ error: 'No se recibieron archivos' });
+    }
+
+    const results = { total: req.files.length, imported: 0, skipped: 0, errors: [] };
+
+    for (const file of req.files) {
+      const { originalname, buffer } = file;
+      try {
+        // Decodificar
+        let content = buffer.toString('utf8');
+        if (/\uFFFD/.test(content)) content = buffer.toString('latin1');
+
+        const parser = getParser(originalname);
+        if (!parser) throw new Error('Formato no soportado');
+
+        const parsed = parser(content, originalname);
+        if (!parsed.slides || parsed.slides.length === 0) throw new Error('Sin secciones con letra');
+
+        parsed.slides = expandByLines(parsed.slides);
+
+        const { title, author, copyright, ccli } = parsed;
+        if (!title) throw new Error('No se pudo detectar el título');
+
+        // Guardar en DB (transacción)
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          const songRes = await client.query(
+            `INSERT INTO songs (title, author, copyright, ccli, language, tags)
+             VALUES ($1,$2,$3,$4,'es','{}') RETURNING id`,
+            [title, author || null, copyright || null, ccli || null]
+          );
+          const songId = songRes.rows[0].id;
+          for (let i = 0; i < parsed.slides.length; i++) {
+            const { label, content: sc } = parsed.slides[i];
+            await client.query(
+              'INSERT INTO song_slides (song_id, label, content, position) VALUES ($1,$2,$3,$4)',
+              [songId, label, sc, i]
+            );
+          }
+          await client.query('COMMIT');
+          results.imported++;
+        } catch (dbErr) {
+          await client.query('ROLLBACK');
+          throw dbErr;
+        } finally {
+          client.release();
+        }
+      } catch (e) {
+        results.skipped++;
+        results.errors.push({ filename: originalname, error: e.message });
+      }
+    }
+
+    res.json(results);
+  });
+};
+
+module.exports = { previewImport, batchImport };
