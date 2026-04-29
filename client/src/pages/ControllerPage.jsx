@@ -5,15 +5,13 @@ import SongDetail      from '../components/Library/SongDetail';
 import BibleBrowser    from '../components/Library/BibleBrowser';
 import LiveControls    from '../components/Controls/LiveControls';
 import LivePreview     from '../components/Controls/LivePreview';
-import { Monitor, Wifi, WifiOff, Music, BookOpen } from 'lucide-react';
+import StageControls   from '../components/Controls/StageControls';
+import VirtualControls from '../components/Controls/VirtualControls';
+import { Wifi, WifiOff, Music, BookOpen } from 'lucide-react';
 
 export default function ControllerPage() {
   const { state } = usePresenter();
   const [activeTab, setActiveTab] = useState('songs'); // 'songs' | 'bible'
-
-  const openOutput = () => {
-    window.open('/output', '_blank', 'width=1280,height=720,menubar=no,toolbar=no,location=no');
-  };
 
   return (
     <div className="flex flex-col h-screen bg-surface-900 overflow-hidden">
@@ -32,14 +30,6 @@ export default function ControllerPage() {
               : <><WifiOff size={14} className="text-red-400" /><span className="text-red-400">Sin conexión</span></>
             }
           </div>
-
-          <button
-            onClick={openOutput}
-            className="flex items-center gap-2 btn-primary"
-          >
-            <Monitor size={16} />
-            Abrir Salida
-          </button>
         </div>
       </header>
 
@@ -81,9 +71,11 @@ export default function ControllerPage() {
         )}
 
         {/* Columna 3: Controles en vivo + Preview (siempre visible) */}
-        <aside className="w-72 shrink-0 flex flex-col overflow-hidden">
+        <aside className="w-96 shrink-0 flex flex-col overflow-hidden">
           <LivePreview />
           <LiveControls />
+          <StageControls />
+          <VirtualControls />
         </aside>
       </div>
     </div>

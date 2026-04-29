@@ -16,10 +16,37 @@ const initialState = {
 
   // Estado en vivo
   liveState: {
-    type:      null,
-    slideData: null,
-    isBlank:   false,
-    background: { color: '#000000', type: 'color' },
+    type:          null,
+    slideData:     null,
+    nextSlideData: null,
+    isBlank:       false,
+    background:    { color: '#000000', type: 'color' },
+  },
+
+  // Configuración pantalla de escenario
+  stageConfig: {
+    background:    { type: 'color', color: '#1e1e2e' },
+    showClock:     true,
+    showNextSlide: true,
+    fontSize:      'auto',
+  },
+
+  // Configuración salida virtual / NDI
+  virtualConfig: {
+    background:  { type: 'transparent' },
+    chromaColor: '#00b140',
+    fontSize:    'auto',
+    ndiEnabled:  false,
+  },
+
+  // Estado NDI (del servidor)
+  ndiStatus: {
+    grandioseInstalled: false,
+    senderReady:        false,
+    sending:            false,
+    sourceName:         'AIO Presenter',
+    resolution:         '1920×1080',
+    fps:                30,
   },
 
   // Socket
@@ -53,6 +80,12 @@ function reducer(state, action) {
       return { ...state, selectedSlide: action.payload };
     case 'SET_LIVE_STATE':
       return { ...state, liveState: action.payload };
+    case 'SET_STAGE_CONFIG':
+      return { ...state, stageConfig: action.payload };
+    case 'SET_VIRTUAL_CONFIG':
+      return { ...state, virtualConfig: action.payload };
+    case 'SET_NDI_STATUS':
+      return { ...state, ndiStatus: action.payload };
     case 'SET_CONNECTED':
       return { ...state, connected: action.payload };
     default:
@@ -71,9 +104,12 @@ export function PresenterProvider({ children }) {
     const socket = io('http://localhost:3001', { autoConnect: true });
     socketRef.current = socket;
 
-    socket.on('connect',     () => dispatch({ type: 'SET_CONNECTED', payload: true }));
-    socket.on('disconnect',  () => dispatch({ type: 'SET_CONNECTED', payload: false }));
-    socket.on('live:state',  (data) => dispatch({ type: 'SET_LIVE_STATE', payload: data }));
+    socket.on('connect',      () => dispatch({ type: 'SET_CONNECTED', payload: true }));
+    socket.on('disconnect',   () => dispatch({ type: 'SET_CONNECTED', payload: false }));
+    socket.on('live:state',      (data) => dispatch({ type: 'SET_LIVE_STATE',      payload: data }));
+    socket.on('stage:config',    (data) => dispatch({ type: 'SET_STAGE_CONFIG',    payload: data }));
+    socket.on('virtual:config',  (data) => dispatch({ type: 'SET_VIRTUAL_CONFIG',  payload: data }));
+    socket.on('ndi:status',      (data) => dispatch({ type: 'SET_NDI_STATUS',      payload: data }));
 
     return () => socket.disconnect();
   }, []);
@@ -126,6 +162,14 @@ export function PresenterProvider({ children }) {
 
     setBackground: (bg) => {
       socketRef.current?.emit('live:background', bg);
+    },
+
+    setStageConfig: (config) => {
+      socketRef.current?.emit('stage:config', config);
+    },
+
+    setVirtualConfig: (config) => {
+      socketRef.current?.emit('virtual:config', config);
     },
 
     reloadSongs: async (search) => {

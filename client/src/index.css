@@ -17,6 +17,14 @@
     font-family: 'Inter', sans-serif;
   }
 
+  /* Modo virtual: fondo transparente para OBS Browser Source */
+  html.virtual-mode,
+  html.virtual-mode body,
+  html.virtual-mode #root {
+    background-color: transparent !important;
+    background: transparent !important;
+  }
+
   ::-webkit-scrollbar {
     width: 6px;
   }

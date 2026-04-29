@@ -31,6 +31,7 @@ export default function SongDetail() {
 
       if (nextIndex !== null && nextIndex !== currentIndex) {
         const slide = slides[nextIndex];
+        const nextSlide = slides[nextIndex + 1] || null;
         actions.selectSlide(slide);
         actions.showSlide({
           type:      'song',
@@ -40,6 +41,11 @@ export default function SongDetail() {
             label:     slide.label,
             content:   slide.content,
           },
+          nextSlideData: nextSlide ? {
+            type:    'song',
+            label:   nextSlide.label,
+            content: nextSlide.content,
+          } : null,
         });
       }
     };
@@ -57,7 +63,8 @@ export default function SongDetail() {
     );
   }
 
-  const handleSlideClick = (slide) => {
+  const handleSlideClick = (slide, index) => {
+    const nextSlide = selectedSong.slides[index + 1] || null;
     actions.selectSlide(slide);
     actions.showSlide({
       type:      'song',
@@ -68,6 +75,11 @@ export default function SongDetail() {
         label:     slide.label,
         content:   slide.content,
       },
+      nextSlideData: nextSlide ? {
+        type:    'song',
+        label:   nextSlide.label,
+        content: nextSlide.content,
+      } : null,
     });
   };
 
@@ -98,7 +110,7 @@ export default function SongDetail() {
               return (
                 <div
                   key={slide.id}
-                  onClick={() => handleSlideClick(slide)}
+                  onClick={() => handleSlideClick(slide, index)}
                   className={`
                     group card p-3 cursor-pointer transition-all
                     hover:border-accent/50 hover:bg-surface-700

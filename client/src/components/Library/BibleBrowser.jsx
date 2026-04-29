@@ -98,10 +98,7 @@ export default function BibleBrowser() {
           setActiveVerseIdx(idx);
           // proyectar ese verso directamente
           const v = res.data[idx];
-          actions.showSlide({
-            type: 'bible',
-            slideData: { type: 'bible', text: v.text, reference: `${v.book_name} ${v.chapter}:${v.verse}`, version: v.version },
-          });
+          sendVerse(v, res.data[idx + 1] || null);
         }
         setPendingVerse(null);
       }
@@ -159,7 +156,7 @@ export default function BibleBrowser() {
   };
 
   // ─── Proyectar versículo ───────────────────────────────────────────────────
-  const sendVerse = useCallback((v) => {
+  const sendVerse = useCallback((v, nextV = null) => {
     actions.showSlide({
       type:      'bible',
       slideData: {
@@ -168,6 +165,11 @@ export default function BibleBrowser() {
         reference: `${v.book_name} ${v.chapter}:${v.verse}`,
         version:   v.version,
       },
+      nextSlideData: nextV ? {
+        type:      'bible',
+        text:      nextV.text,
+        reference: `${nextV.book_name} ${nextV.chapter}:${nextV.verse}`,
+      } : null,
     });
   }, [actions]);
 
@@ -187,7 +189,7 @@ export default function BibleBrowser() {
         } else {
           next = prev === null ? 0 : Math.min(verses.length - 1, prev + 1);
         }
-        sendVerse(verses[next]);
+        sendVerse(verses[next], verses[next + 1] || null);
         return next;
       });
     };
@@ -307,7 +309,7 @@ export default function BibleBrowser() {
                         {verses.map((v, idx) => (
                           <button
                             key={v.id}
-                            onClick={() => { setActiveVerseIdx(idx); sendVerse(v); }}
+                            onClick={() => { setActiveVerseIdx(idx); sendVerse(v, verses[idx + 1] || null); }}
                             className={`flex items-center justify-center rounded font-semibold text-base py-2 transition-all
                               ${activeVerseIdx === idx
                                 ? 'bg-accent text-white'
@@ -325,7 +327,7 @@ export default function BibleBrowser() {
                           <div
                             key={`text-${v.id}`}
                             ref={el => { verseTextRefs.current[idx] = el; }}
-                            onClick={() => { setActiveVerseIdx(idx); sendVerse(v); }}
+                            onClick={() => { setActiveVerseIdx(idx); sendVerse(v, verses[idx + 1] || null); }}
                             className={`flex gap-3 text-base py-2 px-3 rounded cursor-pointer transition-colors select-text
                               ${activeVerseIdx === idx
                                 ? 'bg-accent/20 text-zinc-100'
