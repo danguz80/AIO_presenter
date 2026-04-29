@@ -1,9 +1,52 @@
+import { useEffect } from 'react';
 import { usePresenter } from '../../context/usePresenter';
-import { Play, ChevronRight, Music } from 'lucide-react';
+import { Music } from 'lucide-react';
 
 export default function SongDetail() {
   const { state, actions } = usePresenter();
   const { selectedSong, selectedSlide, liveState } = state;
+
+  // Navegación por teclado: Espacio / → / ↓ = siguiente, ← / ↑ = anterior
+  useEffect(() => {
+    const handleKey = (e) => {
+      // No navegar si el foco está en un input/textarea
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      const slides = selectedSong?.slides;
+      if (!slides || slides.length === 0) return;
+
+      const currentIndex = selectedSlide
+        ? slides.findIndex(s => s.id === selectedSlide.id)
+        : -1;
+
+      let nextIndex = null;
+      if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextIndex = currentIndex < slides.length - 1 ? currentIndex + 1 : currentIndex;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        nextIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+      }
+
+      if (nextIndex !== null && nextIndex !== currentIndex) {
+        const slide = slides[nextIndex];
+        actions.selectSlide(slide);
+        actions.showSlide({
+          type:      'song',
+          slideData: {
+            type:      'song',
+            songTitle: selectedSong.title,
+            label:     slide.label,
+            content:   slide.content,
+          },
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [selectedSong, selectedSlide, actions]);
 
   if (!selectedSong) {
     return (
@@ -16,13 +59,11 @@ export default function SongDetail() {
 
   const handleSlideClick = (slide) => {
     actions.selectSlide(slide);
-  };
-
-  const handleSend = (slide) => {
     actions.showSlide({
       type:      'song',
       slideData: {
         type:      'song',
+        slideId:   slide.id,
         songTitle: selectedSong.title,
         label:     slide.label,
         content:   slide.content,
@@ -31,7 +72,7 @@ export default function SongDetail() {
   };
 
   const isLive = (slide) =>
-    liveState.slideData?.content === slide.content &&
+    liveState.slideData?.slideId === slide.id &&
     liveState.slideData?.type    === 'song' &&
     !liveState.isBlank;
 
@@ -51,7 +92,7 @@ export default function SongDetail() {
           <p className="text-zinc-600 text-sm">Esta canción no tiene secciones.</p>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {selectedSong.slides.map((slide) => {
+            {selectedSong.slides.map((slide, index) => {
               const active = isLive(slide);
               const selected = selectedSlide?.id === slide.id;
               return (
@@ -65,14 +106,19 @@ export default function SongDetail() {
                     ${active   ? 'border-green-500 bg-green-950/30' : ''}
                   `}
                 >
-                  {/* Etiqueta */}
+                  {/* Etiqueta + número */}
                   <div className="flex items-center justify-between mb-2">
-                    <span className={`
-                      text-xs font-medium px-2 py-0.5 rounded
-                      ${active ? 'bg-green-500/20 text-green-400' : 'bg-surface-600 text-zinc-400'}
-                    `}>
-                      {slide.label}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-mono text-zinc-500 w-5 text-right shrink-0">
+                        {index + 1}
+                      </span>
+                      <span className={`
+                        text-xs font-medium px-2 py-0.5 rounded
+                        ${active ? 'bg-green-500/20 text-green-400' : 'bg-surface-600 text-zinc-400'}
+                      `}>
+                        {slide.label}
+                      </span>
+                    </div>
                     {active && (
                       <span className="flex items-center gap-1 text-xs text-green-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -85,21 +131,6 @@ export default function SongDetail() {
                   <p className="text-xs text-zinc-300 whitespace-pre-line line-clamp-4 leading-relaxed">
                     {slide.content}
                   </p>
-
-                  {/* Botón enviar */}
-                  <button
-                    onClick={e => { e.stopPropagation(); handleSend(slide); }}
-                    className={`
-                      mt-2 w-full flex items-center justify-center gap-1 py-1.5 rounded text-xs font-medium
-                      transition-colors
-                      ${active
-                        ? 'bg-green-600 hover:bg-green-700 text-white'
-                        : 'bg-accent hover:bg-accent-hover text-white opacity-0 group-hover:opacity-100'
-                      }
-                    `}
-                  >
-                    {active ? <><ChevronRight size={12} /> En pantalla</> : <><Play size={12} /> Enviar</>}
-                  </button>
                 </div>
               );
             })}

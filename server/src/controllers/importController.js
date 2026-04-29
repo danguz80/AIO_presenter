@@ -25,22 +25,26 @@ const upload = multer({
   limits: { fileSize: MAX_SIZE_BYTES },
 }).single('file');
 
-// ─── Expande slides: cada línea de contenido → diapositiva propia ───────────
+// ─── Expande slides: cada estrofa (párrafo) → diapositiva propia ────────────
 /**
  * Dado un array de { label, content }, genera un nuevo array donde
- * cada línea no vacía del content se convierte en una diapositiva separada
- * con el mismo label. Esto permite proyectar línea a línea.
+ * cada párrafo (grupo de líneas separado por línea en blanco) del content
+ * se convierte en una diapositiva separada con el mismo label.
+ * Si el content no tiene párrafos delimitados, se mantiene como uno solo.
  */
 function expandByLines(slides) {
   const result = [];
   for (const slide of slides) {
-    const lines = (slide.content || '')
-      .split('\n')
-      .map(l => l.trim())
-      .filter(l => l.length > 0);
-    if (lines.length === 0) continue;
-    for (const line of lines) {
-      result.push({ label: slide.label, content: line });
+    // Separar en párrafos por líneas en blanco
+    const paragraphs = (slide.content || '')
+      .split(/\n\s*\n/)
+      .map(p => p.trim())
+      .filter(p => p.length > 0);
+
+    if (paragraphs.length === 0) continue;
+
+    for (const para of paragraphs) {
+      result.push({ label: slide.label, content: para });
     }
   }
   return result.length > 0 ? result : slides;

@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Search, Send, ChevronLeft, ChevronRight, BookOpen, X } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Search, Send, BookOpen, X } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
 
@@ -20,6 +20,11 @@ export default function BibleBrowser() {
   const [book,      setBook]      = useState(null);   // objeto { id, name, abbrev }
   const [chapter,   setChapter]   = useState(null);   // número
 
+  // ── Verso activo (para navegación con teclado) ────────────────────────────
+  const [activeVerseIdx,  setActiveVerseIdx]  = useState(null);
+  const [pendingChapter,  setPendingChapter]  = useState(null);
+  const [pendingVerse,    setPendingVerse]    = useState(null);
+
   // ── Búsqueda ──────────────────────────────────────────────────────────────
   const [mode,          setMode]          = useState(MODE_BROWSE);
   const [searchQuery,   setSearchQuery]   = useState('');
@@ -30,12 +35,18 @@ export default function BibleBrowser() {
   const [loadingBooks,   setLoadingBooks]   = useState(false);
   const [loadingChapters,setLoadingChapters]= useState(false);
   const [loadingVerses,  setLoadingVerses]  = useState(false);
-
+  // ── Refs para scroll al versículo activo ─────────────────────────────────
+  const verseTextRefs = useRef([]);
   // ─── Cargar versiones ──────────────────────────────────────────────────────
   useEffect(() => {
     api.get('/bible/versions').then(res => {
       setVersions(res.data);
-      if (res.data.length > 0) setVersionId(String(res.data[0].id));
+      if (res.data.length > 0) {
+        const rv = res.data.find(v =>
+          /rvr?60|rv1960/i.test(v.abbreviation) || /rv1960|reina.valera.*1960/i.test(v.name || '')
+        );
+        setVersionId(String((rv || res.data[0]).id));
+      }
     }).catch(console.error);
   }, []);
 
@@ -62,7 +73,14 @@ export default function BibleBrowser() {
     setVerses([]);
     api.get(`/bible/${versionId}/books/${book.id}/chapters`).then(res => {
       setChapters(res.data);
-      if (res.data.length > 0) setChapter(res.data[0]);
+      if (res.data.length > 0) {
+        // Si hay un capítulo pendiente por referencia, usarlo; si no, ir al 1
+        const target = pendingChapter && res.data.includes(pendingChapter)
+          ? pendingChapter
+          : res.data[0];
+        setChapter(target);
+        setPendingChapter(null);
+      }
     }).catch(console.error).finally(() => setLoadingChapters(false));
   }, [book]);
 
@@ -71,15 +89,57 @@ export default function BibleBrowser() {
     if (!book || chapter === null) return;
     setLoadingVerses(true);
     setVerses([]);
+    setActiveVerseIdx(null);
     api.get(`/bible/${versionId}/books/${book.id}/chapters/${chapter}`).then(res => {
       setVerses(res.data);
+      if (pendingVerse) {
+        const idx = res.data.findIndex(v => v.verse === pendingVerse);
+        if (idx !== -1) {
+          setActiveVerseIdx(idx);
+          // proyectar ese verso directamente
+          const v = res.data[idx];
+          actions.showSlide({
+            type: 'bible',
+            slideData: { type: 'bible', text: v.text, reference: `${v.book_name} ${v.chapter}:${v.verse}`, version: v.version },
+          });
+        }
+        setPendingVerse(null);
+      }
     }).catch(console.error).finally(() => setLoadingVerses(false));
   }, [chapter, book]);
 
   // ─── Búsqueda ─────────────────────────────────────────────────────────────
+  // Intenta interpretar la query como referencia: "Juan 3" / "Gn 1:5" / "Génesis 1"
+  const tryNavigateRef = useCallback((q) => {
+    // Extraer "nombre [cap[:vers]]"
+    const match = q.trim().match(/^(.+?)\s+(\d+)(?::(\d+))?$/);
+    if (!match) return false;
+    const [, bookQuery, chapStr, verseStr] = match;
+    const chapNum = parseInt(chapStr, 10);
+    const verseNum = verseStr ? parseInt(verseStr, 10) : null;
+    const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const q2 = norm(bookQuery);
+    const found = books.find(b =>
+      norm(b.name).startsWith(q2) || norm(b.abbrev) === q2
+    );
+    if (!found) return false;
+    // Navegar al libro y capítulo
+    setBook(found);
+    // El capítulo se carga async; lo fijamos después de que chapters llegue
+    // Lo guardamos en un ref temporal a través de estado
+    setPendingChapter(chapNum);
+    setPendingVerse(verseNum);
+    setMode(MODE_BROWSE);
+    setSearchQuery('');
+    return true;
+  }, [books]);
+
   const doSearch = useCallback(async () => {
     const q = searchQuery.trim();
     if (q.length < 3) return;
+    // Primero intentar navegación por referencia
+    if (tryNavigateRef(q)) return;
+    setMode(MODE_SEARCH);
     setSearching(true);
     setSearchResults([]);
     try {
@@ -92,137 +152,107 @@ export default function BibleBrowser() {
     } finally {
       setSearching(false);
     }
-  }, [searchQuery, versionId]);
+  }, [searchQuery, versionId, tryNavigateRef]);
 
   const handleSearchKey = (e) => {
     if (e.key === 'Enter') doSearch();
   };
 
   // ─── Proyectar versículo ───────────────────────────────────────────────────
-  const sendVerse = (v) => {
+  const sendVerse = useCallback((v) => {
     actions.showSlide({
       type:      'bible',
-      text:      v.text,
-      reference: `${v.book_name} ${v.chapter}:${v.verse}`,
-      version:   v.version,
+      slideData: {
+        type:      'bible',
+        text:      v.text,
+        reference: `${v.book_name} ${v.chapter}:${v.verse}`,
+        version:   v.version,
+      },
     });
-  };
+  }, [actions]);
+
+  // ─── Navegación por teclado (Space / ↓ / → = siguiente verso) ─────────────
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (e.key !== ' ' && e.key !== 'ArrowDown' && e.key !== 'ArrowRight' &&
+          e.key !== 'ArrowUp'  && e.key !== 'ArrowLeft') return;
+      if (verses.length === 0) return;
+      e.preventDefault();
+
+      setActiveVerseIdx(prev => {
+        let next;
+        if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+          next = prev === null ? 0 : Math.max(0, prev - 1);
+        } else {
+          next = prev === null ? 0 : Math.min(verses.length - 1, prev + 1);
+        }
+        sendVerse(verses[next]);
+        return next;
+      });
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [verses, sendVerse]);
+
+  // ─── Scroll al versículo activo en el texto del capítulo ────────────────
+  useEffect(() => {
+    if (activeVerseIdx !== null) {
+      verseTextRefs.current[activeVerseIdx]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [activeVerseIdx]);
 
   // ─── Navegar capítulos ────────────────────────────────────────────────────
-  const prevChapter = () => {
-    const idx = chapters.indexOf(chapter);
-    if (idx > 0) setChapter(chapters[idx - 1]);
-  };
-  const nextChapter = () => {
-    const idx = chapters.indexOf(chapter);
-    if (idx < chapters.length - 1) setChapter(chapters[idx + 1]);
-  };
-
   const currentVersionName = versions.find(v => String(v.id) === versionId)?.abbreviation || '';
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
 
-      {/* ── Barra de herramientas ─────────────────────────────────────────── */}
-      <div className="shrink-0 p-3 border-b border-surface-700 space-y-2">
-        {/* Fila 1: version + libro + capítulo */}
-        <div className="flex gap-2">
-          {/* Versión */}
-          <select
-            value={versionId}
-            onChange={e => setVersionId(e.target.value)}
-            className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-24 shrink-0"
-          >
-            {versions.map(v => (
-              <option key={v.id} value={v.id}>{v.abbreviation}</option>
-            ))}
-          </select>
+      {/* ── Barra superior: versión + búsqueda ───────────────────────────── */}
+      <div className="shrink-0 flex gap-2 p-2 border-b border-surface-700">
+        <select
+          value={versionId}
+          onChange={e => setVersionId(e.target.value)}
+          className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-20 shrink-0"
+        >
+          {versions.map(v => (
+            <option key={v.id} value={v.id}>{v.abbreviation}</option>
+          ))}
+        </select>
 
-          {/* Libro */}
-          <select
-            value={book?.id || ''}
-            onChange={e => {
-              const b = books.find(b => String(b.id) === e.target.value);
-              setBook(b || null);
-            }}
-            disabled={loadingBooks || books.length === 0}
-            className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent flex-1 disabled:opacity-50"
-          >
-            {books.length === 0
-              ? <option value="">— Libro —</option>
-              : books.map(b => <option key={b.id} value={b.id}>{b.name}</option>)
-            }
-          </select>
-
-          {/* Capítulo */}
-          <div className="flex items-center gap-1 shrink-0">
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <input
+            type="text"
+            placeholder='Buscar texto o "Juan 3:16"…'
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearchKey}
+            onFocus={() => { if (searchQuery.trim().length >= 3) setMode(MODE_SEARCH); }}
+            className="w-full pl-8 pr-8 py-1.5 text-xs bg-surface-700 border border-surface-600 rounded text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent"
+          />
+          {searchQuery && (
             <button
-              onClick={prevChapter}
-              disabled={!chapter || chapters.indexOf(chapter) === 0}
-              className="p-1 rounded bg-surface-700 hover:bg-surface-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              onClick={() => { setSearchQuery(''); setSearchResults([]); setMode(MODE_BROWSE); }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
             >
-              <ChevronLeft size={14} className="text-zinc-300" />
+              <X size={13} />
             </button>
-            <select
-              value={chapter ?? ''}
-              onChange={e => setChapter(Number(e.target.value))}
-              disabled={loadingChapters || chapters.length === 0}
-              className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-16 disabled:opacity-50"
-            >
-              {chapters.length === 0
-                ? <option value="">—</option>
-                : chapters.map(c => <option key={c} value={c}>{c}</option>)
-              }
-            </select>
-            <button
-              onClick={nextChapter}
-              disabled={!chapter || chapters.indexOf(chapter) === chapters.length - 1}
-              className="p-1 rounded bg-surface-700 hover:bg-surface-600 disabled:opacity-30 disabled:cursor-not-allowed"
-            >
-              <ChevronRight size={14} className="text-zinc-300" />
-            </button>
-          </div>
+          )}
         </div>
-
-        {/* Fila 2: búsqueda */}
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Buscar versículo (min 3 letras)…"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={handleSearchKey}
-              onFocus={() => setMode(MODE_SEARCH)}
-              className="w-full pl-8 pr-8 py-1.5 text-xs bg-surface-700 border border-surface-600 rounded text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => { setSearchQuery(''); setSearchResults([]); setMode(MODE_BROWSE); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
-              >
-                <X size={13} />
-              </button>
-            )}
-          </div>
-          <button
-            onClick={doSearch}
-            disabled={searchQuery.trim().length < 3 || searching}
-            className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed font-medium shrink-0"
-          >
-            {searching ? '…' : 'Buscar'}
-          </button>
-        </div>
+        <button
+          onClick={doSearch}
+          disabled={searchQuery.trim().length < 3 || searching}
+          className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed font-medium shrink-0"
+        >
+          {searching ? '…' : 'Buscar'}
+        </button>
       </div>
 
-      {/* ── Contenido ────────────────────────────────────────────────────────── */}
+      {/* ── Cuerpo principal ─────────────────────────────────────────────── */}
       {mode === MODE_SEARCH ? (
-        // ── Vista: resultados de búsqueda ──────────────────────────────────
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {searching && (
-            <p className="text-zinc-500 text-xs text-center py-8">Buscando…</p>
-          )}
+          {searching && <p className="text-zinc-500 text-xs text-center py-8">Buscando…</p>}
           {!searching && searchResults.length === 0 && searchQuery.length >= 3 && (
             <p className="text-zinc-500 text-xs text-center py-8">Sin resultados para "{searchQuery}"</p>
           )}
@@ -230,54 +260,180 @@ export default function BibleBrowser() {
             <p className="text-zinc-500 text-xs text-center py-8">Escribe al menos 3 letras y presiona Buscar</p>
           )}
           {searchResults.map(v => (
-            <VerseCard key={`${v.id}`} verse={v} onSend={sendVerse} showRef />
+            <VerseCard key={v.id} verse={v} onSend={sendVerse} showRef />
           ))}
         </div>
       ) : (
-        // ── Vista: navegación por libro/capítulo ───────────────────────────
-        <div className="flex-1 overflow-y-auto">
-          {!book && (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-zinc-600">
-              <BookOpen size={40} strokeWidth={1} />
-              <p className="text-sm">Selecciona un libro para comenzar</p>
-            </div>
-          )}
-          {book && loadingVerses && (
-            <p className="text-zinc-500 text-xs text-center py-8">Cargando versículos…</p>
-          )}
-          {book && !loadingVerses && verses.length === 0 && (
-            <p className="text-zinc-500 text-xs text-center py-8">No hay versículos</p>
-          )}
-          {book && !loadingVerses && verses.length > 0 && (
-            <>
-              {/* Encabezado capítulo */}
-              <div className="sticky top-0 bg-surface-800 px-4 py-2 border-b border-surface-700 z-10">
-                <h3 className="text-sm font-semibold text-zinc-200">
-                  {book.name} {chapter} <span className="text-zinc-500 font-normal text-xs">· {currentVersionName} · {verses.length} versículos</span>
-                </h3>
+        /* Layout 3 paneles: izq libros+capítulos | der versículos */
+        <div className="flex-1 flex overflow-hidden min-h-0">
+
+          {/* ── Columna izquierda ──────────────────────────────────────────── */}
+          <div className="overflow-y-auto border-r border-surface-700 p-2 space-y-3" style={{ width: '52%' }}>
+            <BookGrid books={books} selectedBook={book} onSelect={setBook} />
+            {chapters.length > 0 && (
+              <div className="border-t border-surface-700 pt-2">
+                <ChapterGrid chapters={chapters} selectedChapter={chapter} onSelect={setChapter} />
               </div>
-              <div className="p-2 space-y-1">
-                {verses.map(v => (
-                  <VerseCard key={v.id} verse={v} onSend={sendVerse} />
-                ))}
+            )}
+          </div>
+
+          {/* ── Columna derecha: grilla de versículos ─────────────────────── */}
+          <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+            {!book && (
+              <div className="flex flex-col items-center justify-center h-full gap-2 text-zinc-600">
+                <BookOpen size={32} strokeWidth={1} />
+                <p className="text-xs">Selecciona un libro</p>
               </div>
-            </>
-          )}
+            )}
+            {book && !chapter && (
+              <div className="flex items-center justify-center h-full text-zinc-600 text-xs">
+                Selecciona un capítulo
+              </div>
+            )}
+            {book && chapter && (
+              <>
+                <div className="shrink-0 px-3 py-1.5 border-b border-surface-700 bg-surface-800">
+                  <p className="text-xs font-semibold text-zinc-300">
+                    {book.name} {chapter}
+                    <span className="text-zinc-500 font-normal"> · {currentVersionName}</span>
+                  </p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2">
+                  {loadingVerses && <p className="text-zinc-500 text-xs text-center py-8">Cargando…</p>}
+                  {!loadingVerses && (
+                    <>
+                      {/* Grilla de números */}
+                      <div className="grid gap-1 mb-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))' }}>
+                        {verses.map((v, idx) => (
+                          <button
+                            key={v.id}
+                            onClick={() => { setActiveVerseIdx(idx); sendVerse(v); }}
+                            className={`flex items-center justify-center rounded font-semibold text-base py-2 transition-all
+                              ${activeVerseIdx === idx
+                                ? 'bg-accent text-white'
+                                : 'bg-surface-600 text-zinc-200 hover:bg-surface-500'}`}
+                            title={v.text}
+                          >
+                            {v.verse}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Texto completo del capítulo */}
+                      <div className="space-y-1">
+                        {verses.map((v, idx) => (
+                          <div
+                            key={`text-${v.id}`}
+                            ref={el => { verseTextRefs.current[idx] = el; }}
+                            onClick={() => { setActiveVerseIdx(idx); sendVerse(v); }}
+                            className={`flex gap-3 text-base py-2 px-3 rounded cursor-pointer transition-colors select-text
+                              ${activeVerseIdx === idx
+                                ? 'bg-accent/20 text-zinc-100'
+                                : 'text-zinc-400 hover:bg-surface-700 hover:text-zinc-200'}`}
+                          >
+                            <span className="shrink-0 font-bold text-zinc-500 w-6 text-right leading-relaxed">{v.verse}</span>
+                            <span className="leading-relaxed font-bold">{v.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+// ─── Color por grupo de libro ─────────────────────────────────────────────────
+function bookStyle(num) {
+  if (num <= 5)  return { bg: '#92400e', hover: '#78350f' }; // Pentateuco
+  if (num <= 17) return { bg: '#78350f', hover: '#6b2f0c' }; // Historia AT
+  if (num <= 22) return { bg: '#7c3d12', hover: '#6b3510' }; // Poesía
+  if (num <= 27) return { bg: '#9a3412', hover: '#82290e' }; // Profetas mayores
+  if (num <= 39) return { bg: '#b45309', hover: '#9a4508' }; // Profetas menores
+  if (num <= 44) return { bg: '#1d4ed8', hover: '#1a43c0' }; // Evangelios + Hechos
+  if (num <= 52) return { bg: '#6d28d9', hover: '#5b22b8' }; // Cartas de Pablo
+  if (num <= 65) return { bg: '#0e7490', hover: '#0b6178' }; // Epístolas generales
+  return          { bg: '#15803d', hover: '#126e34' };        // Apocalipsis
+}
+
+// ─── Grilla de libros ─────────────────────────────────────────────────────────
+function BookGrid({ books, selectedBook, onSelect }) {
+  const [hovered, setHovered] = useState(null);
+  const ot = books.filter(b => b.book_number <= 39);
+  const nt = books.filter(b => b.book_number >= 40);
+
+  const renderBook = (b) => {
+    const { bg, hover } = bookStyle(b.book_number);
+    const isSelected = selectedBook?.id === b.id;
+    const isHov = hovered === b.id;
+    return (
+      <button
+        key={b.id}
+        onClick={() => onSelect(b)}
+        onMouseEnter={() => setHovered(b.id)}
+        onMouseLeave={() => setHovered(null)}
+        style={{ backgroundColor: isHov || isSelected ? hover : bg }}
+        className={`flex flex-col items-center justify-center rounded text-white transition-all py-2.5 px-1 ${isSelected ? 'ring-2 ring-white ring-inset' : ''}`}
+      >
+        <span className="font-bold text-base leading-tight">{b.abbrev}</span>
+        <span className="text-[10px] leading-tight opacity-80 truncate w-full text-center mt-0.5">{b.name}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div className="space-y-2">
+      <div>
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 px-0.5">Antiguo Testamento</p>
+        <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(62px, 1fr))' }}>
+          {ot.map(renderBook)}
+        </div>
+      </div>
+      <div>
+        <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-1 px-0.5">Nuevo Testamento</p>
+        <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(62px, 1fr))' }}>
+          {nt.map(renderBook)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Grilla de capítulos ──────────────────────────────────────────────────────
+function ChapterGrid({ chapters, selectedChapter, onSelect }) {
+  return (
+    <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))' }}>
+      {chapters.map(c => (
+        <button
+          key={c}
+          onClick={() => onSelect(c)}
+          className={`flex items-center justify-center rounded font-semibold text-base transition-all py-2
+            ${c === selectedChapter
+              ? 'bg-accent text-white'
+              : 'bg-surface-600 text-zinc-200 hover:bg-surface-500'}`}
+        >
+          {c}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Tarjeta de versículo ─────────────────────────────────────────────────────
-function VerseCard({ verse, onSend, showRef = false }) {
+function VerseCard({ verse, onSend, showRef = false, isActive = false }) {
   const { state } = usePresenter();
   const isLive = state.liveState?.type === 'bible' &&
-    state.liveState?.slideData?.reference === `${verse.book_name} ${verse.chapter}:${verse.verse}`;
+    state.liveState?.slideData?.reference === `${verse.book_name} ${verse.chapter}:${verse.verse}` &&
+    state.liveState?.slideData?.version === verse.version;
 
   return (
     <div
-      className={`group relative flex gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-surface-700 transition-colors ${isLive ? 'bg-accent/10 ring-1 ring-accent/40' : ''}`}
+      className={`group relative flex gap-2 px-3 py-2 rounded-lg cursor-pointer hover:bg-surface-700 transition-colors ${isLive ? 'bg-accent/10 ring-1 ring-accent/40' : isActive ? 'bg-surface-700' : ''}`}
       onClick={() => onSend(verse)}
     >
       {/* Número de versículo */}

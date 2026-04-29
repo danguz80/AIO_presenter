@@ -18,6 +18,7 @@ export default function LiveControls() {
 
   const handleBlank = () => {
     actions.toggleBlank(!liveState.isBlank);
+    actions.selectSlide(null);
   };
 
   const setBackground = (color) => {
@@ -43,7 +44,7 @@ export default function LiveControls() {
       >
         {liveState.isBlank
           ? <><Eye size={16} /> Mostrar</>
-          : <><EyeOff size={16} /> Pantalla negra</>
+          : <><EyeOff size={16} /> Borrar todo</>
         }
       </button>
 

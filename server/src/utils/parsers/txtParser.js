@@ -179,7 +179,18 @@ function parseTxt(content, filename = '') {
     slides.push({ label: 'Verso 1', content: content.trim() });
   }
 
-  // Título por defecto: nombre del archivo limpio
+  // Post-procesar slides con label "Título": extraer metadatos y eliminarlos
+  const titleSlides = slides.filter(s => /^t[íi]tulo$/i.test(s.label.trim()));
+  if (titleSlides.length > 0) {
+    const titleLines = titleSlides
+      .flatMap(s => s.content.split(/\n+/).map(l => l.trim()).filter(Boolean));
+    if (!title && titleLines.length > 0) title = titleLines[0];
+    if (!author && titleLines.length > 1) author = titleLines[1];
+    // Quitar los slides de Título
+    slides.splice(0, slides.length, ...slides.filter(s => !/^t[íi]tulo$/i.test(s.label.trim())));
+  }
+
+  // Título por defecto: nombre del archivo limpio (solo si no se extrajo de [Título])
   if (!title) {
     title = filename
       .replace(/\.[^.]+$/, '')
