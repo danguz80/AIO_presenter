@@ -5,46 +5,47 @@ import { X } from 'lucide-react';
 // Convierte array de slides → texto editable
 // Slides del mismo label separados por línea en blanco.
 // Al cambiar de label: línea en blanco + {NuevoLabel}
+// Si el label está vacío no se emite encabezado.
 function slidesToText(slides) {
   if (!slides || slides.length === 0) return '';
   const lines = [];
-  let lastLabel = null;
+  let lastLabel = undefined;
   for (const slide of slides) {
-    if (slide.label !== lastLabel) {
-      if (lastLabel !== null) lines.push('');
-      lines.push(`{${slide.label}}`);
-      lastLabel = slide.label;
+    const lbl = slide.label?.trim() || '';
+    if (lbl !== lastLabel) {
+      if (lastLabel !== undefined) lines.push('');
+      if (lbl) lines.push(`{${lbl}}`);
+      lastLabel = lbl;
     } else {
       lines.push(''); // línea en blanco entre slides del mismo label
     }
-    lines.push(slide.content); // el contenido puede tener \n internos
+    lines.push(slide.content);
   }
   return lines.join('\n');
 }
 
 // Parsea el texto con {labels} → array de slides
 // Bloque de líneas sin línea en blanco entre ellas = una sola diapositiva
+// Si no hay {label}, el slide se guarda con label '' (vacío).
 function textToSlides(text) {
   const slides = [];
   const parts = text.split(/\n(?=\{[^}]+\})/);
-  let autoIndex = 0;
 
   for (const part of parts) {
     const labelMatch = part.match(/^\{([^}]+)\}/);
-    const label = labelMatch ? labelMatch[1].trim() : null;
+    const label = labelMatch ? labelMatch[1].trim() : '';
     const body  = part.replace(/^\{[^}]+\}\n?/, '');
 
     // Bloques separados por línea(s) en blanco → cada bloque = un slide
     const blocks = body.split(/\n[ \t]*\n/).map(b => b.trim()).filter(b => b.length > 0);
     if (blocks.length === 0) continue;
 
-    const effectiveLabel = label || `Verso ${++autoIndex}`;
     for (const block of blocks) {
-      slides.push({ label: effectiveLabel, content: block });
+      slides.push({ label, content: block });
     }
   }
 
-  return slides.length > 0 ? slides : [{ label: 'Verso 1', content: text.trim() }];
+  return slides.length > 0 ? slides : [{ label: '', content: text.trim() }];
 }
 
 export default function SongFormModal({ song, onClose }) {

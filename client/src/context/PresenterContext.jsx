@@ -49,6 +49,13 @@ const initialState = {
     fps:                30,
   },
 
+  // Solicitud de navegación desde móvil (u otro cliente)
+  navigateRequest: null, // { dir: 'next'|'prev', ts: number }
+
+  // Canción pendiente de cargar (sincronización desde otro cliente)
+  pendingSongId:  null,
+  pendingSlideId: null,
+
   // Socket
   connected: false,
 };
@@ -80,12 +87,26 @@ function reducer(state, action) {
       return { ...state, selectedSlide: action.payload };
     case 'SET_LIVE_STATE':
       return { ...state, liveState: action.payload };
+    case 'SYNC_LIVE_SONG': {
+      // Si ya es la misma canción, solo actualizar el slide seleccionado
+      const { songId, slideId } = action.payload;
+      if (state.selectedSong?.id === songId) {
+        const slide = state.selectedSong.slides?.find(s => s.id === slideId) || null;
+        return { ...state, selectedSlide: slide };
+      }
+      // Si es una canción diferente: marcar pendiente de carga
+      return { ...state, pendingSongId: songId, pendingSlideId: slideId };
+    }
     case 'SET_STAGE_CONFIG':
       return { ...state, stageConfig: action.payload };
     case 'SET_VIRTUAL_CONFIG':
       return { ...state, virtualConfig: action.payload };
     case 'SET_NDI_STATUS':
       return { ...state, ndiStatus: action.payload };
+    case 'NAVIGATE':
+      return { ...state, navigateRequest: action.payload };
+    case 'SET_PENDING_SONG':
+      return { ...state, selectedSong: action.payload.song, selectedSlide: action.payload.slide, pendingSongId: null, pendingSlideId: null };
     case 'SET_CONNECTED':
       return { ...state, connected: action.payload };
     default:
@@ -101,16 +122,29 @@ export function PresenterProvider({ children }) {
 
   // Conectar Socket.io
   useEffect(() => {
-    const socket = io('http://localhost:3001', { autoConnect: true });
+    // Conectar directamente al backend (sin pasar por el proxy de Vite)
+    // Usa IP guardada en localStorage para que funcione como PWA instalada
+    const savedIp   = localStorage.getItem('aio_server_ip');
+    const savedPort = localStorage.getItem('aio_server_port') || '3001';
+    const host      = savedIp || window.location.hostname;
+    const backendUrl = `http://${host}:${savedPort}`;
+    const socket = io(backendUrl, { autoConnect: true });
     socketRef.current = socket;
 
     socket.on('connect',      () => dispatch({ type: 'SET_CONNECTED', payload: true }));
     socket.on('disconnect',   () => dispatch({ type: 'SET_CONNECTED', payload: false }));
-    socket.on('live:state',      (data) => dispatch({ type: 'SET_LIVE_STATE',      payload: data }));
+    socket.on('live:state', (data) => {
+      dispatch({ type: 'SET_LIVE_STATE', payload: data });
+      // Si el slide activo cambió desde otro cliente (móvil o navegación server-side),
+      // sincronizar selectedSong y selectedSlide para actualizar la grilla del controlador
+      if (data.slideData?.type === 'song' && data.slideData.songId) {
+        dispatch({ type: 'SYNC_LIVE_SONG', payload: data.slideData });
+      }
+    });
     socket.on('stage:config',    (data) => dispatch({ type: 'SET_STAGE_CONFIG',    payload: data }));
     socket.on('virtual:config',  (data) => dispatch({ type: 'SET_VIRTUAL_CONFIG',  payload: data }));
     socket.on('ndi:status',      (data) => dispatch({ type: 'SET_NDI_STATUS',      payload: data }));
-
+    socket.on('navigate',        (dir)  => dispatch({ type: 'NAVIGATE', payload: { dir, ts: Date.now() } }));
     return () => socket.disconnect();
   }, []);
 
@@ -120,6 +154,19 @@ export function PresenterProvider({ children }) {
       dispatch({ type: 'SET_SONGS', payload: res.data });
     }).catch(console.error);
   }, []);
+
+  // Cuando otro cliente cambia la canción activa, cargar el detalle completo
+  // para sincronizar la grilla del controlador de escritorio
+  useEffect(() => {
+    if (!state.pendingSongId) return;
+    const songId   = state.pendingSongId;
+    const slideId  = state.pendingSlideId;
+    api.get(`/songs/${songId}`).then(res => {
+      const song  = res.data;
+      const slide = song.slides?.find(s => s.id === slideId) || null;
+      dispatch({ type: 'SET_PENDING_SONG', payload: { song, slide } });
+    }).catch(console.error);
+  }, [state.pendingSongId, state.pendingSlideId]);
 
   // ─── Acciones ────────────────────────────────────────────────────────────
   const actions = {
@@ -170,6 +217,10 @@ export function PresenterProvider({ children }) {
 
     setVirtualConfig: (config) => {
       socketRef.current?.emit('virtual:config', config);
+    },
+
+    navigate: (dir) => {
+      socketRef.current?.emit('navigate', dir);
     },
 
     reloadSongs: async (search) => {

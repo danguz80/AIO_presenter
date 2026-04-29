@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { usePresenter } from '../context/usePresenter';
+import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
+import { stripChords } from '../utils/chordUtils';
 
 /**
  * Ventana de salida — se abre en una pestaña/ventana separada
@@ -8,6 +10,8 @@ import { usePresenter } from '../context/usePresenter';
 export default function OutputPage() {
   const { state } = usePresenter();
   const { liveState } = state;
+
+  useKeyboardRelay();
 
   // Fullscreen automático si el usuario lo permite
   useEffect(() => {
@@ -41,7 +45,8 @@ function SlideContent({ slideData }) {
   const { type } = slideData;
 
   if (type === 'song') {
-    const lineCount = (slideData.content || '').split('\n').filter(l => l.trim()).length;
+    const cleanContent = stripChords(slideData.content || '');
+    const lineCount = cleanContent.split('\n').filter(l => l.trim()).length;
     const fontSize = lineCount <= 3 ? 'clamp(2rem, 5vw, 4.5rem)'
                    : lineCount <= 5 ? 'clamp(1.6rem, 4vw, 3.5rem)'
                    : lineCount <= 7 ? 'clamp(1.3rem, 3.2vw, 2.8rem)'
@@ -58,7 +63,7 @@ function SlideContent({ slideData }) {
           className="text-white leading-relaxed whitespace-pre-line w-full"
           style={{ fontSize, textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
         >
-          {slideData.content}
+          {cleanContent}
         </p>
         {slideData.songTitle && (
           <p className="text-zinc-400 text-base mt-6">{slideData.songTitle}</p>

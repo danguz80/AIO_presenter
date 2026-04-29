@@ -83,11 +83,38 @@ CREATE TABLE IF NOT EXISTS schedule_items (
 );
 
 -- ==========================================
+-- CALENDARIO / EVENTS
+-- ==========================================
+CREATE TABLE IF NOT EXISTS events (
+  id           SERIAL PRIMARY KEY,
+  title        VARCHAR(255) NOT NULL,
+  date         DATE NOT NULL,
+  time         TIME,
+  description  TEXT,
+  is_recurring BOOLEAN NOT NULL DEFAULT FALSE,
+  recurrence   VARCHAR(20) CHECK (recurrence IN ('weekly', 'biweekly', 'monthly')),
+  recur_end    DATE,
+  created_at   TIMESTAMP DEFAULT NOW(),
+  updated_at   TIMESTAMP DEFAULT NOW()
+);
+
+-- Playlist de canciones de un evento
+CREATE TABLE IF NOT EXISTS event_songs (
+  id         SERIAL PRIMARY KEY,
+  event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  song_id    INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+  position   INTEGER NOT NULL DEFAULT 0,
+  notes      TEXT
+);
+
+-- ==========================================
 -- ÍNDICES
 -- ==========================================
 CREATE INDEX IF NOT EXISTS idx_song_slides_song_id ON song_slides(song_id);
 CREATE INDEX IF NOT EXISTS idx_bible_verses_book ON bible_verses(book_id, chapter, verse);
 CREATE INDEX IF NOT EXISTS idx_schedule_items_schedule ON schedule_items(schedule_id);
+CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
+CREATE INDEX IF NOT EXISTS idx_event_songs_event ON event_songs(event_id);
 
 -- ==========================================
 -- DATOS DE EJEMPLO

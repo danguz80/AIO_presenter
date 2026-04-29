@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 import { usePresenter } from '../context/usePresenter';
+import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
+import { stripChords } from '../utils/chordUtils';
 
 /**
  * Salida Virtual — diseñada para usarse como:
@@ -12,6 +14,8 @@ import { usePresenter } from '../context/usePresenter';
 export default function VirtualPage() {
   const { state } = usePresenter();
   const { liveState, virtualConfig } = state;
+
+  useKeyboardRelay();
 
   useEffect(() => {
     document.title = 'AIO Presenter — Virtual/NDI';
@@ -49,7 +53,8 @@ export default function VirtualPage() {
 // ─── Contenido del slide ──────────────────────────────────────────────────────
 function VirtualSlideContent({ slideData, fontSize }) {
   if (slideData.type === 'song') {
-    const lineCount = (slideData.content ?? '').split('\n').filter(l => l.trim()).length;
+    const cleanContent = stripChords(slideData.content ?? '');
+    const lineCount = cleanContent.split('\n').filter(l => l.trim()).length;
     const autoSize =
       lineCount <= 3  ? 'clamp(2.2rem, 5.5vw, 5rem)'
       : lineCount <= 5 ? 'clamp(1.8rem, 4.2vw, 3.8rem)'
@@ -78,7 +83,7 @@ function VirtualSlideContent({ slideData, fontSize }) {
             textShadow: '0 2px 12px rgba(0,0,0,0.9)',
           }}
         >
-          {slideData.content}
+          {cleanContent}
         </p>
         {slideData.songTitle && (
           <p className="text-white/30 text-base mt-8">{slideData.songTitle}</p>

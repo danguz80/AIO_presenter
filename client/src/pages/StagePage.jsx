@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { usePresenter } from '../context/usePresenter';
+import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
+import { stripChords, parseChordLines } from '../utils/chordUtils';
 
 /**
  * Pantalla de Escenario — se abre en una ventana separada para el
@@ -10,6 +12,8 @@ export default function StagePage() {
   const { state } = usePresenter();
   const { liveState, stageConfig } = state;
   const [time, setTime] = useState(new Date());
+
+  useKeyboardRelay();
 
   useEffect(() => {
     document.title = 'AIO Presenter — Escenario';
@@ -84,12 +88,18 @@ export default function StagePage() {
 // ─── Contenido del slide actual ───────────────────────────────────────────────
 function StageSlideContent({ slideData, fontSize }) {
   if (slideData.type === 'song') {
-    const lineCount = (slideData.content || '').split('\n').filter(l => l.trim()).length;
+    const cleanContent = stripChords(slideData.content || '');
+    const lineCount = cleanContent.split('\n').filter(l => l.trim()).length;
+    const chordLines = parseChordLines(slideData.content || '');
+    const hasAnyChords = chordLines.some(line => line.some(seg => seg.chord));
+    // Con acordes cada línea ocupa ~1.6x más de altura → reducir tamaño
+    const effectiveLines = hasAnyChords ? Math.ceil(lineCount * 1.6) : lineCount;
+
     const autoSize =
-      lineCount <= 3 ? 'clamp(2.2rem, 5.5vw, 5rem)'
-      : lineCount <= 5 ? 'clamp(1.8rem, 4.2vw, 3.8rem)'
-      : lineCount <= 7 ? 'clamp(1.4rem, 3.4vw, 3rem)'
-      : lineCount <= 10 ? 'clamp(1.1rem, 2.6vw, 2.4rem)'
+      effectiveLines <= 3  ? 'clamp(2.2rem, 5.5vw, 5rem)'
+      : effectiveLines <= 5  ? 'clamp(1.8rem, 4.2vw, 3.8rem)'
+      : effectiveLines <= 7  ? 'clamp(1.4rem, 3.4vw, 3rem)'
+      : effectiveLines <= 10 ? 'clamp(1.1rem, 2.6vw, 2.4rem)'
       : 'clamp(0.9rem, 2vw, 1.8rem)';
 
     const sizeMap = {
@@ -99,6 +109,8 @@ function StageSlideContent({ slideData, fontSize }) {
       auto:   autoSize,
     };
 
+    const fSize = sizeMap[fontSize] ?? autoSize;
+
     return (
       <div className="w-full h-full flex flex-col items-center justify-center px-16 text-center">
         {slideData.label && (
@@ -106,12 +118,41 @@ function StageSlideContent({ slideData, fontSize }) {
             {slideData.label}
           </p>
         )}
-        <p
-          className="text-white leading-relaxed whitespace-pre-line w-full"
-          style={{ fontSize: sizeMap[fontSize] ?? autoSize, textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}
-        >
-          {slideData.content}
-        </p>
+        <div className="w-full" style={{ fontSize: fSize }}>
+          {chordLines.map((line, li) => {
+            const lineText = line.map(s => s.text).join('');
+            if (!lineText.trim()) return <div key={li} style={{ height: '0.6em' }} />;
+            const hasChords = line.some(seg => seg.chord);
+            if (!hasChords) {
+              return (
+                <div key={li} className="text-white leading-relaxed"
+                  style={{ textShadow: '0 2px 10px rgba(0,0,0,0.6)' }}>
+                  {lineText}
+                </div>
+              );
+            }
+            return (
+              <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.15 }}>
+                {line.map((seg, si) => (
+                  <span key={si} className="inline-flex flex-col items-start">
+                    <span
+                      className="font-bold font-mono text-yellow-300"
+                      style={{ fontSize: '0.62em', lineHeight: 1, minHeight: '1.1em' }}
+                    >
+                      {seg.chord || ''}
+                    </span>
+                    <span
+                      className="text-white"
+                      style={{ textShadow: '0 2px 10px rgba(0,0,0,0.6)', lineHeight: 1.35, whiteSpace: 'pre' }}
+                    >
+                      {seg.text || (seg.chord ? '\u00a0' : '')}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            );
+          })}
+        </div>
         {slideData.songTitle && (
           <p className="text-white/30 text-base mt-8">{slideData.songTitle}</p>
         )}
@@ -163,7 +204,7 @@ function NextSlidePreview({ slideData }) {
           </span>
         )}
         <p className="text-white/70 text-sm leading-relaxed whitespace-pre-line line-clamp-2">
-          {slideData.content}
+          {stripChords(slideData.content)}
         </p>
       </div>
     );

@@ -1,4 +1,5 @@
 import { usePresenter } from '../../context/usePresenter';
+import { stripChords, parseChordLines } from '../../utils/chordUtils';
 
 export default function LivePreview() {
   const { state } = usePresenter();
@@ -59,7 +60,7 @@ export default function LivePreview() {
           <div className="w-full rounded overflow-hidden flex flex-col"
             style={{ ...stageBgStyle, aspectRatio: '16/9' }}>
             <div className="flex-1 flex items-center justify-center px-2">
-              <SlidePreviewContent slideData={slideData} isBlank={isBlank} />
+              <SlidePreviewContent slideData={slideData} isBlank={isBlank} showChords />
             </div>
             {stageConfig.showNextSlide && (
               <div className="shrink-0 bg-black/40 px-2 py-0.5 border-t border-white/10">
@@ -116,18 +117,58 @@ function PreviewBox({ label, dotColor, borderColor, live, onClick, children }) {
 }
 
 // ─── Contenido del slide ──────────────────────────────────────────────────────
-function SlidePreviewContent({ slideData, isBlank, transparent = false }) {
+function SlidePreviewContent({ slideData, isBlank, transparent = false, showChords = false }) {
   if (isBlank || !slideData) {
     return <span className="text-zinc-600 text-[9px]">Vacío</span>;
   }
   const textColor = transparent ? 'text-zinc-800' : 'text-white';
 
   if (slideData.type === 'song') {
+    if (showChords) {
+      const chordLines = parseChordLines(slideData.content || '');
+      const hasAnyChords = chordLines.some(l => l.some(s => s.chord));
+      if (hasAnyChords) {
+        return (
+          <div className="text-center px-2 w-full">
+            {slideData.label && (
+              <p className="text-[6px] text-zinc-400 uppercase mb-0.5">{slideData.label}</p>
+            )}
+            <div className="text-[7px] leading-none">
+              {chordLines.map((line, li) => {
+                const lineText = line.map(s => s.text).join('');
+                if (!lineText.trim()) return <div key={li} style={{ height: '0.4em' }} />;
+                const hasChords = line.some(s => s.chord);
+                if (!hasChords) {
+                  return (
+                    <div key={li} className={`${textColor} leading-relaxed`}>{lineText}</div>
+                  );
+                }
+                return (
+                  <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.1 }}>
+                    {line.map((seg, si) => (
+                      <span key={si} className="inline-flex flex-col items-start">
+                        <span className="font-bold font-mono text-yellow-300"
+                          style={{ fontSize: '0.75em', lineHeight: 1, minHeight: '1em' }}>
+                          {seg.chord || ''}
+                        </span>
+                        <span className={textColor} style={{ lineHeight: 1.3, whiteSpace: 'pre' }}>
+                          {seg.text || (seg.chord ? '\u00a0' : '')}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+    }
     return (
       <div className="text-center px-2">
         <p className="text-[7px] text-zinc-400 uppercase mb-0.5">{slideData.label}</p>
         <p className={`text-[9px] ${textColor} leading-relaxed whitespace-pre-line line-clamp-4`}>
-          {slideData.content}
+          {stripChords(slideData.content)}
         </p>
       </div>
     );
@@ -151,7 +192,7 @@ function NextPreviewContent({ slideData }) {
     return (
       <p className="text-white/60 text-[6px] leading-relaxed whitespace-pre-line line-clamp-1">
         <span className="text-white/30 mr-1 uppercase">{slideData.label}</span>
-        {slideData.content}
+        {stripChords(slideData.content)}
       </p>
     );
   }

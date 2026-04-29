@@ -7,9 +7,12 @@ const pool = new Pool({
   database: process.env.DB_NAME     || 'aio_presenter',
   user:     process.env.DB_USER     || 'postgres',
   password: process.env.DB_PASSWORD || '',
+  // Forzar UTF-8 en la conexión para tildes, ñ y otros caracteres especiales
+  client_encoding: 'UTF8',
 });
 
-pool.on('connect', () => {
+pool.on('connect', (client) => {
+  client.query("SET client_encoding = 'UTF8'");
   console.log('[DB] Conectado a PostgreSQL');
 });
 

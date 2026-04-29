@@ -1,57 +1,65 @@
 import { useEffect } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import { Music } from 'lucide-react';
+import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
+import { stripChords } from '../../utils/chordUtils';
 
 export default function SongDetail() {
   const { state, actions } = usePresenter();
-  const { selectedSong, selectedSlide, liveState } = state;
+  const { selectedSong, selectedSlide, liveState, navigateRequest } = state;
+
+  // Función central de navegación (reutilizada por teclado, relay y móvil)
+  const navigate = (dir) => {
+    const slides = selectedSong?.slides;
+    if (!slides || slides.length === 0) return;
+    const currentIndex = selectedSlide
+      ? slides.findIndex(s => s.id === selectedSlide.id)
+      : -1;
+    let nextIndex = null;
+    if (dir === 'next') nextIndex = currentIndex < slides.length - 1 ? currentIndex + 1 : currentIndex;
+    else if (dir === 'prev') nextIndex = currentIndex > 0 ? currentIndex - 1 : 0;
+    if (nextIndex === null || nextIndex === currentIndex) return;
+    const slide = slides[nextIndex];
+    const nextSlide = slides[nextIndex + 1] || null;
+    actions.selectSlide(slide);
+    actions.showSlide({
+      type:       'song',
+      slides,            // para que el servidor guarde el contexto de navegación
+      slideIndex: nextIndex,
+      slideData: {
+        type:      'song',
+        songId:    selectedSong.id,
+        slideId:   slide.id,
+        songTitle: selectedSong.title,
+        label:     slide.label,
+        content:   slide.content,
+      },
+      nextSlideData: nextSlide ? {
+        type:    'song',
+        label:   nextSlide.label,
+        content: nextSlide.content,
+      } : null,
+    });
+  };
 
   // Navegación por teclado: Espacio / → / ↓ = siguiente, ← / ↑ = anterior
   useEffect(() => {
     const handleKey = (e) => {
-      // No navegar si el foco está en un input/textarea
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-      const slides = selectedSong?.slides;
-      if (!slides || slides.length === 0) return;
-
-      const currentIndex = selectedSlide
-        ? slides.findIndex(s => s.id === selectedSlide.id)
-        : -1;
-
-      let nextIndex = null;
       if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        nextIndex = currentIndex < slides.length - 1 ? currentIndex + 1 : currentIndex;
+        e.preventDefault?.(); navigate('next');
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        nextIndex = currentIndex > 0 ? currentIndex - 1 : 0;
-      }
-
-      if (nextIndex !== null && nextIndex !== currentIndex) {
-        const slide = slides[nextIndex];
-        const nextSlide = slides[nextIndex + 1] || null;
-        actions.selectSlide(slide);
-        actions.showSlide({
-          type:      'song',
-          slideData: {
-            type:      'song',
-            songTitle: selectedSong.title,
-            label:     slide.label,
-            content:   slide.content,
-          },
-          nextSlideData: nextSlide ? {
-            type:    'song',
-            label:   nextSlide.label,
-            content: nextSlide.content,
-          } : null,
-        });
+        e.preventDefault?.(); navigate('prev');
       }
     };
-
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    const relay = openKeyRelayReceiver();
+    relay.onmessage = ({ data }) => handleKey(data);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      relay.close();
+    };
   }, [selectedSong, selectedSlide, actions]);
 
   if (!selectedSong) {
@@ -64,12 +72,16 @@ export default function SongDetail() {
   }
 
   const handleSlideClick = (slide, index) => {
-    const nextSlide = selectedSong.slides[index + 1] || null;
+    const slides    = selectedSong.slides;
+    const nextSlide = slides[index + 1] || null;
     actions.selectSlide(slide);
     actions.showSlide({
-      type:      'song',
+      type:       'song',
+      slides,            // para que el servidor guarde el contexto de navegación
+      slideIndex: index,
       slideData: {
         type:      'song',
+        songId:    selectedSong.id,
         slideId:   slide.id,
         songTitle: selectedSong.title,
         label:     slide.label,
@@ -124,12 +136,14 @@ export default function SongDetail() {
                       <span className="text-xs font-mono text-zinc-500 w-5 text-right shrink-0">
                         {index + 1}
                       </span>
-                      <span className={`
-                        text-xs font-medium px-2 py-0.5 rounded
-                        ${active ? 'bg-green-500/20 text-green-400' : 'bg-surface-600 text-zinc-400'}
-                      `}>
-                        {slide.label}
-                      </span>
+                      {slide.label ? (
+                        <span className={`
+                          text-xs font-medium px-2 py-0.5 rounded
+                          ${active ? 'bg-green-500/20 text-green-400' : 'bg-surface-600 text-zinc-400'}
+                        `}>
+                          {slide.label}
+                        </span>
+                      ) : null}
                     </div>
                     {active && (
                       <span className="flex items-center gap-1 text-xs text-green-400">
@@ -141,7 +155,7 @@ export default function SongDetail() {
 
                   {/* Contenido */}
                   <p className="text-xs text-zinc-300 whitespace-pre-line line-clamp-4 leading-relaxed">
-                    {slide.content}
+                    {stripChords(slide.content)}
                   </p>
                 </div>
               );

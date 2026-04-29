@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Send, BookOpen, X } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
+import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
 
 // ─── Modos de vista ───────────────────────────────────────────────────────────
 const MODE_BROWSE  = 'browse';
@@ -173,6 +174,21 @@ export default function BibleBrowser() {
     });
   }, [actions]);
 
+  // ─── Navegación desde móvil (via socket) ─────────────────────────────────
+  const { navigateRequest } = state;
+  useEffect(() => {
+    if (!navigateRequest) return;
+    const fakeKey = navigateRequest.dir === 'next' ? 'ArrowRight' : 'ArrowLeft';
+    if (verses.length === 0) return;
+    setActiveVerseIdx(prev => {
+      const next = fakeKey === 'ArrowLeft'
+        ? (prev === null ? 0 : Math.max(0, prev - 1))
+        : (prev === null ? 0 : Math.min(verses.length - 1, prev + 1));
+      sendVerse(verses[next], verses[next + 1] || null);
+      return next;
+    });
+  }, [navigateRequest]);
+
   // ─── Navegación por teclado (Space / ↓ / → = siguiente verso) ─────────────
   useEffect(() => {
     const handleKey = (e) => {
@@ -180,7 +196,7 @@ export default function BibleBrowser() {
       if (e.key !== ' ' && e.key !== 'ArrowDown' && e.key !== 'ArrowRight' &&
           e.key !== 'ArrowUp'  && e.key !== 'ArrowLeft') return;
       if (verses.length === 0) return;
-      e.preventDefault();
+      e.preventDefault?.();
 
       setActiveVerseIdx(prev => {
         let next;
@@ -194,7 +210,12 @@ export default function BibleBrowser() {
       });
     };
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
+    const relay = openKeyRelayReceiver();
+    relay.onmessage = ({ data }) => handleKey(data);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      relay.close();
+    };
   }, [verses, sendVerse]);
 
   // ─── Scroll al versículo activo en el texto del capítulo ────────────────

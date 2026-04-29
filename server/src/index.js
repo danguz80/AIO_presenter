@@ -1,3 +1,5 @@
+const os = require('os');
+
 require('dotenv').config();
 const express    = require('express');
 const http       = require('http');
@@ -7,18 +9,19 @@ const cors       = require('cors');
 const songsRouter  = require('./routes/songs');
 const bibleRouter  = require('./routes/bible');
 const importRouter = require('./routes/import');
+const eventsRouter = require('./routes/events');
 const ndi          = require('./ndi/ndiSender');
 
 const app    = express();
 const server = http.createServer(app);
 
 // ─── CORS ───────────────────────────────────────────────────────────────────
-const allowedOrigins = ['http://localhost:5173', 'http://localhost:3000'];
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// Permitir cualquier origen de red local (móviles en la misma red WiFi)
+app.use(cors({ origin: true, credentials: true }));
 
 // ─── SOCKET.IO ──────────────────────────────────────────────────────────────
 const io = new Server(server, {
-  cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
+  cors: { origin: true, methods: ['GET', 'POST'] },
 });
 
 /**
@@ -49,6 +52,9 @@ let virtualConfig = {
   ndiEnabled:  false,
 };
 
+/** Slides de la canción activa para navegación server-side */
+let currentSong = null; // { slides: [...], slideIndex: 0, songTitle: '' }
+
 // ─── NDI ─────────────────────────────────────────────────────────────────────
 (async () => {
   const result = await ndi.init();
@@ -69,7 +75,20 @@ io.on('connection', (socket) => {
 
   // El operador envía un slide a proyectar
   socket.on('live:show', (data) => {
-    liveState = { ...liveState, ...data, isBlank: false };
+    // Guardar slides para navegación server-side (enviados por cualquier cliente)
+    if (data.slides && Array.isArray(data.slides)) {
+      currentSong = {
+        slides:     data.slides,
+        slideIndex: data.slideIndex ?? 0,
+        songTitle:  data.slideData?.songTitle || '',
+        songId:     data.slideData?.songId   || null,
+      };
+    } else if (data.type !== 'song') {
+      currentSong = null; // limpiar si se proyecta algo que no es canción
+    }
+    // No persistir slides en liveState (no es necesario enviarlo a los clientes)
+    const { slides, slideIndex, ...dataWithoutSlides } = data;
+    liveState = { ...liveState, ...dataWithoutSlides, isBlank: false };
     ndi.updateState(liveState, virtualConfig);
     io.emit('live:state', liveState);
   });
@@ -109,6 +128,39 @@ io.on('connection', (socket) => {
     io.emit('ndi:status', ndi.getStatus());
   });
 
+  // Navegar: el móvil u otro cliente pide avanzar/retroceder
+  socket.on('navigate', (dir) => {
+    // Si hay una canción activa, el servidor calcula el siguiente slide
+    if (currentSong && currentSong.slides.length > 0) {
+      const { slides, songId, slideIndex, songTitle } = currentSong;
+      const newIndex = dir === 'next'
+        ? Math.min(slideIndex + 1, slides.length - 1)
+        : Math.max(slideIndex - 1, 0);
+      if (newIndex === slideIndex) return;
+      currentSong.slideIndex = newIndex;
+      const slide     = slides[newIndex];
+      const nextSlide = slides[newIndex + 1] || null;
+      liveState = {
+        ...liveState,
+        isBlank:       false,
+        slideData: {
+          type:      'song',
+          songId,
+          slideId:   slide.id,
+          songTitle,
+          label:     slide.label,
+          content:   slide.content,
+        },
+        nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
+      };
+      ndi.updateState(liveState, virtualConfig);
+      io.emit('live:state', liveState); // actualiza TODOS los clientes
+    } else {
+      // Sin canción activa (ej. Biblia): re-emitir para que los clientes naveguen
+      socket.broadcast.emit('navigate', dir);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`[Socket] Cliente desconectado: ${socket.id}`);
   });
@@ -122,9 +174,25 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/songs',  songsRouter);
 app.use('/api/bible',  bibleRouter);
 app.use('/api/import', importRouter);
+app.use('/api/events', eventsRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Devuelve la IP local de la máquina para mostrar en el QR
+app.get('/api/network-info', (_req, res) => {
+  const interfaces = os.networkInterfaces();
+  const ips = [];
+  for (const iface of Object.values(interfaces)) {
+    for (const addr of iface) {
+      if (addr.family === 'IPv4' && !addr.internal) {
+        ips.push(addr.address);
+      }
+    }
+  }
+  const port = process.env.PORT || 3001;
+  res.json({ ips, port });
 });
 
 // ─── 404 ─────────────────────────────────────────────────────────────────────
