@@ -1,0 +1,154 @@
+import { useState, useCallback } from 'react';
+import { usePresenter }  from '../../context/usePresenter';
+import SongFormModal     from './SongFormModal';
+import ImportModal       from './ImportModal';
+import { Search, Plus, Music, Trash2, Upload, Loader2 } from 'lucide-react';
+import api from '../../hooks/useApi';
+
+export default function SongLibrary() {
+  const { state, actions } = usePresenter();
+  const [search,      setSearch]      = useState('');
+  const [showForm,    setShowForm]    = useState(false);
+  const [showImport,  setShowImport]  = useState(false);
+  const [editingSong, setEditingSong] = useState(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
+
+  const handleSearch = useCallback(async (value) => {
+    setSearch(value);
+    await actions.reloadSongs(value);
+  }, [actions]);
+
+  const handleSelect = async (song) => {
+    await actions.loadSongDetail(song.id);
+  };
+
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
+    if (!confirm('¿Eliminar esta canción?')) return;
+    await actions.deleteSong(id);
+  };
+
+  const handleEdit = async (e, song) => {
+    e.stopPropagation();
+    setLoadingEdit(song.id);
+    try {
+      const res = await api.get(`/songs/${song.id}`);
+      setEditingSong(res.data);
+      setShowForm(true);
+    } catch {
+      setEditingSong(song);
+      setShowForm(true);
+    } finally {
+      setLoadingEdit(false);
+    }
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingSong(null);
+  };
+
+  const closeImport = () => setShowImport(false);
+
+  return (
+    <>
+      <div className="flex items-center justify-between px-3 py-3 border-b border-surface-700">
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+          Canciones
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowImport(true)}
+            className="btn-ghost py-1 px-2 flex items-center gap-1 text-xs"
+            title="Importar desde archivo"
+          >
+            <Upload size={13} />
+            Importar
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="btn-primary py-1 px-2 flex items-center gap-1"
+            title="Nueva canción"
+          >
+            <Plus size={14} />
+            Nueva
+          </button>
+        </div>
+      </div>
+
+      {/* Búsqueda */}
+      <div className="px-3 py-2 border-b border-surface-700">
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+          <input
+            className="input pl-8"
+            placeholder="Buscar canción..."
+            value={search}
+            onChange={e => handleSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div className="flex-1 overflow-y-auto">
+        {state.songs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 text-zinc-600 gap-2">
+            <Music size={28} />
+            <span className="text-sm">Sin canciones</span>
+          </div>
+        ) : (
+          <ul>
+            {state.songs.map(song => (
+              <li
+                key={song.id}
+                onClick={() => handleSelect(song)}
+                className={`
+                  group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-surface-700/50
+                  hover:bg-surface-700 transition-colors
+                  ${state.selectedSong?.id === song.id ? 'bg-surface-700 border-l-2 border-l-accent' : ''}
+                `}
+              >
+                <Music size={14} className="text-zinc-500 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-zinc-100 truncate">{song.title}</p>
+                  {song.author && (
+                    <p className="text-xs text-zinc-500 truncate">{song.author}</p>
+                  )}
+                </div>
+                {/* Acciones hover */}
+                <div className="hidden group-hover:flex items-center gap-1">
+                  <button
+                    onClick={e => handleEdit(e, song)}
+                    className="p-1 text-zinc-400 hover:text-white hover:bg-surface-600 rounded"
+                    title="Editar"
+                    disabled={loadingEdit === song.id}
+                  >
+                    {loadingEdit === song.id ? <Loader2 size={13} className="animate-spin" /> : '✏️'}
+                  </button>
+                  <button
+                    onClick={e => handleDelete(e, song.id)}
+                    className="p-1 text-zinc-400 hover:text-red-400 hover:bg-surface-600 rounded"
+                    title="Eliminar"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {showForm && (
+        <SongFormModal
+          song={editingSong}
+          onClose={closeForm}
+        />
+      )}
+
+      {showImport && (
+        <ImportModal onClose={closeImport} />
+      )}
+    </>
+  );
+}
