@@ -5,10 +5,10 @@ import SongDetail      from '../components/Library/SongDetail';
 import BibleBrowser    from '../components/Library/BibleBrowser';
 import LiveControls    from '../components/Controls/LiveControls';
 import LivePreview     from '../components/Controls/LivePreview';
-import StageControls   from '../components/Controls/StageControls';
-import VirtualControls from '../components/Controls/VirtualControls';
+import SettingsPanel   from '../components/Settings/SettingsPanel';
+import SongFormModal   from '../components/Library/SongFormModal';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -24,8 +24,9 @@ function fmtDate(d) {
 export default function ControllerPage() {
   const { state } = usePresenter();
   const [activeTab, setActiveTab] = useState('songs'); // 'songs' | 'bible'
-  const [showQR, setShowQR]       = useState(false);
   const [mobileUrl, setMobileUrl] = useState('');
+
+  const [showSettings, setShowSettings] = useState(false);
 
   // Obtener IP local del servidor para construir URL del móvil
   useEffect(() => {
@@ -68,51 +69,17 @@ export default function ControllerPage() {
             <span className="hidden sm:inline">Calendario</span>
           </Link>
 
-          {/* Botón móvil */}
+          {/* Botón configuración */}
           <button
-            onClick={() => setShowQR(true)}
-            title="Conectar móvil"
+            onClick={() => setShowSettings(true)}
+            title="Configuración"
             className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-accent transition-colors px-2 py-1 rounded hover:bg-surface-700"
           >
-            <Smartphone size={15} />
-            <span className="hidden sm:inline">Móvil</span>
+            <Settings size={15} />
+            <span className="hidden sm:inline">Configuración</span>
           </button>
         </div>
       </header>
-
-      {/* ── Modal QR ── */}
-      {showQR && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
-          onClick={() => setShowQR(false)}
-        >
-          <div
-            className="bg-surface-800 border border-surface-600 rounded-2xl p-6 max-w-xs w-full mx-4 text-center shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <span className="font-semibold text-white text-sm">Conectar móvil</span>
-              <button onClick={() => setShowQR(false)} className="text-zinc-400 hover:text-white">
-                <X size={16} />
-              </button>
-            </div>
-
-            {mobileUrl ? (
-              <>
-                <div className="bg-white p-3 rounded-xl inline-block mb-4">
-                  <QRCodeSVG value={mobileUrl} size={180} />
-                </div>
-                <p className="text-zinc-300 text-xs mb-1 font-mono break-all">{mobileUrl}</p>
-                <p className="text-zinc-500 text-xs mt-3 leading-relaxed">
-                  Conecta tu móvil a la misma red WiFi<br />y escanea el código QR
-                </p>
-              </>
-            ) : (
-              <p className="text-zinc-400 text-sm py-6">Obteniendo IP…</p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* ── Tabs: Canciones / Biblia ── */}
       <div className="flex gap-1 px-4 pt-2 pb-0 bg-surface-800 border-b border-surface-700 shrink-0">
@@ -156,10 +123,16 @@ export default function ControllerPage() {
         <aside className="w-96 shrink-0 flex flex-col overflow-hidden">
           <LivePreview />
           <LiveControls />
-          <StageControls />
-          <VirtualControls />
         </aside>
       </div>
+
+      {/* Panel de Configuración */}
+      {showSettings && (
+        <SettingsPanel
+          mobileUrl={mobileUrl}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   );
 }
@@ -219,7 +192,13 @@ function EventsPanel() {
   const [creatingBusy, setCreatingBusy] = useState(false);
   const [newEv,       setNewEv]       = useState({ title: '', date: '', time: '', is_recurring: false, recurrence: 'weekly' });
   const [createError, setCreateError] = useState('');
+  const [editingSong, setEditingSong] = useState(null); // song completa para SongFormModal
   const searchRef = useRef(null);
+
+  // Publicar el schedule al contexto global cuando cambia el evento seleccionado
+  useEffect(() => {
+    actions.setSchedule(selectedEv?.songs ?? []);
+  }, [selectedEv]); // eslint-disable-line
 
   // Cargar todas las canciones una vez al abrir
   useEffect(() => {
@@ -340,6 +319,46 @@ function EventsPanel() {
     finally { setCreatingBusy(false); }
   };
 
+  const reorderSong = async (song_id, dir) => {
+    const songs = selectedEv.songs || [];
+    const idx = songs.findIndex(p => p.song_id === song_id);
+    if (idx < 0) return;
+    const newIdx = dir === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= songs.length) return;
+    const newSongs = [...songs];
+    [newSongs[idx], newSongs[newIdx]] = [newSongs[newIdx], newSongs[idx]];
+    setSaving(true);
+    const occDate = selectedEv.is_recurring ? String(selectedEv.date).split('T')[0] : null;
+    const baseDate = selectedEv.base_date || String(selectedEv.date).split('T')[0];
+    try {
+      await fetch(`/api/events/${selectedEv.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: selectedEv.title, date: baseDate,
+          time: selectedEv.time || null, description: selectedEv.description || null,
+          is_recurring: selectedEv.is_recurring, recurrence: selectedEv.recurrence || null,
+          recur_end: selectedEv.recur_end || null, occurrence_date: occDate,
+          songs: newSongs.map((p, i) => ({ song_id: p.song_id, position: i })),
+        }),
+      });
+      setSelectedEv(ev => ({ ...ev, songs: newSongs }));
+      setEvents(evs => evs.map(e =>
+        (e.id === selectedEv.id && String(e.date).split('T')[0] === String(selectedEv.date).split('T')[0])
+          ? { ...e, songs: newSongs } : e
+      ));
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const openEditSong = async (song_id) => {
+    try {
+      const res = await fetch(`/api/songs/${song_id}`);
+      const data = await res.json();
+      setEditingSong(data);
+    } catch (e) { console.error(e); }
+  };
+
   const removeSong = async (song_id) => {
     const newSongs = (selectedEv.songs || []).filter(p => p.song_id !== song_id);
     setSaving(true);
@@ -383,6 +402,7 @@ function EventsPanel() {
   }
 
   return (
+    <>
     <div className="w-52 shrink-0 border-r border-surface-700 flex flex-col overflow-hidden bg-surface-800/50">
 
       {/* ── Vista: crear evento ── */}
@@ -626,9 +646,24 @@ function EventsPanel() {
               <div className="flex flex-col">
                 {selectedEv.songs.map((s, i) => (
                   <div key={s.song_id} className="flex items-center border-b border-surface-700/60 last:border-0 group">
+                    {/* Botones reordenar */}
+                    <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                      <button
+                        onClick={() => reorderSong(s.song_id, 'up')}
+                        disabled={i === 0}
+                        className="px-1 pt-1 pb-0 text-zinc-600 hover:text-zinc-300 disabled:opacity-20 transition-colors"
+                        title="Subir"
+                      ><ChevronUp size={10} /></button>
+                      <button
+                        onClick={() => reorderSong(s.song_id, 'down')}
+                        disabled={i === selectedEv.songs.length - 1}
+                        className="px-1 pt-0 pb-1 text-zinc-600 hover:text-zinc-300 disabled:opacity-20 transition-colors"
+                        title="Bajar"
+                      ><ChevronDown size={10} /></button>
+                    </div>
                     <button
                       onClick={() => actions.loadSongDetail(s.song_id)}
-                      className="flex items-center gap-2 px-2.5 py-2 flex-1 min-w-0 hover:bg-accent/15 transition-colors text-left"
+                      className="flex items-center gap-2 px-1.5 py-2 flex-1 min-w-0 hover:bg-accent/15 transition-colors text-left"
                     >
                       <span className="text-[10px] text-zinc-600 w-4 text-right shrink-0">{i + 1}</span>
                       <Music size={10} className="text-accent shrink-0" />
@@ -637,13 +672,18 @@ function EventsPanel() {
                         {s.author && <p className="text-[10px] text-zinc-500 truncate">{s.author}</p>}
                       </div>
                     </button>
+                    {/* Editar */}
+                    <button
+                      onClick={() => openEditSong(s.song_id)}
+                      className="px-1 py-2 text-zinc-600 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                      title="Editar canción"
+                    ><Pencil size={10} /></button>
+                    {/* Quitar */}
                     <button
                       onClick={() => removeSong(s.song_id)}
                       className="px-1.5 py-2 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
                       title="Quitar"
-                    >
-                      <X size={11} />
-                    </button>
+                    ><X size={11} /></button>
                   </div>
                 ))}
               </div>
@@ -657,6 +697,28 @@ function EventsPanel() {
         </>
       )}
     </div>
+
+    {/* Modal edición de canción */}
+    {editingSong && (
+      <SongFormModal
+        song={editingSong}
+        onClose={async () => {
+          // refrescar datos de la canción editada en la playlist
+          try {
+            const res = await fetch(`/api/songs/${editingSong.id}`);
+            const updated = await res.json();
+            setSelectedEv(ev => ({
+              ...ev,
+              songs: (ev.songs || []).map(p =>
+                p.song_id === updated.id ? { ...p, title: updated.title, author: updated.author } : p
+              ),
+            }));
+          } catch (_) {}
+          setEditingSong(null);
+        }}
+      />
+    )}
+    </>
   );
 }
 

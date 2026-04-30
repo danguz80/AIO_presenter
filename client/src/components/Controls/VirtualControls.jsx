@@ -26,10 +26,10 @@ const CHROMA_PRESETS = [
 
 const VIRTUAL_URL = `${window.location.origin}/virtual`;
 
-export default function VirtualControls() {
+export default function VirtualControls({ defaultOpen = false }) {
   const { state, actions } = usePresenter();
   const { virtualConfig, ndiStatus } = state;
-  const [open, setOpen]     = useState(false);
+  const [open, setOpen]     = useState(defaultOpen);
   const [copied, setCopied] = useState(false);
 
   const update = (patch) => {

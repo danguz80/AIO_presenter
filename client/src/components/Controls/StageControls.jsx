@@ -1,88 +1,259 @@
 import { useState } from 'react';
 import { usePresenter } from '../../context/usePresenter';
-import { Clock, Eye, EyeOff, ChevronDown, ChevronUp, Type } from 'lucide-react';
+import {
+  Clock, Eye, EyeOff, ChevronDown, ChevronUp, Type,
+  Hash, Tag, AlignLeft, Rows2, Music2, Plus, X, Save, BookOpen,
+} from 'lucide-react';
+
+function injectGoogleFont(name) {
+  const id = `gf-${name.toLowerCase().replace(/\s+/g, '-')}`;
+  if (document.getElementById(id)) return;
+  const link = document.createElement('link');
+  link.id = id;
+  link.rel = 'stylesheet';
+  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name)}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
+  document.head.appendChild(link);
+}
 
 const BG_PRESETS = [
-  { color: '#1e1e2e', label: 'Oscuro azulado' },
+  { color: '#000000', label: 'Negro' },
   { color: '#0d1117', label: 'Negro suave' },
+  { color: '#1e1e2e', label: 'Oscuro azulado' },
   { color: '#1a1a1a', label: 'Gris oscuro' },
   { color: '#0f2027', label: 'Teal oscuro' },
   { color: '#1a0a2e', label: 'Violeta oscuro' },
-  { color: '#0a1628', label: 'Marino profundo' },
 ];
 
-const FONT_SIZES = [
-  { value: 'auto',   label: 'Auto' },
-  { value: 'small',  label: 'Pequeño' },
-  { value: 'medium', label: 'Mediano' },
-  { value: 'large',  label: 'Grande' },
+const FONT_FAMILIES = [
+  { value: 'sans',      label: 'Sans Serif' },
+  { value: 'serif',     label: 'Serif' },
+  { value: 'mono',      label: 'Monospace' },
+  { value: 'condensed', label: 'Condensada' },
 ];
 
-export default function StageControls() {
+export default function StageControls({ defaultOpen = false }) {
   const { state, actions } = usePresenter();
-  const { stageConfig } = state;
-  const [open, setOpen] = useState(false);
+  const { stageConfig, stageTemplates = [] } = state;
+  const [open, setOpen] = useState(defaultOpen);
+  const [fontInput, setFontInput] = useState('');
+  const [templateName, setTemplateName] = useState('');
 
-  const update = (patch) => {
-    actions.setStageConfig({ ...stageConfig, ...patch });
+  const saveTemplate = () => {
+    const name = templateName.trim();
+    if (!name) return;
+    const next = [{ name, config: stageConfig }, ...stageTemplates.filter(t => t.name !== name)];
+    actions.setStageTemplates(next);
+    setTemplateName('');
   };
+
+  const applyTemplate = (t) => actions.setStageConfig(t.config);
+
+  const deleteTemplate = (name) => {
+    actions.setStageTemplates(stageTemplates.filter(t => t.name !== name));
+  };
+
+  const update = (patch) => actions.setStageConfig({ ...stageConfig, ...patch });
+
+  const {
+    showClock, showNextSlide, showSongTitle, showSlideCounter,
+    showSectionLabel, showSideLabel,
+    lyricsColor, nextLyricsColor, chordsColor, clockColor, nextColor,
+    fontFamily, fontBold, fontItalic,
+    fontSizeCounter    = 14,
+    fontSizeTitle      = 16,
+    fontSizeLabel      = 11,
+    fontSizeSideLabel  = 13,
+    fontSizeClock      = 22,
+    fontSizeNextSong   = 16,
+    fontSizeNextLyrics = 32,
+    fontSize           = 36,
+    fontSizeChords     = 18,
+    customFonts = [],
+  } = stageConfig;
+
+  const addFont = () => {
+    const name = fontInput.trim();
+    if (!name) return;
+    if (customFonts.includes(name)) { setFontInput(''); return; }
+    injectGoogleFont(name);
+    update({ customFonts: [...customFonts, name] });
+    setFontInput('');
+  };
+
+  const removeFont = (name) => {
+    const next = customFonts.filter(f => f !== name);
+    // Si la fuente activa es la eliminada, volver a sans
+    const nextFamily = fontFamily === name ? 'sans' : fontFamily;
+    update({ customFonts: next, fontFamily: nextFamily });
+  };
+
+  // Combinar presets + fuentes personalizadas
+  const allFontFamilies = [
+    ...FONT_FAMILIES,
+    ...customFonts.map(f => ({ value: f, label: f, custom: true })),
+  ];
 
   return (
     <div className="border-t border-surface-700">
-      {/* Cabecera colapsable */}
       <button
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-zinc-400 uppercase tracking-wider hover:text-zinc-200 transition-colors"
       >
-        <span>Config. Escenario</span>
+        <span className="flex items-center gap-1.5"><Type size={12} /> Escenario</span>
         {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
       </button>
 
       {open && (
-        <div className="px-3 pb-3 space-y-3">
+        <div className="px-3 pb-3 space-y-4">
 
-          {/* Toggles */}
-          <div className="flex flex-col gap-1.5">
-            <ToggleRow
-              icon={<Clock size={13} />}
-              label="Mostrar reloj"
-              value={stageConfig.showClock}
-              onChange={(v) => update({ showClock: v })}
-            />
-            <ToggleRow
-              icon={<Eye size={13} />}
-              label="Siguiente slide"
-              value={stageConfig.showNextSlide}
-              onChange={(v) => update({ showNextSlide: v })}
-            />
-          </div>
-
-          {/* Tamaño de fuente */}
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-400 mb-1.5">
-              <Type size={12} />
-              Tamaño de texto
+          {/* PLANTILLAS */}
+          <SubSection title="Plantillas">
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={templateName}
+                onChange={e => setTemplateName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && saveTemplate()}
+                placeholder="Nombre de plantilla"
+                className="flex-1 bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-2 py-1.5 placeholder-zinc-500 focus:outline-none focus:border-accent"
+              />
+              <button
+                onClick={saveTemplate}
+                disabled={!templateName.trim()}
+                title="Guardar plantilla"
+                className="px-2 py-1.5 rounded bg-accent text-white text-xs hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Save size={12} />
+              </button>
             </div>
-            <div className="grid grid-cols-4 gap-1">
-              {FONT_SIZES.map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => update({ fontSize: value })}
-                  className={`py-1.5 text-xs rounded transition-colors font-medium ${
-                    stageConfig.fontSize === value
-                      ? 'bg-accent text-white'
-                      : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'
-                  }`}
-                >
-                  {label}
-                </button>
+            {stageTemplates.length > 0 && (
+              <div className="space-y-1 mt-1.5">
+                {stageTemplates.map(t => (
+                  <div key={t.name} className="flex items-center gap-1">
+                    <button
+                      onClick={() => applyTemplate(t)}
+                      className="flex-1 flex items-center gap-1.5 text-xs text-zinc-300 bg-surface-600 hover:bg-surface-500 rounded px-2 py-1.5 truncate transition-colors text-left"
+                    >
+                      <BookOpen size={10} className="shrink-0 text-accent" />
+                      <span className="truncate">{t.name}</span>
+                    </button>
+                    <button
+                      onClick={() => deleteTemplate(t.name)}
+                      className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-surface-600 transition-colors"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SubSection>
+
+          {/* MOSTRAR / OCULTAR */}
+          <SubSection title="Mostrar / Ocultar">
+            <ToggleRow icon={<Music2 size={12} />}    label="Título canción"    value={showSongTitle    ?? true}  onChange={v => update({ showSongTitle: v })} />
+            <ToggleRow icon={<Hash size={12} />}       label="Contador slides"   value={showSlideCounter ?? true}  onChange={v => update({ showSlideCounter: v })} />
+            <ToggleRow icon={<AlignLeft size={12} />}  label="Etiqueta lateral"  value={showSideLabel    ?? true}  onChange={v => update({ showSideLabel: v })} />
+            <ToggleRow icon={<Rows2 size={12} />}      label="Siguiente slide"   value={showNextSlide    ?? true}  onChange={v => update({ showNextSlide: v })} />
+            <ToggleRow icon={<Clock size={12} />}      label="Reloj"             value={showClock        ?? true}  onChange={v => update({ showClock: v })} />
+          </SubSection>
+
+          {/* TIPOGRAFÍA */}
+          <SubSection title="Tipografía">
+            <div className="grid grid-cols-2 gap-1 mb-2">
+              {allFontFamilies.map(({ value, label, custom }) => (
+                <div key={value} className="relative">
+                  <button
+                    onClick={() => update({ fontFamily: value })}
+                    className={`w-full py-1.5 text-xs rounded transition-colors font-medium pr-5 ${
+                      (fontFamily ?? 'sans') === value
+                        ? 'bg-accent text-white'
+                        : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'
+                    }`}
+                    style={custom ? { fontFamily: `'${label}', sans-serif` } : {}}
+                  >
+                    {label}
+                  </button>
+                  {custom && (
+                    <button
+                      onClick={() => removeFont(value)}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-red-400 transition-colors"
+                    >
+                      <X size={9} />
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
-          </div>
+            <div className="flex gap-1.5 mb-2">
+              <button
+                onClick={() => update({ fontBold: !fontBold })}
+                className={`flex-1 py-1.5 text-xs rounded font-bold transition-colors ${
+                  fontBold ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'
+                }`}
+              >
+                <span style={{ fontWeight: 'bold' }}>N</span> Negrita
+              </button>
+              <button
+                onClick={() => update({ fontItalic: !fontItalic })}
+                className={`flex-1 py-1.5 text-xs rounded transition-colors ${
+                  fontItalic ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'
+                }`}
+              >
+                <span style={{ fontStyle: 'italic' }}>I</span> Cursiva
+              </button>
+            </div>
+          </SubSection>
 
-          {/* Fondo de escenario */}
-          <div>
-            <p className="text-xs text-zinc-400 mb-1.5">Fondo de escenario</p>
+          {/* TAMAÑOS */}
+          <SubSection title="Tamaños">
+            <SizeRow label="Letras (actual)"   value={fontSize            ?? 36} onChange={v => update({ fontSize: v })} />
+            <SizeRow label="Acordes"            value={fontSizeChords      ?? 18} onChange={v => update({ fontSizeChords: v })} />
+            <SizeRow label="Letras (sig.)"      value={fontSizeNextLyrics  ?? 32} onChange={v => update({ fontSizeNextLyrics: v })} />
+            <SizeRow label="Título canción"     value={fontSizeTitle       ?? 16} onChange={v => update({ fontSizeTitle: v })} />
+            <SizeRow label="Contador"           value={fontSizeCounter     ?? 14} onChange={v => update({ fontSizeCounter: v })} />
+            <SizeRow label="Franja lateral"     value={fontSizeSideLabel   ?? 13} onChange={v => update({ fontSizeSideLabel: v })} />
+            <SizeRow label="Próx. canción"      value={fontSizeNextSong    ?? 16} onChange={v => update({ fontSizeNextSong: v })} />
+            <SizeRow label="Reloj"              value={fontSizeClock       ?? 22} onChange={v => update({ fontSizeClock: v })} />
+          </SubSection>
+
+          {/* FUENTES PERSONALIZADAS */}
+          <SubSection title="Fuentes (Google Fonts)">
+            <div className="flex gap-1">
+              <input
+                type="text"
+                value={fontInput}
+                onChange={e => setFontInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addFont()}
+                placeholder="Ej: Montserrat"
+                className="flex-1 bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-2 py-1.5 placeholder-zinc-500 focus:outline-none focus:border-accent"
+              />
+              <button
+                onClick={addFont}
+                disabled={!fontInput.trim()}
+                className="px-2 py-1.5 rounded bg-accent text-white text-xs hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <Plus size={12} />
+              </button>
+            </div>
+            {customFonts.length === 0 && (
+              <p className="text-[10px] text-zinc-600 mt-1">
+                Escribe el nombre exacto de una fuente de Google Fonts
+              </p>
+            )}
+          </SubSection>
+
+          {/* COLORES */}
+          <SubSection title="Colores">
+            <ColorRow label="Letra"              value={lyricsColor     ?? '#ffffff'} onChange={v => update({ lyricsColor: v })} />
+            <ColorRow label="Letra Próx. Diap."  value={nextLyricsColor ?? '#ffffff'} onChange={v => update({ nextLyricsColor: v })} />
+            <ColorRow label="Acordes"             value={chordsColor     ?? '#fde047'} onChange={v => update({ chordsColor: v })} />
+            <ColorRow label="Reloj"               value={clockColor      ?? '#ef4444'} onChange={v => update({ clockColor: v })} />
+            <ColorRow label="Próx. canción"       value={nextColor       ?? '#22c55e'} onChange={v => update({ nextColor: v })} />
+          </SubSection>
+
+          {/* FONDO */}
+          <SubSection title="Fondo">
             <div className="grid grid-cols-3 gap-1.5">
               {BG_PRESETS.map((preset) => (
                 <button
@@ -97,29 +268,40 @@ export default function StageControls() {
                   style={{ backgroundColor: preset.color }}
                 />
               ))}
-              {/* Color personalizado */}
-              <div className="relative col-span-3">
-                <label
-                  className="flex items-center gap-2 w-full h-8 rounded border-2 border-surface-600 hover:border-zinc-400 overflow-hidden cursor-pointer px-2"
-                  title="Color personalizado"
-                >
-                  <span className="text-xs text-zinc-400">Personalizado</span>
-                  <div
-                    className="w-5 h-5 rounded ml-auto border border-surface-600 shrink-0"
-                    style={{ backgroundColor: stageConfig.background.color }}
-                  />
-                  <input
-                    type="color"
-                    value={stageConfig.background.color}
-                    onChange={(e) => update({ background: { type: 'color', color: e.target.value } })}
-                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                  />
-                </label>
-              </div>
             </div>
-          </div>
+            <div className="mt-1.5 relative">
+              <label
+                className="flex items-center gap-2 w-full h-8 rounded border-2 border-surface-600 hover:border-zinc-400 overflow-hidden cursor-pointer px-2"
+                title="Color personalizado"
+              >
+                <span className="text-xs text-zinc-400">Personalizado</span>
+                <div
+                  className="w-5 h-5 rounded ml-auto border border-surface-600 shrink-0"
+                  style={{ backgroundColor: stageConfig.background.color }}
+                />
+                <input
+                  type="color"
+                  value={stageConfig.background.color}
+                  onChange={(e) => update({ background: { type: 'color', color: e.target.value } })}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+              </label>
+            </div>
+          </SubSection>
+
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Sub-componentes ────────────────────────────────────────────────────────────
+
+function SubSection({ title, children }) {
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">{title}</p>
+      <div className="space-y-1.5">{children}</div>
     </div>
   );
 }
@@ -128,20 +310,53 @@ function ToggleRow({ icon, label, value, onChange }) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-1.5 text-xs text-zinc-300">
-        {icon}
-        {label}
+        {icon}{label}
       </div>
       <button
         onClick={() => onChange(!value)}
-        className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition-colors ${
-          value
-            ? 'bg-accent/20 text-accent'
-            : 'bg-surface-600 text-zinc-500 hover:text-zinc-300'
+        className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded transition-colors ${
+          value ? 'bg-accent/20 text-accent' : 'bg-surface-600 text-zinc-500 hover:text-zinc-300'
         }`}
       >
-        {value ? <Eye size={11} /> : <EyeOff size={11} />}
+        {value ? <Eye size={10} /> : <EyeOff size={10} />}
         {value ? 'On' : 'Off'}
       </button>
+    </div>
+  );
+}
+
+function SizeRow({ label, value, onChange }) {
+  const PT_OPTIONS = [8,9,10,11,12,13,14,16,18,20,22,24,26,28,32,36,40,48,56,64,72,80,96];
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-zinc-300 truncate shrink-0">{label}</span>
+      <select
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-1.5 py-1 focus:outline-none focus:border-accent"
+      >
+        {PT_OPTIONS.map(pt => (
+          <option key={pt} value={pt}>{pt}pt</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ColorRow({ label, value, onChange }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-zinc-300">{label}</span>
+      <label className="flex items-center gap-1.5 cursor-pointer group">
+        <span className="text-[10px] text-zinc-500 font-mono group-hover:text-zinc-300 transition-colors">
+          {value?.toUpperCase()}
+        </span>
+        <div
+          className="w-6 h-6 rounded border-2 border-surface-500 hover:border-zinc-300 transition-colors shrink-0"
+          style={{ backgroundColor: value }}
+        />
+        <input type="color" value={value} onChange={e => onChange(e.target.value)} className="sr-only" />
+      </label>
     </div>
   );
 }

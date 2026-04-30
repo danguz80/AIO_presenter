@@ -37,7 +37,8 @@ async function getEvents(req, res) {
           'position', es.position,
           'notes', es.notes,
           'title', s.title,
-          'author', s.author
+          'author', s.author,
+          'song_key', s.song_key
         ) ORDER BY es.position
       ) FILTER (WHERE es.id IS NOT NULL),
       '[]'
@@ -74,7 +75,8 @@ async function getEvents(req, res) {
            COALESCE(
              json_agg(
                json_build_object('id', es.id, 'song_id', es.song_id, 'position', es.position,
-                                 'notes', es.notes, 'title', s.title, 'author', s.author)
+                                 'notes', es.notes, 'title', s.title, 'author', s.author,
+                                 'song_key', s.song_key)
                ORDER BY es.position
              ) FILTER (WHERE es.id IS NOT NULL),
              '[]'

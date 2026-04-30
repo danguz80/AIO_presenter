@@ -5,7 +5,8 @@ const getAllSongs = async (req, res) => {
   try {
     const { search, tag } = req.query;
     let query = `
-      SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.language, s.tags, s.created_at
+      SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.language, s.tags,
+             s.song_key, s.bpm, s.time_sig, s.link, s.created_at
       FROM songs s
     `;
     const params = [];
@@ -54,15 +55,16 @@ const getSongById = async (req, res) => {
 const createSong = async (req, res) => {
   const client = await pool.connect();
   try {
-    const { title, author, copyright, ccli, language, tags, slides } = req.body;
+    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link } = req.body;
     if (!title) return res.status(400).json({ error: 'El título es requerido' });
 
     await client.query('BEGIN');
 
     const songResult = await client.query(
-      `INSERT INTO songs (title, author, copyright, ccli, language, tags)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [title, author || null, copyright || null, ccli || null, language || 'es', tags || []]
+      `INSERT INTO songs (title, author, copyright, ccli, language, tags, song_key, bpm, time_sig, link)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
+       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null]
     );
     const song = songResult.rows[0];
 
@@ -96,14 +98,15 @@ const updateSong = async (req, res) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
-    const { title, author, copyright, ccli, language, tags, slides } = req.body;
+    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link } = req.body;
 
     await client.query('BEGIN');
 
     const result = await client.query(
       `UPDATE songs SET title=$1, author=$2, copyright=$3, ccli=$4, language=$5, tags=$6,
-       updated_at=NOW() WHERE id=$7 RETURNING *`,
-      [title, author || null, copyright || null, ccli || null, language || 'es', tags || [], id]
+       song_key=$7, bpm=$8, time_sig=$9, link=$10, updated_at=NOW() WHERE id=$11 RETURNING *`,
+      [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
+       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null, id]
     );
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');

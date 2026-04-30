@@ -5,6 +5,7 @@ const express    = require('express');
 const http       = require('http');
 const { Server } = require('socket.io');
 const cors       = require('cors');
+const pool       = require('./config/database');
 
 const songsRouter  = require('./routes/songs');
 const bibleRouter  = require('./routes/bible');
@@ -37,12 +38,78 @@ let liveState = {
 };
 
 /** Configuración independiente de la pantalla de escenario */
-let stageConfig = {
-  background:    { type: 'color', color: '#1e1e2e' },
-  showClock:     true,
-  showNextSlide: true,
-  fontSize:      'auto', // 'auto' | 'small' | 'medium' | 'large'
+const DEFAULT_STAGE_CONFIG = {
+  background:       { type: 'color', color: '#1e1e2e' },
+  showClock:        true,
+  showNextSlide:    true,
+  showSongTitle:    true,
+  showSlideCounter: true,
+  showSectionLabel: true,
+  showSideLabel:    true,
+  lyricsColor:      '#ffffff',
+  nextLyricsColor:  '#ffffff',
+  chordsColor:      '#fde047',
+  clockColor:       '#ef4444',
+  nextColor:        '#22c55e',
+  fontSize:         'auto',
+  fontFamily:       'sans',
+  fontBold:         true,
+  fontItalic:       false,
+  customFonts:      [],
 };
+
+let stageConfig = { ...DEFAULT_STAGE_CONFIG };
+let stageTemplates = [];
+
+// Crear tabla settings si no existe y cargar stageConfig + templates persistidos
+(async () => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key   VARCHAR(100) PRIMARY KEY,
+        value JSONB NOT NULL
+      )
+    `);
+    // Migraciones: añadir columnas de metadatos a songs si no existen
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS song_key   VARCHAR(20)`);
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS bpm        INTEGER`);
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS time_sig   VARCHAR(20)`);
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS link       TEXT`);
+    const { rows } = await pool.query(
+      "SELECT key, value FROM app_settings WHERE key IN ('stageConfig','stageTemplates')"
+    );
+    for (const row of rows) {
+      if (row.key === 'stageConfig')    { stageConfig    = { ...DEFAULT_STAGE_CONFIG, ...row.value }; console.log('[Settings] stageConfig cargado desde DB'); }
+      if (row.key === 'stageTemplates') { stageTemplates = row.value; }
+    }
+  } catch (e) {
+    console.error('[Settings] Error cargando settings desde DB:', e.message);
+  }
+})();
+
+async function saveStageConfig() {
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('stageConfig', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(stageConfig)]
+    );
+  } catch (e) {
+    console.error('[Settings] Error guardando stageConfig:', e.message);
+  }
+}
+
+async function saveStageTemplates() {
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('stageTemplates', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(stageTemplates)]
+    );
+  } catch (e) {
+    console.error('[Settings] Error guardando stageTemplates:', e.message);
+  }
+}
 
 /** Configuración de la salida virtual / NDI */
 let virtualConfig = {
@@ -54,6 +121,9 @@ let virtualConfig = {
 
 /** Slides de la canción activa para navegación server-side */
 let currentSong = null; // { slides: [...], slideIndex: 0, songTitle: '' }
+
+/** Lista de canciones del evento del día (para pantalla de escenario) */
+let schedule = [];
 
 // ─── NDI ─────────────────────────────────────────────────────────────────────
 (async () => {
@@ -70,8 +140,10 @@ io.on('connection', (socket) => {
   // Enviar estado actual al cliente que se conecta
   socket.emit('live:state',      liveState);
   socket.emit('stage:config',    stageConfig);
+  socket.emit('stage:templates', stageTemplates);
   socket.emit('virtual:config',  virtualConfig);
   socket.emit('ndi:status',      ndi.getStatus());
+  socket.emit('schedule:update', schedule);
 
   // El operador envía un slide a proyectar
   socket.on('live:show', (data) => {
@@ -86,9 +158,9 @@ io.on('connection', (socket) => {
     } else if (data.type !== 'song') {
       currentSong = null; // limpiar si se proyecta algo que no es canción
     }
-    // No persistir slides en liveState (no es necesario enviarlo a los clientes)
-    const { slides, slideIndex, ...dataWithoutSlides } = data;
-    liveState = { ...liveState, ...dataWithoutSlides, isBlank: false };
+    // No persistir el array completo de slides (demasiado grande), pero sí el índice y total
+    const { slides, ...rest } = data;
+    liveState = { ...liveState, ...rest, totalSlides: slides?.length ?? null, isBlank: false };
     ndi.updateState(liveState, virtualConfig);
     io.emit('live:state', liveState);
   });
@@ -106,9 +178,23 @@ io.on('connection', (socket) => {
     io.emit('live:state', liveState);
   });
 
+  // Actualizar plantillas de escenario
+  socket.on('stage:templates', (templates) => {
+    stageTemplates = Array.isArray(templates) ? templates : [];
+    saveStageTemplates();
+    io.emit('stage:templates', stageTemplates);
+  });
+
+  // Actualizar lista del evento del día
+  socket.on('schedule:update', (songs) => {
+    schedule = Array.isArray(songs) ? songs : [];
+    io.emit('schedule:update', schedule);
+  });
+
   // Actualizar configuración de la pantalla de escenario
   socket.on('stage:config', (config) => {
     stageConfig = { ...stageConfig, ...config };
+    saveStageConfig();
     io.emit('stage:config', stageConfig);
   });
 

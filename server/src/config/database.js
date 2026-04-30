@@ -11,8 +11,7 @@ const pool = new Pool({
   client_encoding: 'UTF8',
 });
 
-pool.on('connect', (client) => {
-  client.query("SET client_encoding = 'UTF8'");
+pool.on('connect', () => {
   console.log('[DB] Conectado a PostgreSQL');
 });
 

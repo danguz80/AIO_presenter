@@ -4,6 +4,44 @@ import api from '../hooks/useApi';
 
 export const PresenterContext = createContext(null);
 
+// ─── stageConfig por defecto + persistencia en localStorage ─────────────────
+const DEFAULT_STAGE_CONFIG = {
+  background:       { type: 'color', color: '#1e1e2e' },
+  showClock:        true,
+  showNextSlide:    true,
+  showSongTitle:    true,
+  showSlideCounter: true,
+  showSectionLabel: true,
+  showSideLabel:    true,
+  lyricsColor:  '#ffffff',
+  nextLyricsColor: '#ffffff',
+  chordsColor:  '#fde047',
+  clockColor:   '#ef4444',
+  nextColor:    '#22c55e',
+  fontSize:   36,
+  fontFamily: 'sans',
+  fontBold:   true,
+  fontItalic: false,
+  fontSizeCounter:    14,
+  fontSizeTitle:      16,
+  fontSizeLabel:      11,
+  fontSizeSideLabel:  13,
+  fontSizeClock:      22,
+  fontSizeNextSong:   16,
+  fontSizeNextLyrics: 32,
+  fontSize:           36,
+  fontSizeChords:     18,
+  customFonts: [],
+};
+
+function loadStageConfig() {
+  try {
+    const saved = localStorage.getItem('aio_stage_config');
+    if (saved) return { ...DEFAULT_STAGE_CONFIG, ...JSON.parse(saved) };
+  } catch { /* ignore */ }
+  return DEFAULT_STAGE_CONFIG;
+}
+
 // ─── Estado inicial ───────────────────────────────────────────────────────────
 const initialState = {
   // Biblioteca
@@ -20,16 +58,19 @@ const initialState = {
     slideData:     null,
     nextSlideData: null,
     isBlank:       false,
+    slideIndex:    null,
+    totalSlides:   null,
     background:    { color: '#000000', type: 'color' },
   },
 
   // Configuración pantalla de escenario
-  stageConfig: {
-    background:    { type: 'color', color: '#1e1e2e' },
-    showClock:     true,
-    showNextSlide: true,
-    fontSize:      'auto',
-  },
+  stageConfig: loadStageConfig(),
+
+  // Plantillas de pantalla de escenario
+  stageTemplates: (() => {
+    try { return JSON.parse(localStorage.getItem('aio_stage_templates') || '[]'); } catch { return []; }
+  })(),
+
 
   // Configuración salida virtual / NDI
   virtualConfig: {
@@ -88,17 +129,21 @@ function reducer(state, action) {
     case 'SET_LIVE_STATE':
       return { ...state, liveState: action.payload };
     case 'SYNC_LIVE_SONG': {
-      // Si ya es la misma canción, solo actualizar el slide seleccionado
-      const { songId, slideId } = action.payload;
-      if (state.selectedSong?.id === songId) {
-        const slide = state.selectedSong.slides?.find(s => s.id === slideId) || null;
-        return { ...state, selectedSlide: slide };
-      }
       // Si es una canción diferente: marcar pendiente de carga
-      return { ...state, pendingSongId: songId, pendingSlideId: slideId };
+      const { songId, slideId } = action.payload;
+      if (state.selectedSong?.id !== songId) {
+        return { ...state, pendingSongId: songId, pendingSlideId: slideId };
+      }
+      // Misma canción: NO sobreescribir selectedSlide (el usuario controla su selección).
+      // El indicador "en vivo" (verde) ya se actualiza con SET_LIVE_STATE.
+      return state;
     }
     case 'SET_STAGE_CONFIG':
-      return { ...state, stageConfig: action.payload };
+      return { ...state, stageConfig: { ...DEFAULT_STAGE_CONFIG, ...state.stageConfig, ...action.payload } };
+    case 'SET_STAGE_TEMPLATES':
+      return { ...state, stageTemplates: action.payload };
+    case 'SET_SCHEDULE':
+      return { ...state, schedule: action.payload };
     case 'SET_VIRTUAL_CONFIG':
       return { ...state, virtualConfig: action.payload };
     case 'SET_NDI_STATUS':
@@ -118,7 +163,11 @@ function reducer(state, action) {
 
 export function PresenterProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const socketRef = useRef(null);
+  const socketRef  = useRef(null);
+  const scheduleRef = useRef(initialState.schedule);
+
+  // Mantener scheduleRef sincronizado con el estado
+  useEffect(() => { scheduleRef.current = state.schedule; }, [state.schedule]);
 
   // Conectar Socket.io
   useEffect(() => {
@@ -131,7 +180,13 @@ export function PresenterProvider({ children }) {
     const socket = io(backendUrl, { autoConnect: true });
     socketRef.current = socket;
 
-    socket.on('connect',      () => dispatch({ type: 'SET_CONNECTED', payload: true }));
+    socket.on('connect', () => {
+      dispatch({ type: 'SET_CONNECTED', payload: true });
+      // Re-emitir schedule al reconectar (el servidor lo pierde al reiniciarse)
+      if (scheduleRef.current?.length > 0) {
+        socket.emit('schedule:update', scheduleRef.current);
+      }
+    });
     socket.on('disconnect',   () => dispatch({ type: 'SET_CONNECTED', payload: false }));
     socket.on('live:state', (data) => {
       dispatch({ type: 'SET_LIVE_STATE', payload: data });
@@ -142,6 +197,8 @@ export function PresenterProvider({ children }) {
       }
     });
     socket.on('stage:config',    (data) => dispatch({ type: 'SET_STAGE_CONFIG',    payload: data }));
+    socket.on('stage:templates', (data) => dispatch({ type: 'SET_STAGE_TEMPLATES', payload: data }));
+    socket.on('schedule:update',  (data) => dispatch({ type: 'SET_SCHEDULE',        payload: data }));
     socket.on('virtual:config',  (data) => dispatch({ type: 'SET_VIRTUAL_CONFIG',  payload: data }));
     socket.on('ndi:status',      (data) => dispatch({ type: 'SET_NDI_STATUS',      payload: data }));
     socket.on('navigate',        (dir)  => dispatch({ type: 'NAVIGATE', payload: { dir, ts: Date.now() } }));
@@ -212,7 +269,21 @@ export function PresenterProvider({ children }) {
     },
 
     setStageConfig: (config) => {
+      try { localStorage.setItem('aio_stage_config', JSON.stringify(config)); } catch { /* ignore */ }
       socketRef.current?.emit('stage:config', config);
+      dispatch({ type: 'SET_STAGE_CONFIG', payload: config });
+    },
+
+    setStageTemplates: (templates) => {
+      try { localStorage.setItem('aio_stage_templates', JSON.stringify(templates)); } catch { /* ignore */ }
+      socketRef.current?.emit('stage:templates', templates);
+      dispatch({ type: 'SET_STAGE_TEMPLATES', payload: templates });
+    },
+
+    setSchedule: (songs) => {
+      const list = songs ?? [];
+      socketRef.current?.emit('schedule:update', list);
+      dispatch({ type: 'SET_SCHEDULE', payload: list });
     },
 
     setVirtualConfig: (config) => {
