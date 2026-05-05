@@ -83,11 +83,35 @@ const initialState = {
 
   // Configuración pantalla principal (proyector)
   outputConfig: {
+    // Tipografía letras
+    lyricsColor:      '#ffffff',
+    fontFamily:       'sans',
+    fontBold:         false,
+    fontItalic:       false,
+    fontSize:         'auto',
+    fontStrokeWidth:  0,
+    fontStrokeColor:  '#000000',
+    // Elementos visibles
+    showLabel:        true,
+    showSongTitle:    true,
+    // Comentarios
     showComments:      false,
     commentColor:      '#facc15',
     commentFontSize:   16,
     commentFontFamily: 'sans',
+    // Diapositiva de título
+    titleSlideEnabled:  false,
+    titleFontFamily:    'sans',
+    titleFontSize:      72,
+    titleColor:         '#ffffff',
+    titleShowArtist:    false,
+    artistFontFamily:   'sans',
+    artistFontSize:     36,
+    artistColor:        '#aaaaaa',
   },
+
+  // Plantillas de la pantalla principal
+  outputTemplates: [],
 
   // Estado NDI (del servidor)
   ndiStatus: {
@@ -164,6 +188,8 @@ function reducer(state, action) {
       return { ...state, virtualConfig: { ...state.virtualConfig, ...action.payload } };
     case 'SET_OUTPUT_CONFIG':
       return { ...state, outputConfig: { ...state.outputConfig, ...action.payload } };
+    case 'SET_OUTPUT_TEMPLATES':
+      return { ...state, outputTemplates: action.payload };
     case 'SET_NDI_STATUS':
       return { ...state, ndiStatus: action.payload };
     case 'NAVIGATE':
@@ -230,6 +256,7 @@ export function PresenterProvider({ children }) {
     socket.on('schedule:update',  (data) => dispatch({ type: 'SET_SCHEDULE',        payload: data }));
     socket.on('virtual:config',  (data) => dispatch({ type: 'SET_VIRTUAL_CONFIG',  payload: data }));
     socket.on('output:config',   (data) => dispatch({ type: 'SET_OUTPUT_CONFIG',   payload: data }));
+    socket.on('output:templates', (data) => dispatch({ type: 'SET_OUTPUT_TEMPLATES', payload: data }));
     socket.on('ndi:status',      (data) => dispatch({ type: 'SET_NDI_STATUS',      payload: data }));
     socket.on('navigate',          (dir)  => dispatch({ type: 'NAVIGATE',          payload: { dir, ts: Date.now() } }));
     socket.on('event:plays',       (data) => dispatch({ type: 'SET_EVENT_PLAYS',   payload: data }));
@@ -325,6 +352,11 @@ export function PresenterProvider({ children }) {
     setOutputConfig: (config) => {
       dispatch({ type: 'SET_OUTPUT_CONFIG', payload: config });
       socketRef.current?.emit('output:config', config);
+    },
+
+    setOutputTemplates: (templates) => {
+      socketRef.current?.emit('output:templates', templates);
+      dispatch({ type: 'SET_OUTPUT_TEMPLATES', payload: templates });
     },
 
     navigate: (dir) => {

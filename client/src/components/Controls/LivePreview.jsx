@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import { stripChords, parseChordLines, isCommentLine, stripComments, extractInlineComment } from '../../utils/chordUtils';
+import { injectGoogleFont } from '../../utils/fontUtils';
 
 const LABEL_COLORS = {
   intro: '#4f46e5', verso: '#2563eb', 'pre-coro': '#c026d3', precoro: '#c026d3',
@@ -15,11 +17,30 @@ function getSectionColor(label) {
 export default function LivePreview() {
   const { state } = usePresenter();
   const { liveState, stageConfig, virtualConfig, schedule, eventPlays, reservasMode } = state;
-  const outputShowComments      = state.outputConfig?.showComments      ?? false;
-  const outputCommentColor       = state.outputConfig?.commentColor       ?? '#facc15';
-  const outputCommentFontSize    = state.outputConfig?.commentFontSize    ?? 16;
-  const outputCommentFontFamily  = state.outputConfig?.commentFontFamily  ?? 'sans';
+  const outputCfg = state.outputConfig ?? {};
+  const outputShowComments      = outputCfg.showComments      ?? false;
+  const outputCommentColor       = outputCfg.commentColor       ?? '#facc15';
+  const outputCommentFontSize    = outputCfg.commentFontSize    ?? 16;
+  const outputCommentFontFamily  = outputCfg.commentFontFamily  ?? 'sans';
+  const outputLyricsColor        = outputCfg.lyricsColor        ?? '#ffffff';
+  const outputFontBold           = outputCfg.fontBold           ?? false;
+  const outputFontItalic         = outputCfg.fontItalic         ?? false;
+  const outputFontFamily         = outputCfg.fontFamily         ?? 'sans';
   const virtualShowComments      = virtualConfig?.showComments ?? false;
+
+  // Escala proporcional al fontSize configurado (ref: 72px → 9px en preview)
+  const outputFontSize = outputCfg.fontSize ?? 'auto';
+  const previewFontPx  = outputFontSize === 'auto'
+    ? 9
+    : Math.max(5, Math.min(22, Math.round(Number(outputFontSize) * 9 / 72)));
+
+  // Inyectar Google Fonts cuando cambia la configuración del output (incluyendo título)
+  useEffect(() => {
+    injectGoogleFont(outputCfg.fontFamily);
+    injectGoogleFont(outputCfg.commentFontFamily);
+    injectGoogleFont(outputCfg.titleFontFamily);
+    injectGoogleFont(outputCfg.artistFontFamily);
+  }, [outputCfg.fontFamily, outputCfg.commentFontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
   const { slideData, nextSlideData, isBlank, background } = liveState;
 
   const live = !isBlank && !!slideData;
@@ -57,15 +78,23 @@ export default function LivePreview() {
         onClick={() => openWindow('/output')}
       >
         <div className="w-full h-full flex items-center justify-center"
-          style={mainBgStyle}>
-          <SlidePreviewContent
-            slideData={slideData}
-            isBlank={isBlank}
-            showComments={outputShowComments}
-            commentColor={outputCommentColor}
-            commentFontSize={outputCommentFontSize}
-            commentFontFamily={outputCommentFontFamily}
-          />
+          style={{ ...mainBgStyle, fontSize: previewFontPx + 'px' }}>
+          {slideData?.type === 'title' && !isBlank ? (
+            <TitlePreviewContent slideData={slideData} outputCfg={outputCfg} />
+          ) : (
+            <SlidePreviewContent
+              slideData={slideData}
+              isBlank={isBlank}
+              showComments={outputShowComments}
+              commentColor={outputCommentColor}
+              commentFontSize={outputCommentFontSize}
+              commentFontFamily={outputCommentFontFamily}
+              lyricsColor={outputLyricsColor}
+              fontBold={outputFontBold}
+              fontItalic={outputFontItalic}
+              fontFamily={outputFontFamily}
+            />
+          )}
         </div>
       </PreviewBox>
 
@@ -99,7 +128,7 @@ export default function LivePreview() {
         onClick={() => openWindow('/virtual')}
       >
         <div className="w-full h-full flex items-center justify-center"
-          style={virtualBgStyle}>
+          style={{ ...virtualBgStyle, fontSize: '9px' }}>
           {virtualConfig.background.type === 'transparent' && !live
             ? <span className="text-zinc-500 text-[8px]">Transparente</span>
             : <SlidePreviewContent slideData={slideData} isBlank={isBlank}
@@ -369,14 +398,50 @@ function PreviewBox({ label, dotColor, borderColor, live, onClick, children }) {
   );
 }
 
+// ─── Diapositiva de título (miniatura para preview Principal) ─────────────────
+function TitlePreviewContent({ slideData, outputCfg }) {
+  const PRESETS = { sans: 'system-ui, sans-serif', serif: 'Georgia, serif', mono: 'monospace', condensed: 'Arial Narrow, Arial, sans-serif' };
+  const resolveFF = (f) => PRESETS[f] ?? `'${f}', system-ui, sans-serif`;
+
+  const titleFF    = resolveFF(outputCfg.titleFontFamily  ?? 'sans');
+  const artistFF   = resolveFF(outputCfg.artistFontFamily ?? 'sans');
+  const titleColor = outputCfg.titleColor        ?? '#ffffff';
+  const artistColor= outputCfg.artistColor       ?? '#aaaaaa';
+  const showArtist = outputCfg.titleShowArtist   ?? false;
+
+  return (
+    <div className="text-center px-2 flex flex-col items-center gap-0.5">
+      <div style={{ fontSize: '1em', color: titleColor, fontFamily: titleFF, fontWeight: 'bold', lineHeight: 1.3 }}>
+        {slideData.songTitle}
+      </div>
+      {showArtist && slideData.songAuthor && (
+        <div style={{ fontSize: '0.75em', color: artistColor, fontFamily: artistFF, lineHeight: 1.3 }}>
+          {slideData.songAuthor}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Contenido del slide ──────────────────────────────────────────────────────
-function SlidePreviewContent({ slideData, isBlank, transparent = false, showChords = false, showComments = false, commentColor = null, commentFontSize = 16, commentFontFamily = 'sans' }) {
+function SlidePreviewContent({ slideData, isBlank, transparent = false, showChords = false, showComments = false, commentColor = null, commentFontSize = 16, commentFontFamily = 'sans', lyricsColor = null, fontBold = false, fontItalic = false, fontFamily = 'sans' }) {
   if (isBlank || !slideData) {
     return <span className="text-zinc-600 text-[9px]">Vacío</span>;
   }
-  const textColor = transparent ? 'text-zinc-800' : 'text-white';
+  const baseTextColor = transparent ? 'text-zinc-800' : 'text-white';
   // styledComments: solo cuando se pasan datos de estilo (Principal). Stream usa texto plano.
   const styledComments = showComments && commentColor !== null;
+  // Si lyricsColor se pasa (Principal), usarlo; si no, usar clase CSS
+  const resolvedFF = (() => {
+    const { FONT_PRESETS } = { FONT_PRESETS: { sans: 'system-ui, sans-serif', serif: 'Georgia, serif', mono: 'monospace', condensed: 'Arial Narrow, Arial, sans-serif' } };
+    return FONT_PRESETS[fontFamily] ?? `'${fontFamily}', system-ui, sans-serif`;
+  })();
+  const lyricInlineStyle = lyricsColor ? {
+    color: lyricsColor,
+    fontWeight: fontBold   ? 'bold'   : 'normal',
+    fontStyle:  fontItalic ? 'italic' : 'normal',
+    fontFamily: resolvedFF,
+  } : null;
 
   if (slideData.type === 'song') {
     // Pre-procesar líneas para separar comentarios
@@ -387,9 +452,8 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
       return { visible, comment, isFullComment: false };
     });
 
-    const commentFF = commentFontFamily === 'serif' ? 'Georgia, serif'
-                    : commentFontFamily === 'mono'  ? 'monospace'
-                    : 'sans-serif';
+    const FONT_PRESETS_CF = { sans: 'system-ui, sans-serif', serif: 'Georgia, serif', mono: 'monospace', condensed: 'Arial Narrow, Arial, sans-serif' };
+    const commentFF = FONT_PRESETS_CF[commentFontFamily] ?? `'${commentFontFamily}', system-ui, sans-serif`;
     const commentStyle = { color: commentColor ?? '#facc15', fontFamily: commentFF, fontStyle: 'italic' };
 
     if (showChords) {
@@ -399,9 +463,9 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
         return (
           <div className="text-center px-2 w-full">
             {slideData.label && (
-              <p className="text-[6px] text-zinc-400 uppercase mb-0.5">{slideData.label}</p>
+              <p className="text-zinc-400 uppercase mb-0.5" style={{ fontSize: '0.67em' }}>{slideData.label}</p>
             )}
-            <div className="text-[7px] leading-none">
+            <div style={{ fontSize: '0.78em', lineHeight: 'normal' }}>
               {chordLines.map((line, li) => {
                 const ld = lineData[li] ?? {};
                 if (ld.isFullComment) {
@@ -414,7 +478,7 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
                 const inlineC = styledComments && ld.comment
                   ? <span style={{ ...commentStyle, marginLeft: '0.2em' }}>{ld.comment}</span>
                   : null;
-                if (!hasC) return <div key={li} className={`${textColor} leading-relaxed`}>{lineText}{inlineC}</div>;
+                if (!hasC) return <div key={li} style={{ lineHeight: 1.2, ...(lyricInlineStyle ?? {}) }} className={lyricInlineStyle ? '' : `${baseTextColor} leading-relaxed`}>{lineText}{inlineC}</div>;
                 return (
                   <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.1 }}>
                     {line.map((seg, si) => (
@@ -423,7 +487,7 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
                           style={{ fontSize: '0.75em', lineHeight: 1, minHeight: '1em' }}>
                           {seg.chord || ''}
                         </span>
-                        <span className={textColor} style={{ lineHeight: 1.3, whiteSpace: 'pre' }}>
+                        <span style={{ lineHeight: 1.3, whiteSpace: 'pre', ...(lyricInlineStyle ?? { color: transparent ? '#1c1917' : '#ffffff' }) }}>
                           {seg.text || (seg.chord ? '\u00a0' : '')}
                         </span>
                       </span>
@@ -440,8 +504,8 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
     // Texto plano (sin acordes)
     return (
       <div className="text-center px-2">
-        <p className="text-[7px] text-zinc-400 uppercase mb-0.5">{slideData.label}</p>
-        <div className="text-[9px] leading-relaxed">
+        <p className="text-zinc-400 uppercase mb-0.5" style={{ fontSize: '0.78em' }}>{slideData.label}</p>
+        <div style={{ fontSize: '1em', lineHeight: 1.4 }}>
           {lineData.map((ld, i) => {
             if (ld.isFullComment) {
               if (!showComments) return null;
@@ -450,7 +514,7 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
             const vis = stripChords(ld.visible);
             if (!vis.trim() && !ld.comment) return null;
             return (
-              <div key={i} className={textColor}>
+              <div key={i} style={lyricInlineStyle ?? {}} className={lyricInlineStyle ? '' : baseTextColor}>
                 {vis}
                 {styledComments && ld.comment && (
                   <span style={{ ...commentStyle, marginLeft: '0.2em' }}>{ld.comment}</span>
@@ -465,10 +529,11 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
   if (slideData.type === 'bible') {
     return (
       <div className="text-center px-2">
-        <p className={`text-[9px] ${textColor} leading-relaxed whitespace-pre-line line-clamp-4`}>
+        <p className={`${baseTextColor} leading-relaxed whitespace-pre-line line-clamp-4`}
+           style={{ fontSize: '1em' }}>
           {slideData.text}
         </p>
-        <p className="text-[7px] text-zinc-300 mt-0.5">{slideData.reference}</p>
+        <p className="text-zinc-300 mt-0.5" style={{ fontSize: '0.78em' }}>{slideData.reference}</p>
       </div>
     );
   }

@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { usePresenter } from '../../context/usePresenter';
-import { Music } from 'lucide-react';
+import { Music, ZoomIn, ZoomOut } from 'lucide-react';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
-import { stripChords, stripComments } from '../../utils/chordUtils';
+import { stripChords, stripComments, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
+import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 
 // Colores por tipo de sección
 const LABEL_COLORS = {
@@ -30,6 +31,16 @@ function getLabelColor(label) {
 export default function SongDetail() {
   const { state, actions } = usePresenter();
   const { selectedSong, selectedSlide, liveState, navigateRequest, schedule, eventPlays, eventPlaysContext } = state;
+
+  // Config del proyector para reflejar en thumbnails
+  const outputCfg      = state.outputConfig ?? {};
+  const thumbColor     = outputCfg.lyricsColor  ?? '#ffffff';
+  const thumbFontFamily = resolveFont(outputCfg.fontFamily ?? 'sans');
+  const thumbBold      = outputCfg.fontBold  ?? false;
+  const thumbItalic    = outputCfg.fontItalic ?? false;
+
+  // Inyectar Google Font si es necesario
+  useEffect(() => { injectGoogleFont(outputCfg.fontFamily); }, [outputCfg.fontFamily]);
 
   // ── Tracking slides vistos para auto-marcar ──────────────────────────────
   const seenSlideIds = useRef(new Set());
@@ -105,7 +116,8 @@ export default function SongDetail() {
   const [dragLabel,   setDragLabel]   = useState(null);
   const [dropBefore,  setDropBefore]  = useState(null);
   const [dropping,    setDropping]    = useState(false);
-
+  // ── Zoom de thumbnails (número de columnas: 3-8) ──────────────────────
+  const [thumbCols, setThumbCols] = useState(5);
   const handleGroupDrop = async (label, insertIdx) => {
     if (!label) return;
     setDropping(true);
@@ -148,13 +160,14 @@ export default function SongDetail() {
       slides,            // para que el servidor guarde el contexto de navegación
       slideIndex: nextIndex,
       slideData: {
-        type:      'song',
-        songId:    selectedSong.id,
-        slideId:   slide.id,
-        songTitle: selectedSong.title,
-        songKey:   selectedSong.song_key || null,
-        label:     slide.label,
-        content:   slide.content,
+        type:       'song',
+        songId:     selectedSong.id,
+        slideId:    slide.id,
+        songTitle:  selectedSong.title,
+        songAuthor: selectedSong.author || '',
+        songKey:    selectedSong.song_key || null,
+        label:      slide.label,
+        content:    slide.content,
       },
       nextSlideData: nextSlide ? {
         type:    'song',
@@ -216,13 +229,14 @@ export default function SongDetail() {
       slides,
       slideIndex: index,
       slideData: {
-        type:      'song',
-        songId:    selectedSong.id,
-        slideId:   slide.id,
-        songTitle: selectedSong.title,
-        songKey:   selectedSong.song_key || null,
-        label:     slide.label,
-        content:   slide.content,
+        type:       'song',
+        songId:     selectedSong.id,
+        slideId:    slide.id,
+        songTitle:  selectedSong.title,
+        songAuthor: selectedSong.author || '',
+        songKey:    selectedSong.song_key || null,
+        label:      slide.label,
+        content:    slide.content,
       },
       nextSlideData: nextSlide ? {
         type:    'song',
@@ -279,6 +293,21 @@ export default function SongDetail() {
               ↩ Deshacer ({undoCount})
             </button>
           )}
+          {/* Zoom de thumbnails */}
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => setThumbCols(c => Math.min(8, c + 1))}
+              disabled={thumbCols >= 8}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-surface-600 disabled:opacity-30 transition-colors"
+              title="Más columnas (más pequeño)"
+            ><ZoomOut size={13} /></button>
+            <button
+              onClick={() => setThumbCols(c => Math.max(2, c - 1))}
+              disabled={thumbCols <= 2}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-surface-600 disabled:opacity-30 transition-colors"
+              title="Menos columnas (más grande)"
+            ><ZoomIn size={13} /></button>
+          </div>
           <span className="text-xs text-zinc-600">
             {selectedSong.slides?.length || 0} diapositivas
           </span>
@@ -335,7 +364,8 @@ export default function SongDetail() {
           <p className="text-zinc-600 text-sm p-4">Esta canción no tiene secciones.</p>
         ) : (
           <div
-            className="grid grid-cols-5 gap-2"
+            className="grid gap-2"
+            style={{ gridTemplateColumns: `repeat(${thumbCols}, minmax(0, 1fr))` }}
             onDragOver={e => { if (dragLabel) e.preventDefault(); }}
             onDrop={e => {
               e.preventDefault();
@@ -344,11 +374,106 @@ export default function SongDetail() {
               if (dropBefore === null) handleGroupDrop(lbl, selectedSong.slides.length);
             }}
           >
+            {/* ── Thumbnail de título (si está habilitado) ─────────── */}
+            {outputCfg.titleSlideEnabled && (() => {
+              const titleActive = liveState.slideData?.type === 'title'
+                && liveState.slideData?.songId === selectedSong.id
+                && !liveState.isBlank;
+              const titleFF     = resolveFont(outputCfg.titleFontFamily  ?? 'sans');
+              const titleColor  = outputCfg.titleColor      ?? '#ffffff';
+              const artistColor = outputCfg.artistColor     ?? '#aaaaaa';
+              const showArtist  = outputCfg.titleShowArtist ?? false;
+              const colScale    = 5 / thumbCols;
+              const cfgFontSize = outputCfg.fontSize;
+              const fontScale   = (!cfgFontSize || cfgFontSize === 'auto') ? 1 : Number(cfgFontSize) / 72;
+              const titleSize   = `${Math.max(0.22, Math.min(2.0, 0.62 * colScale * fontScale)).toFixed(3)}rem`;
+              const artistSize  = `${Math.max(0.16, Math.min(1.4,  0.44 * colScale * fontScale)).toFixed(3)}rem`;
+
+              const handleTitleClick = () => {
+                // Si ya está activo, blanquear; si no, proyectar diapositiva de título
+                if (titleActive) {
+                  actions.toggleBlank(true);
+                  return;
+                }
+                // Enviar slide de tipo 'title' directamente al servidor
+                // El servidor lo maneja sin re-disparar la lógica de isNewSong
+                actions.showSlide({
+                  type: 'title-direct',   // señal especial para no re-triggear isNewSong
+                  slides: selectedSong.slides,
+                  slideIndex: -1,
+                  slideData: {
+                    type:       'title',
+                    songId:     selectedSong.id,
+                    songTitle:  selectedSong.title,
+                    songAuthor: selectedSong.author || '',
+                  },
+                  nextSlideData: selectedSong.slides[0]
+                    ? { type: 'song', label: selectedSong.slides[0].label, content: selectedSong.slides[0].content }
+                    : null,
+                });
+              };
+
+              return (
+                <div
+                  key="__title__"
+                  onClick={handleTitleClick}
+                  className={[
+                    'relative flex flex-col cursor-pointer rounded-md overflow-hidden transition-all select-none',
+                    'border-2',
+                    titleActive ? 'border-green-400 shadow-lg shadow-green-900/40'
+                                : 'border-dashed border-zinc-600 hover:border-zinc-400',
+                  ].join(' ')}
+                  style={{ aspectRatio: '16/10' }}
+                >
+                  <div className="absolute inset-0 bg-zinc-900" />
+                  {/* Ícono T */}
+                  <span className="absolute top-1 left-1.5 text-[9px] font-bold text-zinc-500 z-10 leading-none">T</span>
+                  {titleActive && (
+                    <span className="absolute top-1 right-1 z-10 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  )}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center px-2 z-10 gap-0.5">
+                    <div style={{ fontSize: titleSize, color: titleColor, fontFamily: titleFF, fontWeight: 'bold', lineHeight: 1.2, textAlign: 'center' }}>
+                      {selectedSong.title}
+                    </div>
+                    {showArtist && selectedSong.author && (
+                      <div style={{ fontSize: artistSize, color: artistColor, fontFamily: resolveFont(outputCfg.artistFontFamily ?? 'sans'), lineHeight: 1.3, textAlign: 'center' }}>
+                        {selectedSong.author}
+                      </div>
+                    )}
+                  </div>
+                  {/* Banner inferior */}
+                  <div className="absolute bottom-0 inset-x-0 z-10 px-1 py-0.5 bg-zinc-700">
+                    <p className="text-[8px] font-semibold text-center truncate text-zinc-300">Título</p>
+                  </div>
+                </div>
+              );
+            })()}
+
             {selectedSong.slides.map((slide, index) => {
               const active   = isLive(slide);
               const selected = localSelectedId === slide.id;
               const { bg, text } = getLabelColor(slide.label);
-              const content = stripChords(stripComments(slide.content || ''));
+              // Preprocesar líneas igual que el proyector: respetar saltos, filtrar comentarios
+              const rawLines = (slide.content || '').split('\n');
+              const visibleLines = rawLines
+                .map(line => {
+                  if (isCommentLine(line)) return null;
+                  const { visible } = extractInlineComment(line);
+                  return stripChords(visible);
+                })
+                .filter(l => l !== null);
+              // Calcular fontSize escalado al tamaño del thumbnail + zoom de columnas + fontSize output
+              const lineCount = visibleLines.filter(l => l.trim()).length;
+              const baseSize  = lineCount <= 3 ? 0.58
+                              : lineCount <= 5 ? 0.50
+                              : lineCount <= 7 ? 0.42
+                              :                  0.36;
+              // 5 columnas = escala 1x; menos columnas → más grande, más columnas → más pequeño
+              const colScale      = 5 / thumbCols;
+              // Escala proporcional al fontSize de la salida (ref: 72px)
+              const cfgFontSize   = outputCfg.fontSize;
+              const fontScale     = (!cfgFontSize || cfgFontSize === 'auto') ? 1 : Number(cfgFontSize) / 72;
+              const thumbFontSize = `${Math.max(0.18, Math.min(2.4, baseSize * colScale * fontScale)).toFixed(3)}rem`;
               const isDroppingHere = dropBefore === index;
 
               return (
@@ -385,12 +510,24 @@ export default function SongDetail() {
                     <span className="absolute top-1 right-1 z-10 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                   )}
 
-                  {/* Texto del slide centrado */}
+                  {/* Texto del slide centrado — línea por línea como el proyector */}
                   <div className="absolute inset-0 flex items-center justify-center px-2 pb-4 z-10">
-                    <p className="text-white text-center font-semibold leading-snug line-clamp-4"
-                       style={{ fontSize: '0.5rem' }}>
-                      {content.trim().toUpperCase()}
-                    </p>
+                    <div className="text-center overflow-hidden w-full"
+                         style={{
+                           fontFamily: thumbFontFamily,
+                           fontWeight: thumbBold   ? 'bold'   : '600',
+                           fontStyle:  thumbItalic ? 'italic' : 'normal',
+                           lineHeight: 1.4,
+                         }}>
+                      {visibleLines.map((line, li) => {
+                        if (!line.trim()) return <div key={li} style={{ height: '0.25em' }} />;
+                        return (
+                          <div key={li} style={{ fontSize: thumbFontSize, color: thumbColor }}>
+                            {line.trim()}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* Banner de etiqueta */}
