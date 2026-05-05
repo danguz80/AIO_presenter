@@ -1,5 +1,5 @@
 import { usePresenter } from '../../context/usePresenter';
-import { stripChords, parseChordLines } from '../../utils/chordUtils';
+import { stripChords, parseChordLines, isCommentLine, stripComments, extractInlineComment } from '../../utils/chordUtils';
 
 const LABEL_COLORS = {
   intro: '#4f46e5', verso: '#2563eb', 'pre-coro': '#c026d3', precoro: '#c026d3',
@@ -14,7 +14,12 @@ function getSectionColor(label) {
 
 export default function LivePreview() {
   const { state } = usePresenter();
-  const { liveState, stageConfig, virtualConfig, schedule } = state;
+  const { liveState, stageConfig, virtualConfig, schedule, eventPlays, reservasMode } = state;
+  const outputShowComments      = state.outputConfig?.showComments      ?? false;
+  const outputCommentColor       = state.outputConfig?.commentColor       ?? '#facc15';
+  const outputCommentFontSize    = state.outputConfig?.commentFontSize    ?? 16;
+  const outputCommentFontFamily  = state.outputConfig?.commentFontFamily  ?? 'sans';
+  const virtualShowComments      = virtualConfig?.showComments ?? false;
   const { slideData, nextSlideData, isBlank, background } = liveState;
 
   const live = !isBlank && !!slideData;
@@ -41,9 +46,9 @@ export default function LivePreview() {
     window.open(path, '_blank', 'width=1280,height=720,menubar=no,toolbar=no,location=no');
 
   return (
-    <div className="border-b border-surface-700 p-3 shrink-0 space-y-2">
+    <div className="flex-1 min-h-0 border-b border-surface-700 p-3 flex flex-col gap-2 overflow-hidden">
 
-      {/* ── Fila 1: Principal (ancho completo) ───────────────────────── */}
+      {/* ── Principal ───────────────────────────────────────────────── */}
       <PreviewBox
         label="Principal"
         dotColor="bg-orange-400"
@@ -51,60 +56,65 @@ export default function LivePreview() {
         live={live}
         onClick={() => openWindow('/output')}
       >
-        <div className="w-full rounded overflow-hidden flex items-center justify-center"
-          style={{ ...mainBgStyle, aspectRatio: '16/9' }}>
-          <SlidePreviewContent slideData={slideData} isBlank={isBlank} />
+        <div className="w-full h-full flex items-center justify-center"
+          style={mainBgStyle}>
+          <SlidePreviewContent
+            slideData={slideData}
+            isBlank={isBlank}
+            showComments={outputShowComments}
+            commentColor={outputCommentColor}
+            commentFontSize={outputCommentFontSize}
+            commentFontFamily={outputCommentFontFamily}
+          />
         </div>
       </PreviewBox>
 
-      {/* ── Fila 2: Escenario + Stream ───────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-2">
-
-        {/* Escenario */}
-        <PreviewBox
-          label="Escenario"
-          dotColor="bg-orange-400"
-          borderColor={live ? 'border-orange-400' : 'border-surface-600'}
+      {/* ── Escenario ────────────────────────────────────────────────── */}
+      <PreviewBox
+        label="Escenario"
+        dotColor="bg-orange-400"
+        borderColor={live ? 'border-orange-400' : 'border-surface-600'}
+        live={live}
+        onClick={() => openWindow('/stage')}
+      >
+        <StagePreview
+          stageBgStyle={stageBgStyle}
+          slideData={slideData}
+          nextSlideData={nextSlideData}
+          isBlank={isBlank}
           live={live}
-          onClick={() => openWindow('/stage')}
-        >
-          <StagePreview
-            stageBgStyle={stageBgStyle}
-            slideData={slideData}
-            nextSlideData={nextSlideData}
-            isBlank={isBlank}
-            live={live}
-            stageConfig={stageConfig}
-            schedule={schedule}
-          />
-        </PreviewBox>
+          stageConfig={stageConfig}
+          schedule={schedule}
+          eventPlays={eventPlays}
+          reservasMode={reservasMode}
+        />
+      </PreviewBox>
 
-        {/* Virtual / NDI */}
-        <PreviewBox
-          label="Stream"
-          dotColor="bg-cyan-400"
-          borderColor={live ? 'border-cyan-400' : 'border-surface-600'}
-          live={live}
-          onClick={() => openWindow('/virtual')}
-        >
-          <div className="w-full rounded overflow-hidden flex items-center justify-center"
-            style={{ ...virtualBgStyle, aspectRatio: '16/9' }}>
-            {virtualConfig.background.type === 'transparent' && !live
-              ? <span className="text-zinc-500 text-[8px]">Transparente</span>
-              : <SlidePreviewContent slideData={slideData} isBlank={isBlank}
-                  transparent={virtualConfig.background.type === 'transparent'} />
-            }
-          </div>
-        </PreviewBox>
-
-      </div>
+      {/* ── Stream / NDI ─────────────────────────────────────────────── */}
+      <PreviewBox
+        label="Stream"
+        dotColor="bg-cyan-400"
+        borderColor={live ? 'border-cyan-400' : 'border-surface-600'}
+        live={live}
+        onClick={() => openWindow('/virtual')}
+      >
+        <div className="w-full h-full flex items-center justify-center"
+          style={virtualBgStyle}>
+          {virtualConfig.background.type === 'transparent' && !live
+            ? <span className="text-zinc-500 text-[8px]">Transparente</span>
+            : <SlidePreviewContent slideData={slideData} isBlank={isBlank}
+                transparent={virtualConfig.background.type === 'transparent'}
+                showComments={virtualShowComments} />
+          }
+        </div>
+      </PreviewBox>
 
     </div>
   );
 }
 
 // ─── Preview fiel al StagePage ────────────────────────────────────────────────
-function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, stageConfig, schedule }) {
+function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, stageConfig, schedule, eventPlays, reservasMode }) {
   const {
     lyricsColor = '#ffffff', nextLyricsColor = '#ffffff',
     chordsColor = '#fde047',
@@ -113,9 +123,51 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
     slideIndex, totalSlides,
   } = stageConfig;
 
-  const currentSongId = live && slideData?.songId;
+  const normLabel = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const reservasIdx = schedule.findIndex(s => s.item_type === 'separator' && normLabel(s.separator_label).includes('reserva'));
+  const reservasEndIdx = (() => {
+    if (reservasIdx < 0) return -1;
+    const next = schedule.findIndex((s, i) => i > reservasIdx && s.item_type === 'separator');
+    return next >= 0 ? next : schedule.length;
+  })();
+
+  const currentSongId = slideData?.songId;
   const idx = currentSongId ? schedule.findIndex(s => s.song_id === currentSongId) : -1;
-  const nextSong = idx >= 0 && idx + 1 < schedule.length ? schedule[idx + 1] : null;
+  const currentInReservas = reservasIdx >= 0 && idx > reservasIdx && idx < reservasEndIdx;
+
+  const nextSong = (() => {
+    if (reservasMode && reservasIdx >= 0) {
+      if (!currentInReservas) {
+        for (let i = reservasIdx + 1; i < reservasEndIdx; i++) {
+          const it = schedule[i];
+          if (!it.song_id) continue;
+          if (!eventPlays?.has(it.song_id)) return it;
+        }
+      } else {
+        for (let i = idx + 1; i < reservasEndIdx; i++) {
+          const it = schedule[i];
+          if (!it.song_id) continue;
+          if (!eventPlays?.has(it.song_id)) return it;
+        }
+        // Reservas agotadas → primera no tocada de secciones ANTERIORES a reservas
+        for (let i = 0; i < reservasIdx; i++) {
+          const it = schedule[i];
+          if (it.item_type === 'separator' || !it.song_id) continue;
+          if (!eventPlays?.has(it.song_id)) return it;
+        }
+        return null;
+      }
+    }
+    // Lógica normal: primera no tocada en todo el schedule (excluyendo la actual)
+    for (let i = 0; i < schedule.length; i++) {
+      const it = schedule[i];
+      if (it.item_type === 'separator' || !it.song_id) continue;
+      if (it.song_id === currentSongId) continue; // saltar la actual
+      if (eventPlays?.has(it.song_id)) continue;
+      return it;
+    }
+    return null;
+  })();
 
   const sectionColor = getSectionColor(slideData?.label);
 
@@ -128,8 +180,8 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
     parseChordLines(nextSlideData.content || '').some(l => l.some(s => s.chord));
 
   return (
-    <div className="w-full rounded overflow-hidden flex flex-col select-none"
-      style={{ ...stageBgStyle, aspectRatio: '16/9', fontSize: '7px' }}>
+    <div className="w-full h-full flex flex-col select-none overflow-hidden"
+      style={{ ...stageBgStyle, fontSize: '7px' }}>
 
       {/* Top bar */}
       <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-b border-white/10 relative"
@@ -164,6 +216,8 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
                 lyricsColor={lyricsColor}
                 chordsColor={chordsColor}
                 hasChords={hasCurrentChords}
+                showComments={stageConfig.showComments ?? false}
+                commentColor={stageConfig.commentColor ?? '#facc15'}
               />
             )}
           </div>
@@ -184,6 +238,8 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
                   lyricsColor={nextLyricsColor}
                   chordsColor={chordsColor}
                   hasChords={hasNextChords}
+                  showComments={stageConfig.showComments ?? false}
+                  commentColor={stageConfig.commentColor ?? '#facc15'}
                 />
               ) : nextSong ? (
                 <span className="font-semibold truncate max-w-full"
@@ -220,18 +276,36 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
 }
 
 // ─── Slide content miniatura para StagePreview ────────────────────────────────
-function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords }) {
+function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, showComments = false, commentColor = '#facc15' }) {
   if (slideData.type === 'song') {
     if (hasChords) {
-      const chordLines = parseChordLines(slideData.content || '');
+      const rawLines = (slideData.content || '').split('\n');
+      const lineData = rawLines.map(line => {
+        if (isCommentLine(line)) return { visible: '', comment: line.replace(/^\s*\/\/\s?/, ''), isFullComment: true };
+        const { visible, comment } = extractInlineComment(line);
+        return { visible, comment, isFullComment: false };
+      });
+      const chordLines = parseChordLines(lineData.map(ld => ld.visible).join('\n'));
       return (
         <div className="text-center w-full overflow-hidden">
           {chordLines.slice(0, 6).map((line, li) => {
+            const ld = lineData[li] ?? {};
+            if (ld.isFullComment) {
+              if (!showComments) return null;
+              return (
+                <div key={li} style={{ color: commentColor, fontSize: '0.75em', lineHeight: 1.2, fontStyle: 'italic' }}>
+                  {ld.comment}
+                </div>
+              );
+            }
             const lineText = line.map(s => s.text).join('');
-            if (!lineText.trim()) return <div key={li} style={{ height: '0.3em' }} />;
+            if (!lineText.trim() && !ld.comment) return <div key={li} style={{ height: '0.3em' }} />;
             const hasC = line.some(s => s.chord);
+            const inlineComment = showComments && ld.comment
+              ? <span style={{ color: commentColor, fontSize: '0.75em', fontStyle: 'italic', marginLeft: '0.3em' }}>{ld.comment}</span>
+              : null;
             if (!hasC) return (
-              <div key={li} style={{ color: lyricsColor, fontSize: '1em', lineHeight: 1.2 }}>{lineText}</div>
+              <div key={li} style={{ color: lyricsColor, fontSize: '1em', lineHeight: 1.2 }}>{lineText}{inlineComment}</div>
             );
             return (
               <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1 }}>
@@ -245,6 +319,7 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords }) {
                     </span>
                   </span>
                 ))}
+                {inlineComment}
               </div>
             );
           })}
@@ -257,7 +332,7 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords }) {
           {slideData.label}
         </p>
         <p className="whitespace-pre-line line-clamp-4" style={{ color: lyricsColor, fontSize: '1em', lineHeight: 1.25 }}>
-          {stripChords(slideData.content)}
+          {stripChords(showComments ? slideData.content : stripComments(slideData.content))}
         </p>
       </div>
     );
@@ -278,15 +353,15 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords }) {
 // ─── Contenedor con label + borde de color ────────────────────────────────────
 function PreviewBox({ label, dotColor, borderColor, live, onClick, children }) {
   return (
-    <div>
-      <div className="flex items-center gap-1.5 mb-1">
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex items-center gap-1.5 mb-1 shrink-0">
         <span className={`w-2 h-2 rounded-full ${live ? dotColor : 'bg-zinc-600'}`} />
         <span className="text-[10px] font-semibold text-zinc-300 uppercase tracking-wider">{label}</span>
         <span className="ml-auto text-[8px] text-zinc-500">clic para abrir</span>
       </div>
       <div
         onClick={onClick}
-        className={`rounded border-2 overflow-hidden transition-colors cursor-pointer hover:brightness-110 active:scale-[0.99] ${borderColor}`}
+        className={`flex-1 min-h-0 rounded border-2 overflow-hidden transition-colors cursor-pointer hover:brightness-110 active:scale-[0.99] ${borderColor}`}
       >
         {children}
       </div>
@@ -295,15 +370,30 @@ function PreviewBox({ label, dotColor, borderColor, live, onClick, children }) {
 }
 
 // ─── Contenido del slide ──────────────────────────────────────────────────────
-function SlidePreviewContent({ slideData, isBlank, transparent = false, showChords = false }) {
+function SlidePreviewContent({ slideData, isBlank, transparent = false, showChords = false, showComments = false, commentColor = null, commentFontSize = 16, commentFontFamily = 'sans' }) {
   if (isBlank || !slideData) {
     return <span className="text-zinc-600 text-[9px]">Vacío</span>;
   }
   const textColor = transparent ? 'text-zinc-800' : 'text-white';
+  // styledComments: solo cuando se pasan datos de estilo (Principal). Stream usa texto plano.
+  const styledComments = showComments && commentColor !== null;
 
   if (slideData.type === 'song') {
+    // Pre-procesar líneas para separar comentarios
+    const rawLines = (slideData.content || '').split('\n');
+    const lineData = rawLines.map(line => {
+      if (isCommentLine(line)) return { visible: '', comment: line.replace(/^\s*\/\/\s?/, ''), isFullComment: true };
+      const { visible, comment } = extractInlineComment(line);
+      return { visible, comment, isFullComment: false };
+    });
+
+    const commentFF = commentFontFamily === 'serif' ? 'Georgia, serif'
+                    : commentFontFamily === 'mono'  ? 'monospace'
+                    : 'sans-serif';
+    const commentStyle = { color: commentColor ?? '#facc15', fontFamily: commentFF, fontStyle: 'italic' };
+
     if (showChords) {
-      const chordLines = parseChordLines(slideData.content || '');
+      const chordLines = parseChordLines(lineData.map(ld => ld.visible).join('\n'));
       const hasAnyChords = chordLines.some(l => l.some(s => s.chord));
       if (hasAnyChords) {
         return (
@@ -313,14 +403,18 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
             )}
             <div className="text-[7px] leading-none">
               {chordLines.map((line, li) => {
-                const lineText = line.map(s => s.text).join('');
-                if (!lineText.trim()) return <div key={li} style={{ height: '0.4em' }} />;
-                const hasChords = line.some(s => s.chord);
-                if (!hasChords) {
-                  return (
-                    <div key={li} className={`${textColor} leading-relaxed`}>{lineText}</div>
-                  );
+                const ld = lineData[li] ?? {};
+                if (ld.isFullComment) {
+                  if (!showComments) return null;
+                  return <div key={li} style={commentStyle}>{ld.comment}</div>;
                 }
+                const lineText = line.map(s => s.text).join('');
+                if (!lineText.trim() && !ld.comment) return <div key={li} style={{ height: '0.4em' }} />;
+                const hasC = line.some(s => s.chord);
+                const inlineC = styledComments && ld.comment
+                  ? <span style={{ ...commentStyle, marginLeft: '0.2em' }}>{ld.comment}</span>
+                  : null;
+                if (!hasC) return <div key={li} className={`${textColor} leading-relaxed`}>{lineText}{inlineC}</div>;
                 return (
                   <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.1 }}>
                     {line.map((seg, si) => (
@@ -334,6 +428,7 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
                         </span>
                       </span>
                     ))}
+                    {inlineC}
                   </div>
                 );
               })}
@@ -342,12 +437,28 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
         );
       }
     }
+    // Texto plano (sin acordes)
     return (
       <div className="text-center px-2">
         <p className="text-[7px] text-zinc-400 uppercase mb-0.5">{slideData.label}</p>
-        <p className={`text-[9px] ${textColor} leading-relaxed whitespace-pre-line line-clamp-4`}>
-          {stripChords(slideData.content)}
-        </p>
+        <div className="text-[9px] leading-relaxed">
+          {lineData.map((ld, i) => {
+            if (ld.isFullComment) {
+              if (!showComments) return null;
+              return <div key={i} style={commentStyle}>{ld.comment}</div>;
+            }
+            const vis = stripChords(ld.visible);
+            if (!vis.trim() && !ld.comment) return null;
+            return (
+              <div key={i} className={textColor}>
+                {vis}
+                {styledComments && ld.comment && (
+                  <span style={{ ...commentStyle, marginLeft: '0.2em' }}>{ld.comment}</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -370,7 +481,7 @@ function NextPreviewContent({ slideData }) {
     return (
       <p className="text-white/60 text-[6px] leading-relaxed whitespace-pre-line line-clamp-1">
         <span className="text-white/30 mr-1 uppercase">{slideData.label}</span>
-        {stripChords(slideData.content)}
+        {stripChords(stripComments(slideData.content))}
       </p>
     );
   }

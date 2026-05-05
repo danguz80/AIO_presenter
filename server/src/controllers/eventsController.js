@@ -36,9 +36,13 @@ async function getEvents(req, res) {
           'song_id', es.song_id,
           'position', es.position,
           'notes', es.notes,
+          'item_type', es.item_type,
+          'separator_label', es.separator_label,
+          'separator_color', es.separator_color,
           'title', s.title,
           'author', s.author,
-          'song_key', s.song_key
+          'song_key', s.song_key,
+          'tags', s.tags
         ) ORDER BY es.position
       ) FILTER (WHERE es.id IS NOT NULL),
       '[]'
@@ -75,8 +79,11 @@ async function getEvents(req, res) {
            COALESCE(
              json_agg(
                json_build_object('id', es.id, 'song_id', es.song_id, 'position', es.position,
-                                 'notes', es.notes, 'title', s.title, 'author', s.author,
-                                 'song_key', s.song_key)
+                                 'notes', es.notes, 'item_type', es.item_type,
+                                 'separator_label', es.separator_label,
+                                 'separator_color', es.separator_color,
+                                 'title', s.title, 'author', s.author,
+                                 'song_key', s.song_key, 'tags', s.tags)
                ORDER BY es.position
              ) FILTER (WHERE es.id IS NOT NULL),
              '[]'
@@ -133,7 +140,9 @@ async function getEventById(req, res) {
           json_agg(
             json_build_object(
               'id', es.id, 'song_id', es.song_id, 'position', es.position,
-              'notes', es.notes, 'title', s.title, 'author', s.author
+              'notes', es.notes, 'title', s.title, 'author', s.author,
+              'item_type', es.item_type, 'separator_label', es.separator_label,
+              'separator_color', es.separator_color, 'song_key', s.song_key, 'tags', s.tags
             ) ORDER BY es.position
           ) FILTER (WHERE es.id IS NOT NULL),
           '[]'
@@ -168,10 +177,19 @@ async function createEvent(req, res) {
     );
     const event = rows[0];
     for (let i = 0; i < songs.length; i++) {
-      await client.query(
-        `INSERT INTO event_songs (event_id, song_id, position, notes) VALUES ($1, $2, $3, $4)`,
-        [event.id, songs[i].song_id, i, songs[i].notes || null]
-      );
+      const item = songs[i];
+      if (item.item_type === 'separator') {
+        await client.query(
+          `INSERT INTO event_songs (event_id, song_id, item_type, separator_label, separator_color, position, notes)
+           VALUES ($1, NULL, 'separator', $2, $3, $4, $5)`,
+          [event.id, item.separator_label || '', item.separator_color || '#6366f1', i, item.notes || null]
+        );
+      } else {
+        await client.query(
+          `INSERT INTO event_songs (event_id, song_id, item_type, position, notes) VALUES ($1, $2, 'song', $3, $4)`,
+          [event.id, item.song_id, i, item.notes || null]
+        );
+      }
     }
     await client.query('COMMIT');
     res.status(201).json(event);
@@ -210,19 +228,37 @@ async function updateEvent(req, res) {
           [id, occurrence_date]
         );
         for (let i = 0; i < songs.length; i++) {
-          await client.query(
-            `INSERT INTO event_songs (event_id, song_id, position, notes, occurrence_date) VALUES ($1, $2, $3, $4, $5)`,
-            [id, songs[i].song_id, i, songs[i].notes || null, occurrence_date]
-          );
+          const item = songs[i];
+          if (item.item_type === 'separator') {
+            await client.query(
+              `INSERT INTO event_songs (event_id, song_id, item_type, separator_label, separator_color, position, notes, occurrence_date)
+               VALUES ($1, NULL, 'separator', $2, $3, $4, $5, $6)`,
+              [id, item.separator_label || '', item.separator_color || '#6366f1', i, item.notes || null, occurrence_date]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO event_songs (event_id, song_id, item_type, position, notes, occurrence_date) VALUES ($1, $2, 'song', $3, $4, $5)`,
+              [id, item.song_id, i, item.notes || null, occurrence_date]
+            );
+          }
         }
       } else {
         // Evento no recurrente: canciones sin occurrence_date
         await client.query('DELETE FROM event_songs WHERE event_id=$1 AND occurrence_date IS NULL', [id]);
         for (let i = 0; i < songs.length; i++) {
-          await client.query(
-            `INSERT INTO event_songs (event_id, song_id, position, notes) VALUES ($1, $2, $3, $4)`,
-            [id, songs[i].song_id, i, songs[i].notes || null]
-          );
+          const item = songs[i];
+          if (item.item_type === 'separator') {
+            await client.query(
+              `INSERT INTO event_songs (event_id, song_id, item_type, separator_label, separator_color, position, notes)
+               VALUES ($1, NULL, 'separator', $2, $3, $4, $5)`,
+              [id, item.separator_label || '', item.separator_color || '#6366f1', i, item.notes || null]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO event_songs (event_id, song_id, item_type, position, notes) VALUES ($1, $2, 'song', $3, $4)`,
+              [id, item.song_id, i, item.notes || null]
+            );
+          }
         }
       }
     }

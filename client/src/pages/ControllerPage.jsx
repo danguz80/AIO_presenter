@@ -8,11 +8,41 @@ import LivePreview     from '../components/Controls/LivePreview';
 import SettingsPanel   from '../components/Settings/SettingsPanel';
 import SongFormModal   from '../components/Library/SongFormModal';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const RECURRENCE_LABEL = { weekly: 'Semanal', biweekly: 'Cada 2 semanas', monthly: 'Mensual' };
+
+// ─── Hook: panel redimensionable arrastrando el borde derecho ────────────────
+function useResizablePanel(defaultWidth, minWidth = 140, maxWidth = 600) {
+  const [width, setWidth] = useState(defaultWidth);
+  const dragging = useRef(false);
+  const startX   = useRef(0);
+  const startW   = useRef(0);
+
+  const onMouseDown = useCallback((e) => {
+    e.preventDefault();
+    dragging.current = true;
+    startX.current   = e.clientX;
+    startW.current   = width;
+
+    const onMove = (ev) => {
+      if (!dragging.current) return;
+      const delta = ev.clientX - startX.current;
+      setWidth(Math.min(maxWidth, Math.max(minWidth, startW.current + delta)));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [width, minWidth, maxWidth]);
+
+  return { width, onMouseDown };
+}
 function pad(n) { return String(n).padStart(2, '0'); }
 function fmtDate(d) {
   // Acepta '2026-05-03', Date, o string ISO — devuelve '03-05-2026'
@@ -139,7 +169,9 @@ export default function ControllerPage() {
 
 // ─── CollapsibleLibrary ───────────────────────────────────────────
 function CollapsibleLibrary() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+  const { width, onMouseDown } = useResizablePanel(288, 160, 520);
+
   if (!open) {
     return (
       <div className="w-9 shrink-0 border-r border-surface-700 flex flex-col items-center pt-3 bg-surface-800/50">
@@ -155,7 +187,7 @@ function CollapsibleLibrary() {
     );
   }
   return (
-    <aside className="w-72 shrink-0 border-r border-surface-700 flex flex-col overflow-hidden">
+    <aside className="shrink-0 border-r border-surface-700 flex flex-col overflow-hidden relative" style={{ width }}>
       <div className="flex items-center justify-between px-3 py-2 border-b border-surface-700 shrink-0">
         <div className="flex items-center gap-1.5">
           <Music size={13} className="text-accent" />
@@ -170,6 +202,12 @@ function CollapsibleLibrary() {
         </button>
       </div>
       <SongLibrary />
+      {/* Handle de redimensionado */}
+      <div
+        onMouseDown={onMouseDown}
+        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-10"
+        title="Arrastrar para redimensionar"
+      />
     </aside>
   );
 }
@@ -177,8 +215,9 @@ function CollapsibleLibrary() {
 // ─── EventsPanel ─────────────────────────────────────────────────────────────
 function EventsPanel() {
   const today = new Date();
-  const { actions } = usePresenter();
+  const { state, actions } = usePresenter();
   const [open,       setOpen]       = useState(false);
+  const { width: panelWidth, onMouseDown: onResizeMouseDown } = useResizablePanel(280, 160, 480);
   const [year,       setYear]       = useState(today.getFullYear());
   const [month,      setMonth]      = useState(today.getMonth());
   const [events,     setEvents]     = useState([]);
@@ -193,7 +232,71 @@ function EventsPanel() {
   const [newEv,       setNewEv]       = useState({ title: '', date: '', time: '', is_recurring: false, recurrence: 'weekly' });
   const [createError, setCreateError] = useState('');
   const [editingSong, setEditingSong] = useState(null); // song completa para SongFormModal
+  // Separadores
+  const [showSepForm,      setShowSepForm]      = useState(false);
+  const [sepLabel,         setSepLabel]         = useState('');
+  const [sepColor,         setSepColor]         = useState('#6366f1');
+  // Plantillas
+  const [templates,        setTemplates]        = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [templateName,     setTemplateName]     = useState('');
+  const [savingTemplate,   setSavingTemplate]   = useState(false);
+  const [viewingTemplates, setViewingTemplates] = useState(false);
+  // Editar evento
+  const [editingEv,    setEditingEv]    = useState(false);
+  const [editEvData,   setEditEvData]   = useState({});
+  const [editEvBusy,   setEditEvBusy]   = useState(false);
+  const [editEvError,  setEditEvError]  = useState('');
+  // Drag & drop
+  const dragSrcIndex  = useRef(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  // Editar separador inline
+  const [editingSepIdx,   setEditingSepIdx]   = useState(null);
+  const [editingSepLabel, setEditingSepLabel] = useState('');
+  const [editingSepColor, setEditingSepColor] = useState('#6366f1');
   const searchRef = useRef(null);
+
+  // ── Helpers de reproducción ────────────────────────────────────────────────
+  // Fecha de ocurrencia del evento (null para no recurrentes)
+  const occDateForEv = (ev) => ev?.is_recurring ? String(ev.date).split('T')[0] : null;
+
+  // ¿Estamos en o después de la fecha+hora del evento?
+  const isAfterEventTime = (ev) => {
+    if (!ev) return false;
+    const dateStr = String(ev.date).split('T')[0];
+    // PostgreSQL TIME viene como "HH:MM:SS" — tomamos solo "HH:MM"
+    const timeStr = (ev.time || '00:00').slice(0, 5);
+    const eventDt = new Date(`${dateStr}T${timeStr}:00`);
+    return new Date() >= eventDt;
+  };
+
+  // Cargar plays cuando cambia el evento seleccionado
+  useEffect(() => {
+    if (selectedEv) {
+      actions.loadPlays(selectedEv.id, occDateForEv(selectedEv));
+    }
+  }, [selectedEv?.id, selectedEv?.date]); // eslint-disable-line
+
+  const playedIds = state.eventPlays; // Set<song_id>
+  const reservasMode = state.reservasMode;
+
+  // ¿Existe un separador "reservas" en el schedule actual?
+  const normLabel = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const hasReservas = (selectedEv?.songs || []).some(
+    s => s.item_type === 'separator' && normLabel(s.separator_label).includes('reserva')
+  );
+
+  const handleManualMark = async (songId) => {
+    if (!selectedEv || !isAfterEventTime(selectedEv)) return;
+    const totalSlides = state.selectedSong?.id === songId ? (state.selectedSong?.slides?.length || 0) : 0;
+    await actions.markPlayed(selectedEv.id, occDateForEv(selectedEv), songId, totalSlides, totalSlides, true);
+  };
+
+  const handleUnmark = async (songId) => {
+    if (!selectedEv) return;
+    await actions.unmarkPlayed(selectedEv.id, occDateForEv(selectedEv), songId);
+  };
 
   // Publicar el schedule al contexto global cuando cambia el evento seleccionado
   useEffect(() => {
@@ -206,6 +309,11 @@ function EventsPanel() {
       fetch('/api/songs').then(r => r.json()).then(setAllSongs).catch(() => {});
     }
   }, [open]); // eslint-disable-line
+
+  // Cargar plantillas de eventos
+  useEffect(() => {
+    fetch('/api/event-templates').then(r => r.json()).then(setTemplates).catch(() => {});
+  }, []);
 
   const fetchEvents = useCallback((y, m) => {
     const lastDay = new Date(y, m + 1, 0).getDate();
@@ -245,32 +353,60 @@ function EventsPanel() {
         .slice(0, 7)
     : [];
 
+  // ── Helper: guarda la lista de ítems en la API ──────────────────────────────
+  const saveItemsToApi = useCallback(async (items) => {
+    const occDate  = selectedEv.is_recurring ? String(selectedEv.date).split('T')[0] : null;
+    const baseDate = selectedEv.base_date    || String(selectedEv.date).split('T')[0];
+    await fetch(`/api/events/${selectedEv.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: selectedEv.title, date: baseDate,
+        time: selectedEv.time || null, description: selectedEv.description || null,
+        is_recurring: selectedEv.is_recurring, recurrence: selectedEv.recurrence || null,
+        recur_end: selectedEv.recur_end || null, occurrence_date: occDate,
+        songs: items.map((p, i) => ({
+          song_id:         p.song_id         || null,
+          item_type:       p.item_type       || 'song',
+          separator_label: p.separator_label || null,
+          separator_color: p.separator_color || null,
+          position: i,
+        })),
+      }),
+    });
+  }, [selectedEv]);
+
+  // ── Helper: aplica nueva lista en estado ────────────────────────────────────
+  const applyNewItems = useCallback((newItems) => {
+    setSelectedEv(ev => ({ ...ev, songs: newItems }));
+    setEvents(evs => evs.map(e =>
+      (e.id === selectedEv.id && String(e.date).split('T')[0] === String(selectedEv.date).split('T')[0])
+        ? { ...e, songs: newItems } : e
+    ));
+  }, [selectedEv]);
+
   const addSong = async (song) => {
-    const newSongs = [...(selectedEv.songs || []), { song_id: song.id, title: song.title, author: song.author }];
+    const newItems = [...(selectedEv.songs || []), { song_id: song.id, title: song.title, author: song.author, item_type: 'song' }];
     setSaving(true);
-    // Para recurrentes: date = fecha base del evento, occurrence_date = fecha de esta ocurrencia
-    const occDate = selectedEv.is_recurring ? String(selectedEv.date).split('T')[0] : null;
-    const baseDate = selectedEv.base_date || String(selectedEv.date).split('T')[0];
     try {
-      await fetch(`/api/events/${selectedEv.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: selectedEv.title, date: baseDate,
-          time: selectedEv.time || null, description: selectedEv.description || null,
-          is_recurring: selectedEv.is_recurring, recurrence: selectedEv.recurrence || null,
-          recur_end: selectedEv.recur_end || null,
-          occurrence_date: occDate,
-          songs: newSongs.map((p, i) => ({ song_id: p.song_id, position: i })),
-        }),
-      });
-      setSelectedEv(ev => ({ ...ev, songs: newSongs }));
-      setEvents(evs => evs.map(e =>
-        (e.id === selectedEv.id && String(e.date).split('T')[0] === String(selectedEv.date).split('T')[0])
-          ? { ...e, songs: newSongs } : e
-      ));
+      await saveItemsToApi(newItems);
+      applyNewItems(newItems);
       setSongSearch('');
       searchRef.current?.focus();
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const addSeparator = async () => {
+    if (!sepLabel.trim()) return;
+    const newItems = [...(selectedEv.songs || []), {
+      item_type: 'separator', separator_label: sepLabel.trim(), separator_color: sepColor, song_id: null,
+    }];
+    setSaving(true);
+    try {
+      await saveItemsToApi(newItems);
+      applyNewItems(newItems);
+      setSepLabel(''); setSepColor('#6366f1'); setShowSepForm(false);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -280,6 +416,7 @@ function EventsPanel() {
     const iso = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
     setNewEv({ title: '', date: iso, time: '', is_recurring: false, recurrence: 'weekly' });
     setCreateError('');
+    setSelectedTemplate(null);
     setCreating(true);
   };
 
@@ -289,6 +426,14 @@ function EventsPanel() {
     setCreatingBusy(true);
     setCreateError('');
     try {
+      const templateSongs = selectedTemplate
+        ? (selectedTemplate.items || []).map(item => ({
+            song_id:         item.song_id         || null,
+            item_type:       item.item_type       || 'song',
+            separator_label: item.separator_label || null,
+            separator_color: item.separator_color || null,
+          }))
+        : [];
       const res = await fetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -298,20 +443,20 @@ function EventsPanel() {
           time: newEv.time || null,
           is_recurring: newEv.is_recurring,
           recurrence: newEv.is_recurring ? newEv.recurrence : null,
-          songs: [],
+          songs: templateSongs,
         }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
       }
-      await res.json().catch(() => null); // consumir body
-      // Navegar al mes del nuevo evento y recargar
+      await res.json().catch(() => null);
       const [evYear, evMonth] = newEv.date.split('-').map(Number);
       setYear(evYear);
       setMonth(evMonth - 1);
       setCreating(false);
-      fetchEvents(evYear, evMonth - 1); // forzar recarga aunque el mes no haya cambiado
+      setSelectedTemplate(null);
+      fetchEvents(evYear, evMonth - 1);
     } catch (e) {
       console.error(e);
       setCreateError(e.message || 'Error al crear evento');
@@ -319,34 +464,137 @@ function EventsPanel() {
     finally { setCreatingBusy(false); }
   };
 
-  const reorderSong = async (song_id, dir) => {
-    const songs = selectedEv.songs || [];
-    const idx = songs.findIndex(p => p.song_id === song_id);
-    if (idx < 0) return;
-    const newIdx = dir === 'up' ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= songs.length) return;
-    const newSongs = [...songs];
-    [newSongs[idx], newSongs[newIdx]] = [newSongs[newIdx], newSongs[idx]];
+  const reorderItem = async (index, dir) => {
+    const items  = selectedEv.songs || [];
+    const newIdx = dir === 'up' ? index - 1 : index + 1;
+    if (newIdx < 0 || newIdx >= items.length) return;
+    const newItems = [...items];
+    [newItems[index], newItems[newIdx]] = [newItems[newIdx], newItems[index]];
     setSaving(true);
-    const occDate = selectedEv.is_recurring ? String(selectedEv.date).split('T')[0] : null;
-    const baseDate = selectedEv.base_date || String(selectedEv.date).split('T')[0];
     try {
-      await fetch(`/api/events/${selectedEv.id}`, {
+      await saveItemsToApi(newItems);
+      applyNewItems(newItems);
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const removeItem = async (index) => {
+    const newItems = (selectedEv.songs || []).filter((_, i) => i !== index);
+    setSaving(true);
+    try {
+      await saveItemsToApi(newItems);
+      applyNewItems(newItems);
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const saveAsTemplate = async () => {
+    if (!templateName.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const items = (selectedEv.songs || []).map(s => ({
+        item_type:       s.item_type       || 'song',
+        song_id:         s.song_id         || null,
+        title:           s.title           || null,
+        author:          s.author          || null,
+        separator_label: s.separator_label || null,
+        separator_color: s.separator_color || null,
+      }));
+      const res  = await fetch('/api/event-templates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: templateName.trim(), items }),
+      });
+      const tpl = await res.json();
+      setTemplates(ts => [tpl, ...ts]);
+      setTemplateName(''); setShowSaveTemplate(false);
+    } catch (e) { console.error(e); }
+    finally { setSavingTemplate(false); }
+  };
+
+  const deleteTemplateById = async (id) => {
+    try {
+      await fetch(`/api/event-templates/${id}`, { method: 'DELETE' });
+      setTemplates(ts => ts.filter(t => t.id !== id));
+      if (selectedTemplate?.id === id) setSelectedTemplate(null);
+    } catch (e) { console.error(e); }
+  };
+
+  const saveEditEvent = async () => {
+    if (!editEvData.title?.trim()) { setEditEvError('Escribe un título'); return; }
+    if (!editEvData.date)          { setEditEvError('Elige una fecha'); return; }
+    setEditEvBusy(true); setEditEvError('');
+    try {
+      const res = await fetch(`/api/events/${selectedEv.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: selectedEv.title, date: baseDate,
-          time: selectedEv.time || null, description: selectedEv.description || null,
-          is_recurring: selectedEv.is_recurring, recurrence: selectedEv.recurrence || null,
-          recur_end: selectedEv.recur_end || null, occurrence_date: occDate,
-          songs: newSongs.map((p, i) => ({ song_id: p.song_id, position: i })),
+          title:        editEvData.title.trim(),
+          date:         editEvData.date,
+          time:         editEvData.time || null,
+          description:  editEvData.description || null,
+          is_recurring: editEvData.is_recurring,
+          recurrence:   editEvData.is_recurring ? editEvData.recurrence : null,
+          recur_end:    editEvData.recur_end || null,
+          // sin songs → no modifica la playlist
         }),
       });
-      setSelectedEv(ev => ({ ...ev, songs: newSongs }));
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || `HTTP ${res.status}`); }
+      // Actualizar estado local
+      const updated = {
+        ...selectedEv,
+        title:        editEvData.title.trim(),
+        date:         editEvData.date,
+        time:         editEvData.time || null,
+        is_recurring: editEvData.is_recurring,
+        recurrence:   editEvData.is_recurring ? editEvData.recurrence : null,
+        recur_end:    editEvData.recur_end || null,
+      };
+      setSelectedEv(updated);
       setEvents(evs => evs.map(e =>
-        (e.id === selectedEv.id && String(e.date).split('T')[0] === String(selectedEv.date).split('T')[0])
-          ? { ...e, songs: newSongs } : e
+        e.id === selectedEv.id ? { ...e, ...updated } : e
       ));
+      setEditingEv(false);
+    } catch (e) { setEditEvError(e.message || 'Error al guardar'); }
+    finally { setEditEvBusy(false); }
+  };
+
+  const deleteEvent = async () => {
+    if (!window.confirm(`¿Eliminar el evento "${selectedEv.title}"?`)) return;
+    try {
+      await fetch(`/api/events/${selectedEv.id}`, { method: 'DELETE' });
+      setSelectedEv(null);
+      setEvents(evs => evs.filter(e => e.id !== selectedEv.id));
+    } catch (e) { console.error(e); }
+  };
+
+  const saveSeparatorEdit = async () => {
+    if (!editingSepLabel.trim()) return;
+    const items = (selectedEv.songs || []).map((s, i) =>
+      i === editingSepIdx
+        ? { ...s, separator_label: editingSepLabel.trim(), separator_color: editingSepColor }
+        : s
+    );
+    setSaving(true);
+    try {
+      await saveItemsToApi(items);
+      applyNewItems(items);
+      setEditingSepIdx(null);
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  };
+
+  const handleDrop = async (toIndex) => {
+    const from = dragSrcIndex.current;
+    dragSrcIndex.current = null;
+    setDragOverIdx(null);
+    if (from === null || from === toIndex) return;
+    const items    = [...(selectedEv.songs || [])];
+    const [moved]  = items.splice(from, 1);
+    items.splice(toIndex, 0, moved);
+    setSaving(true);
+    try {
+      await saveItemsToApi(items);
+      applyNewItems(items);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -357,33 +605,6 @@ function EventsPanel() {
       const data = await res.json();
       setEditingSong(data);
     } catch (e) { console.error(e); }
-  };
-
-  const removeSong = async (song_id) => {
-    const newSongs = (selectedEv.songs || []).filter(p => p.song_id !== song_id);
-    setSaving(true);
-    const occDate = selectedEv.is_recurring ? String(selectedEv.date).split('T')[0] : null;
-    const baseDate = selectedEv.base_date || String(selectedEv.date).split('T')[0];
-    try {
-      await fetch(`/api/events/${selectedEv.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: selectedEv.title, date: baseDate,
-          time: selectedEv.time || null, description: selectedEv.description || null,
-          is_recurring: selectedEv.is_recurring, recurrence: selectedEv.recurrence || null,
-          recur_end: selectedEv.recur_end || null,
-          occurrence_date: occDate,
-          songs: newSongs.map((p, i) => ({ song_id: p.song_id, position: i })),
-        }),
-      });
-      setSelectedEv(ev => ({ ...ev, songs: newSongs }));
-      setEvents(evs => evs.map(e =>
-        (e.id === selectedEv.id && String(e.date).split('T')[0] === String(selectedEv.date).split('T')[0])
-          ? { ...e, songs: newSongs } : e
-      ));
-    } catch (e) { console.error(e); }
-    finally { setSaving(false); }
   };
 
   if (!open) {
@@ -403,7 +624,13 @@ function EventsPanel() {
 
   return (
     <>
-    <div className="w-52 shrink-0 border-r border-surface-700 flex flex-col overflow-hidden bg-surface-800/50">
+    <div className="shrink-0 border-r border-surface-700 flex flex-col overflow-hidden bg-surface-800/50 relative" style={{ width: panelWidth }}>
+      {/* Handle de redimensionado */}
+      <div
+        onMouseDown={onResizeMouseDown}
+        className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-10"
+        title="Arrastrar para redimensionar"
+      />
 
       {/* ── Vista: crear evento ── */}
       {creating ? (
@@ -480,6 +707,35 @@ function EventsPanel() {
                 </select>
               </div>
             )}
+            {/* Selector de plantilla */}
+            {templates.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wider flex items-center gap-1">
+                  <LayoutTemplate size={10} /> Plantilla <span className="normal-case text-zinc-600">(opcional)</span>
+                </label>
+                <div className="flex flex-col gap-0.5 max-h-36 overflow-y-auto">
+                  {templates.map(tpl => (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => setSelectedTemplate(s => s?.id === tpl.id ? null : tpl)}
+                      className={`text-left px-2.5 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2 ${
+                        selectedTemplate?.id === tpl.id
+                          ? 'bg-accent/20 border border-accent/50 text-accent'
+                          : 'bg-surface-700 border border-surface-600 text-zinc-300 hover:border-accent/30'
+                      }`}
+                    >
+                      <LayoutTemplate size={9} className="shrink-0 opacity-60" />
+                      <span className="flex-1 truncate">{tpl.name}</span>
+                      <span className="text-[9px] text-zinc-500 shrink-0">{tpl.items?.length || 0} ítems</span>
+                    </button>
+                  ))}
+                </div>
+                {selectedTemplate && (
+                  <p className="text-[10px] text-accent/80">✓ Se cargará "{selectedTemplate.name}"</p>
+                )}
+              </div>
+            )}
           </div>
           <div className="px-3 py-3 border-t border-surface-700 shrink-0">
             <button
@@ -491,6 +747,65 @@ function EventsPanel() {
             </button>
           </div>
         </>
+      ) : viewingTemplates ? (
+        /* ── Vista: gestión de plantillas ── */
+        <>
+          <div className="flex items-center gap-1 px-2 py-2.5 border-b border-surface-700 shrink-0">
+            <button
+              onClick={() => setViewingTemplates(false)}
+              className="text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-surface-700 shrink-0"
+              title="Volver"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <div className="flex items-center gap-1.5 flex-1">
+              <LayoutTemplate size={13} className="text-accent" />
+              <span className="text-xs font-semibold">Plantillas guardadas</span>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {templates.length === 0 ? (
+              <div className="flex flex-col items-center gap-1 py-8 text-zinc-600">
+                <LayoutTemplate size={22} />
+                <span className="text-xs text-center px-4">No hay plantillas guardadas</span>
+                <span className="text-[10px] text-zinc-600 text-center px-4">Abre un evento y usa el ícono 🔖 para guardar uno</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-px p-2">
+                {templates.map(tpl => (
+                  <div key={tpl.id} className="flex items-start gap-2 px-2.5 py-2 rounded-lg bg-surface-700/50 group">
+                    <LayoutTemplate size={13} className="text-accent shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">{tpl.name}</p>
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        {(tpl.items || []).map((item, j) =>
+                          item.item_type === 'separator' ? (
+                            <div key={j} className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: item.separator_color || '#6366f1' }} />
+                              <span className="text-[9px] font-semibold truncate" style={{ color: item.separator_color || '#6366f1' }}>{item.separator_label}</span>
+                            </div>
+                          ) : (
+                            <div key={j} className="flex items-center gap-1">
+                              <Music size={8} className="text-zinc-500 shrink-0" />
+                              <span className="text-[9px] text-zinc-400 truncate">{item.title || `Canción #${item.song_id}`}</span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => deleteTemplateById(tpl.id)}
+                      className="shrink-0 p-1 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 rounded hover:bg-surface-700"
+                      title="Eliminar plantilla"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
       ) : !selectedEv ? (
         <>
           {/* Header */}
@@ -500,6 +815,13 @@ function EventsPanel() {
               <span className="text-xs font-semibold">Eventos</span>
             </div>
             <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => setViewingTemplates(true)}
+                className="text-zinc-500 hover:text-accent transition-colors p-0.5 rounded"
+                title="Ver plantillas"
+              >
+                <LayoutTemplate size={13} />
+              </button>
               <button
                 onClick={startCreating}
                 className="text-zinc-500 hover:text-accent transition-colors p-0.5 rounded"
@@ -580,37 +902,179 @@ function EventsPanel() {
           {/* Header con botón volver */}
           <div className="flex items-center gap-1 px-2 py-2.5 border-b border-surface-700 shrink-0">
             <button
-              onClick={() => { setSelectedEv(null); setSongSearch(''); setShowSearch(false); }}
+              onClick={() => { setSelectedEv(null); setSongSearch(''); setShowSearch(false); setEditingEv(false); }}
               className="text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-surface-700 shrink-0"
               title="Volver a eventos"
             >
               <ChevronLeft size={14} />
             </button>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold truncate leading-tight">{selectedEv.title}</p>
-              <p className="text-[10px] text-zinc-500 truncate">
-                {fmtDate(selectedEv.date)}
-                {selectedEv.time ? ' · ' + String(selectedEv.time).slice(0, 5) : ''}
-              </p>
-            </div>
-            {saving
+            {editingEv ? (
+              /* ── Formulario edición ── */
+              <span className="text-xs font-semibold flex-1 text-accent">Editar evento</span>
+            ) : (
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold truncate leading-tight">{selectedEv.title}</p>
+                <p className="text-[10px] text-zinc-500 truncate">
+                  {fmtDate(selectedEv.date)}
+                  {selectedEv.time ? ' · ' + String(selectedEv.time).slice(0, 5) : ''}
+                </p>
+              </div>
+            )}
+            {!editingEv && (saving
               ? <span className="text-[10px] text-zinc-500 shrink-0">…</span>
-              : <button
-                  onClick={() => { setShowSearch(s => !s); setTimeout(() => searchRef.current?.focus(), 50); }}
-                  className={['shrink-0 p-1 rounded transition-colors',
-                    showSearch ? 'text-accent bg-accent/15' : 'text-zinc-400 hover:text-white hover:bg-surface-700'
-                  ].join(' ')}
-                  title="Agregar canción"
-                >
-                  <Plus size={14} />
-                </button>
-            }
+              : <div className="flex items-center gap-0.5 shrink-0">
+                  {/* Ir a reservas */}
+                  {hasReservas && (
+                    <button
+                      onClick={() => actions.setReservasMode(!reservasMode)}
+                      className={['p-1 rounded transition-colors',
+                        reservasMode ? 'text-amber-400 bg-amber-400/15' : 'text-zinc-400 hover:text-amber-400 hover:bg-surface-700'
+                      ].join(' ')}
+                      title={reservasMode ? 'Desactivar modo reservas' : 'Ir a reservas'}
+                    >
+                      <SkipForward size={13} />
+                    </button>
+                  )}
+                  {/* Editar evento */}
+                  <button
+                    onClick={() => {
+                      setEditEvData({
+                        title:        selectedEv.title,
+                        date:         String(selectedEv.date).split('T')[0],
+                        time:         selectedEv.time ? String(selectedEv.time).slice(0,5) : '',
+                        description:  selectedEv.description || '',
+                        is_recurring: selectedEv.is_recurring || false,
+                        recurrence:   selectedEv.recurrence   || 'weekly',
+                        recur_end:    selectedEv.recur_end    || '',
+                      });
+                      setEditEvError('');
+                      setEditingEv(true);
+                    }}
+                    className="p-1 rounded text-zinc-400 hover:text-white hover:bg-surface-700 transition-colors"
+                    title="Editar evento"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  {/* Guardar como plantilla */}
+                  {(selectedEv.songs?.length > 0) && (
+                    <button
+                      onClick={() => { setShowSaveTemplate(s => !s); setTemplateName(''); }}
+                      className={['p-1 rounded transition-colors',
+                        showSaveTemplate ? 'text-accent bg-accent/15' : 'text-zinc-400 hover:text-white hover:bg-surface-700'
+                      ].join(' ')}
+                      title="Guardar como plantilla"
+                    >
+                      <Bookmark size={13} />
+                    </button>
+                  )}
+                  {/* Agregar separador */}
+                  <button
+                    onClick={() => { setShowSepForm(s => !s); setSepLabel(''); }}
+                    className={['p-1 rounded transition-colors',
+                      showSepForm ? 'text-accent bg-accent/15' : 'text-zinc-400 hover:text-white hover:bg-surface-700'
+                    ].join(' ')}
+                    title="Agregar separador de sección"
+                  >
+                    <Minus size={13} />
+                  </button>
+                  {/* Agregar canción */}
+                  <button
+                    onClick={() => { setShowSearch(s => !s); setTimeout(() => searchRef.current?.focus(), 50); }}
+                    className={['p-1 rounded transition-colors',
+                      showSearch ? 'text-accent bg-accent/15' : 'text-zinc-400 hover:text-white hover:bg-surface-700'
+                    ].join(' ')}
+                    title="Agregar canción"
+                  >
+                    <Plus size={14} />
+                  </button>
+                </div>
+            )}
           </div>
 
+          {/* ── Formulario edición de evento ── */}
+          {editingEv && (
+            <div className="flex-1 overflow-y-auto px-3 py-3 flex flex-col gap-3">
+              {editEvError && (
+                <div className="text-[11px] text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-2.5 py-1.5">{editEvError}</div>
+              )}
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wider">Título</label>
+                <input
+                  autoFocus
+                  className="bg-surface-700 border border-surface-600 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent transition-colors"
+                  value={editEvData.title || ''}
+                  onChange={e => setEditEvData(v => ({ ...v, title: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && saveEditEvent()}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wider">Fecha</label>
+                <input
+                  type="date"
+                  className="bg-surface-700 border border-surface-600 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent transition-colors"
+                  value={editEvData.date || ''}
+                  onChange={e => setEditEvData(v => ({ ...v, date: e.target.value }))}
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wider">Hora <span className="normal-case text-zinc-600">(opcional)</span></label>
+                <input
+                  type="time"
+                  className="bg-surface-700 border border-surface-600 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent transition-colors"
+                  value={editEvData.time || ''}
+                  onChange={e => setEditEvData(v => ({ ...v, time: e.target.value }))}
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={editEvData.is_recurring || false}
+                  onChange={e => setEditEvData(v => ({ ...v, is_recurring: e.target.checked }))}
+                  className="accent-indigo-500"
+                />
+                <span className="text-xs text-zinc-300">Recurrente</span>
+              </label>
+              {editEvData.is_recurring && (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-wider">Frecuencia</label>
+                  <select
+                    className="bg-surface-700 border border-surface-600 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent transition-colors"
+                    value={editEvData.recurrence || 'weekly'}
+                    onChange={e => setEditEvData(v => ({ ...v, recurrence: e.target.value }))}
+                  >
+                    <option value="weekly">Semanal</option>
+                    <option value="biweekly">Cada 2 semanas</option>
+                    <option value="monthly">Mensual</option>
+                  </select>
+                </div>
+              )}
+              <div className="flex flex-col gap-2 pt-1">
+                <button
+                  onClick={saveEditEvent}
+                  disabled={editEvBusy}
+                  className="w-full py-1.5 rounded-lg bg-accent hover:bg-accent-hover disabled:opacity-40 text-white text-xs font-semibold transition-colors"
+                >
+                  {editEvBusy ? 'Guardando…' : 'Guardar cambios'}
+                </button>
+                <button
+                  onClick={deleteEvent}
+                  className="w-full py-1.5 rounded-lg border border-red-800/50 text-red-400 hover:bg-red-900/20 text-xs font-medium transition-colors"
+                >
+                  Eliminar evento
+                </button>
+                <button
+                  onClick={() => setEditingEv(false)}
+                  className="w-full py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 text-xs transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Buscador para agregar canciones */}
-          {showSearch && (
-          <div className="px-2 py-2 border-b border-surface-700 shrink-0 relative">
-            <input
+          {!editingEv && showSearch && (
+          <div className="px-2 py-2 border-b border-surface-700 shrink-0 relative">            <input
               ref={searchRef}
               className="w-full bg-surface-700 border border-surface-600 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-accent transition-colors"
               placeholder="+ Agregar canción…"
@@ -640,52 +1104,181 @@ function EventsPanel() {
           </div>
           )}
 
-          {/* Canciones */}
-          <div className="flex-1 overflow-y-auto">
+          {/* Formulario: guardar como plantilla */}
+          {!editingEv && showSaveTemplate && (
+          <div className="px-2 py-2 border-b border-surface-700 shrink-0 flex gap-1.5 items-center">
+            <Bookmark size={11} className="text-accent shrink-0" />
+            <input
+              autoFocus
+              className="flex-1 min-w-0 bg-surface-700 border border-surface-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-accent"
+              placeholder="Nombre de plantilla…"
+              value={templateName}
+              onChange={e => setTemplateName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && saveAsTemplate()}
+            />
+            <button
+              onClick={saveAsTemplate}
+              disabled={!templateName.trim() || savingTemplate}
+              className="px-1.5 py-1 bg-accent/80 hover:bg-accent rounded text-white text-xs disabled:opacity-40 transition-colors"
+            >{savingTemplate ? '…' : '✓'}</button>
+            <button onClick={() => setShowSaveTemplate(false)} className="px-1 py-1 text-zinc-500 hover:text-white text-xs rounded hover:bg-surface-700 transition-colors">✕</button>
+          </div>
+          )}
+
+          {/* Formulario: agregar separador */}
+          {!editingEv && showSepForm && (
+          <div className="px-2 py-2 border-b border-surface-700 shrink-0 flex gap-1.5 items-center">
+            <input
+              autoFocus
+              className="flex-1 min-w-0 bg-surface-700 border border-surface-600 rounded px-2 py-1 text-xs focus:outline-none focus:border-accent"
+              placeholder="Nombre de sección…"
+              value={sepLabel}
+              onChange={e => setSepLabel(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addSeparator()}
+            />
+            <input
+              type="color"
+              value={sepColor}
+              onChange={e => setSepColor(e.target.value)}
+              className="w-7 h-7 rounded cursor-pointer border border-surface-500 bg-transparent shrink-0"
+              title="Color del separador"
+            />
+            <button
+              onClick={addSeparator}
+              disabled={!sepLabel.trim() || saving}
+              className="px-1.5 py-1 bg-accent/80 hover:bg-accent rounded text-white text-xs disabled:opacity-40 transition-colors"
+            >✓</button>
+            <button onClick={() => { setShowSepForm(false); setSepLabel(''); }} className="px-1 py-1 text-zinc-500 hover:text-white text-xs rounded hover:bg-surface-700 transition-colors">✕</button>
+          </div>
+          )}
+
+          {/* Lista de canciones + separadores */}
+          {!editingEv && <div className="flex-1 overflow-y-auto">
             {selectedEv.songs?.length > 0 ? (
               <div className="flex flex-col">
-                {selectedEv.songs.map((s, i) => (
-                  <div key={s.song_id} className="flex items-center border-b border-surface-700/60 last:border-0 group">
-                    {/* Botones reordenar */}
-                    <div className="flex flex-col opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                      <button
-                        onClick={() => reorderSong(s.song_id, 'up')}
-                        disabled={i === 0}
-                        className="px-1 pt-1 pb-0 text-zinc-600 hover:text-zinc-300 disabled:opacity-20 transition-colors"
-                        title="Subir"
-                      ><ChevronUp size={10} /></button>
-                      <button
-                        onClick={() => reorderSong(s.song_id, 'down')}
-                        disabled={i === selectedEv.songs.length - 1}
-                        className="px-1 pt-0 pb-1 text-zinc-600 hover:text-zinc-300 disabled:opacity-20 transition-colors"
-                        title="Bajar"
-                      ><ChevronDown size={10} /></button>
-                    </div>
-                    <button
-                      onClick={() => actions.loadSongDetail(s.song_id)}
-                      className="flex items-center gap-2 px-1.5 py-2 flex-1 min-w-0 hover:bg-accent/15 transition-colors text-left"
-                    >
-                      <span className="text-[10px] text-zinc-600 w-4 text-right shrink-0">{i + 1}</span>
-                      <Music size={10} className="text-accent shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] truncate leading-tight group-hover:text-white transition-colors">{s.title}</p>
-                        {s.author && <p className="text-[10px] text-zinc-500 truncate">{s.author}</p>}
+                {selectedEv.songs.map((s, i) => {
+                  const isDragOver = dragOverIdx === i;
+                  const dragProps = {
+                    draggable: true,
+                    onDragStart: () => { dragSrcIndex.current = i; },
+                    onDragOver:  (e) => { e.preventDefault(); setDragOverIdx(i); },
+                    onDragLeave: () => setDragOverIdx(null),
+                    onDrop:      () => handleDrop(i),
+                    onDragEnd:   () => { dragSrcIndex.current = null; setDragOverIdx(null); },
+                  };
+
+                  if (s.item_type === 'separator') {
+                    // Modo edición inline
+                    if (editingSepIdx === i) {
+                      return (
+                        <div key={s.id || `sep_${i}`} className="flex items-center gap-1 border-b border-surface-700/60 px-1 py-1">
+                          <input
+                            autoFocus
+                            className="flex-1 min-w-0 bg-surface-700 border border-accent/50 rounded px-2 py-1 text-xs focus:outline-none"
+                            value={editingSepLabel}
+                            onChange={e => setEditingSepLabel(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') saveSeparatorEdit(); if (e.key === 'Escape') setEditingSepIdx(null); }}
+                          />
+                          <input
+                            type="color"
+                            value={editingSepColor}
+                            onChange={e => setEditingSepColor(e.target.value)}
+                            className="w-7 h-7 rounded cursor-pointer border border-surface-500 bg-transparent shrink-0"
+                          />
+                          <button onClick={saveSeparatorEdit} disabled={!editingSepLabel.trim() || saving} className="px-1.5 py-1 bg-accent/80 hover:bg-accent rounded text-white text-xs disabled:opacity-40 transition-colors">✓</button>
+                          <button onClick={() => setEditingSepIdx(null)} className="px-1 py-1 text-zinc-500 hover:text-white text-xs rounded hover:bg-surface-700 transition-colors">✕</button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div
+                        key={s.id || `sep_${i}`}
+                        {...dragProps}
+                        className={`flex items-center gap-1 border-b border-surface-700/60 last:border-0 group transition-colors ${isDragOver ? 'bg-accent/10 border-t-2 border-t-accent' : ''}`}
+                      >
+                        {/* Grip handle */}
+                        <div className="pl-1 cursor-grab active:cursor-grabbing text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0">
+                          <GripVertical size={12} />
+                        </div>
+                        {/* Visualización separador: fondo de color */}
+                        <div className="flex-1 flex items-center justify-center px-2 py-1 min-w-0 rounded-sm mx-1 my-1" style={{ backgroundColor: s.separator_color || '#6366f1' }}>
+                          <span className="text-[11px] font-semibold tracking-wide truncate text-white drop-shadow-sm">
+                            {s.separator_label}
+                          </span>
+                        </div>
+                        {/* Editar */}
+                        <button
+                          onClick={() => { setEditingSepIdx(i); setEditingSepLabel(s.separator_label || ''); setEditingSepColor(s.separator_color || '#6366f1'); }}
+                          className="px-1 py-1 text-zinc-600 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                          title="Editar separador"
+                        ><Pencil size={10} /></button>
+                        {/* Quitar */}
+                        <button onClick={() => removeItem(i)} className="px-1 py-1 text-zinc-300 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0" title="Quitar separador"><X size={11} /></button>
                       </div>
-                    </button>
-                    {/* Editar */}
-                    <button
-                      onClick={() => openEditSong(s.song_id)}
-                      className="px-1 py-2 text-zinc-600 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                      title="Editar canción"
-                    ><Pencil size={10} /></button>
-                    {/* Quitar */}
-                    <button
-                      onClick={() => removeSong(s.song_id)}
-                      className="px-1.5 py-2 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                      title="Quitar"
-                    ><X size={11} /></button>
-                  </div>
-                ))}
+                    );
+                  }
+                  // Canción normal
+                  const isPlayed   = playedIds.has(s.song_id);
+                  const canMark    = isAfterEventTime(selectedEv);
+                  return (
+                    <div
+                      key={s.song_id || `song_${i}`}
+                      {...dragProps}
+                      className={`flex items-center border-b border-surface-700/60 last:border-0 group transition-colors
+                        ${isDragOver ? 'bg-accent/10 border-t-2 border-t-accent' : ''}
+                        ${isPlayed   ? 'opacity-50' : ''}`}
+                    >
+                      {/* Grip handle */}
+                      <div className="pl-1 cursor-grab active:cursor-grabbing text-zinc-600 group-hover:text-zinc-400 transition-colors shrink-0">
+                        <GripVertical size={12} />
+                      </div>
+                      <button
+                        onClick={() => actions.loadSongDetail(s.song_id)}
+                        className="flex items-center gap-2 px-1.5 py-2 flex-1 min-w-0 hover:bg-accent/15 transition-colors text-left"
+                      >
+                        <span className="text-[11px] text-zinc-600 w-4 text-right shrink-0">{i + 1}</span>
+                        <Music size={12} className="text-accent shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] truncate leading-tight group-hover:text-white transition-colors">{s.title}</p>
+                          {s.author && <p className="text-[11px] text-zinc-500 truncate">{s.author}</p>}
+                          {s.tags && s.tags.length > 0 && (
+                            <div className="flex flex-wrap gap-0.5 mt-0.5">
+                              {s.tags.map(t => (
+                                <span key={t} className="text-[10px] bg-surface-600 text-zinc-400 px-1 py-px rounded-full leading-none">{t}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      {/* Indicador tocada / botón marcar */}
+                      <button
+                        onClick={() => isPlayed ? handleUnmark(s.song_id) : handleManualMark(s.song_id)}
+                        disabled={!canMark && !isPlayed}
+                        title={isPlayed ? 'Quitar marca de tocada' : canMark ? 'Marcar como tocada' : 'Disponible solo durante/después del evento'}
+                        className={`px-1 py-2 transition-colors shrink-0 opacity-0 group-hover:opacity-100
+                          ${isPlayed
+                            ? 'text-green-400 hover:text-zinc-500 opacity-100'
+                            : canMark
+                              ? 'text-zinc-600 hover:text-green-400'
+                              : 'text-zinc-700 cursor-not-allowed'}`}
+                      >
+                        {isPlayed ? <CheckCircle2 size={12} /> : <Circle size={12} />}
+                      </button>
+                      {/* Editar */}
+                      <button
+                        onClick={() => openEditSong(s.song_id)}
+                        className="px-1 py-2 text-zinc-600 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                        title="Editar canción"
+                      ><Pencil size={10} /></button>
+                      {/* Quitar */}
+                      <button
+                        onClick={() => removeItem(i)}
+                        className="px-1.5 py-2 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                        title="Quitar"
+                      ><X size={11} /></button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1 py-8 text-zinc-600">
@@ -693,7 +1286,7 @@ function EventsPanel() {
                 <span className="text-xs text-center px-3">Busca canciones arriba para agregar</span>
               </div>
             )}
-          </div>
+          </div>}
         </>
       )}
     </div>

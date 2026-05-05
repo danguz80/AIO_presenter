@@ -18,10 +18,13 @@ const DEFAULT_STAGE_CONFIG = {
   chordsColor:  '#fde047',
   clockColor:   '#ef4444',
   nextColor:    '#22c55e',
-  fontSize:   36,
-  fontFamily: 'sans',
-  fontBold:   true,
-  fontItalic: false,
+  fontSize:        36,
+  fontFamily:      'sans',
+  fontFamilyTitle: 'sans',
+  fontBold:        true,
+  fontItalic:      false,
+  fontStrokeWidth: 0,
+  fontStrokeColor: '#000000',
   fontSizeCounter:    14,
   fontSizeTitle:      16,
   fontSizeLabel:      11,
@@ -29,7 +32,6 @@ const DEFAULT_STAGE_CONFIG = {
   fontSizeClock:      22,
   fontSizeNextSong:   16,
   fontSizeNextLyrics: 32,
-  fontSize:           36,
   fontSizeChords:     18,
   customFonts: [],
 };
@@ -66,10 +68,8 @@ const initialState = {
   // Configuración pantalla de escenario
   stageConfig: loadStageConfig(),
 
-  // Plantillas de pantalla de escenario
-  stageTemplates: (() => {
-    try { return JSON.parse(localStorage.getItem('aio_stage_templates') || '[]'); } catch { return []; }
-  })(),
+  // Plantillas de pantalla de escenario (se cargan desde el servidor al conectar)
+  stageTemplates: [],
 
 
   // Configuración salida virtual / NDI
@@ -78,6 +78,15 @@ const initialState = {
     chromaColor: '#00b140',
     fontSize:    'auto',
     ndiEnabled:  false,
+    showComments: false,
+  },
+
+  // Configuración pantalla principal (proyector)
+  outputConfig: {
+    showComments:      false,
+    commentColor:      '#facc15',
+    commentFontSize:   16,
+    commentFontFamily: 'sans',
   },
 
   // Estado NDI (del servidor)
@@ -89,6 +98,13 @@ const initialState = {
     resolution:         '1920×1080',
     fps:                30,
   },
+
+  // Canciones tocadas del evento activo: Set de song_ids
+  eventPlays: new Set(),        // song_ids ya tocadas
+  eventPlaysContext: null,      // { eventId, occurrenceDate } para saber a qué evento pertenecen
+
+  // Modo reservas: nextSong salta al separador de reservas
+  reservasMode: false,
 
   // Solicitud de navegación desde móvil (u otro cliente)
   navigateRequest: null, // { dir: 'next'|'prev', ts: number }
@@ -145,7 +161,9 @@ function reducer(state, action) {
     case 'SET_SCHEDULE':
       return { ...state, schedule: action.payload };
     case 'SET_VIRTUAL_CONFIG':
-      return { ...state, virtualConfig: action.payload };
+      return { ...state, virtualConfig: { ...state.virtualConfig, ...action.payload } };
+    case 'SET_OUTPUT_CONFIG':
+      return { ...state, outputConfig: { ...state.outputConfig, ...action.payload } };
     case 'SET_NDI_STATUS':
       return { ...state, ndiStatus: action.payload };
     case 'NAVIGATE':
@@ -154,6 +172,17 @@ function reducer(state, action) {
       return { ...state, selectedSong: action.payload.song, selectedSlide: action.payload.slide, pendingSongId: null, pendingSlideId: null };
     case 'SET_CONNECTED':
       return { ...state, connected: action.payload };
+    case 'SET_EVENT_PLAYS':
+      return { ...state, eventPlays: new Set(action.payload.ids), eventPlaysContext: action.payload.ctx };
+    case 'ADD_EVENT_PLAY':
+      return { ...state, eventPlays: new Set([...state.eventPlays, action.payload]) };
+    case 'REMOVE_EVENT_PLAY': {
+      const next = new Set(state.eventPlays);
+      next.delete(action.payload);
+      return { ...state, eventPlays: next };
+    }
+    case 'SET_RESERVAS_MODE':
+      return { ...state, reservasMode: action.payload };
     default:
       return state;
   }
@@ -200,8 +229,11 @@ export function PresenterProvider({ children }) {
     socket.on('stage:templates', (data) => dispatch({ type: 'SET_STAGE_TEMPLATES', payload: data }));
     socket.on('schedule:update',  (data) => dispatch({ type: 'SET_SCHEDULE',        payload: data }));
     socket.on('virtual:config',  (data) => dispatch({ type: 'SET_VIRTUAL_CONFIG',  payload: data }));
+    socket.on('output:config',   (data) => dispatch({ type: 'SET_OUTPUT_CONFIG',   payload: data }));
     socket.on('ndi:status',      (data) => dispatch({ type: 'SET_NDI_STATUS',      payload: data }));
-    socket.on('navigate',        (dir)  => dispatch({ type: 'NAVIGATE', payload: { dir, ts: Date.now() } }));
+    socket.on('navigate',          (dir)  => dispatch({ type: 'NAVIGATE',          payload: { dir, ts: Date.now() } }));
+    socket.on('event:plays',       (data) => dispatch({ type: 'SET_EVENT_PLAYS',   payload: data }));
+    socket.on('event:reservas_mode', (mode) => dispatch({ type: 'SET_RESERVAS_MODE', payload: mode }));
     return () => socket.disconnect();
   }, []);
 
@@ -275,7 +307,6 @@ export function PresenterProvider({ children }) {
     },
 
     setStageTemplates: (templates) => {
-      try { localStorage.setItem('aio_stage_templates', JSON.stringify(templates)); } catch { /* ignore */ }
       socketRef.current?.emit('stage:templates', templates);
       dispatch({ type: 'SET_STAGE_TEMPLATES', payload: templates });
     },
@@ -287,17 +318,70 @@ export function PresenterProvider({ children }) {
     },
 
     setVirtualConfig: (config) => {
+      dispatch({ type: 'SET_VIRTUAL_CONFIG', payload: config });
       socketRef.current?.emit('virtual:config', config);
+    },
+
+    setOutputConfig: (config) => {
+      dispatch({ type: 'SET_OUTPUT_CONFIG', payload: config });
+      socketRef.current?.emit('output:config', config);
     },
 
     navigate: (dir) => {
       socketRef.current?.emit('navigate', dir);
     },
 
-    reloadSongs: async (search) => {
-      const params = search ? `?search=${encodeURIComponent(search)}` : '';
+    loadPlays: async (eventId, occurrenceDate) => {
+      try {
+        const q = occurrenceDate ? `?occurrence_date=${occurrenceDate}` : '';
+        const res = await api.get(`/events/${eventId}/plays${q}`);
+        const ids = res.data.map(p => p.song_id);
+        const ctx = { eventId, occurrenceDate };
+        dispatch({ type: 'SET_EVENT_PLAYS', payload: { ids, ctx } });
+        socketRef.current?.emit('event:plays', { ids, ctx });
+        return res.data;
+      } catch { return []; }
+    },
+
+    markPlayed: async (eventId, occurrenceDate, songId, slidesShown, totalSlides, manual = false) => {
+      await api.post(`/events/${eventId}/plays`, {
+        song_id: songId,
+        occurrence_date: occurrenceDate || null,
+        slides_shown: slidesShown,
+        total_slides: totalSlides,
+        manual,
+      });
+      dispatch({ type: 'ADD_EVENT_PLAY', payload: songId });
+      const ctx = state.eventPlaysContext;
+      if (ctx) {
+        const ids = [...state.eventPlays, songId];
+        socketRef.current?.emit('event:plays', { ids, ctx });
+      }
+    },
+
+    unmarkPlayed: async (eventId, occurrenceDate, songId) => {
+      const q = occurrenceDate ? `?occurrence_date=${occurrenceDate}` : '';
+      await api.delete(`/events/${eventId}/plays/${songId}${q}`);
+      dispatch({ type: 'REMOVE_EVENT_PLAY', payload: songId });
+      const ctx = state.eventPlaysContext;
+      if (ctx) {
+        const ids = [...state.eventPlays].filter(id => id !== songId);
+        socketRef.current?.emit('event:plays', { ids, ctx });
+      }
+    },
+
+    reloadSongs: async (search, labelFilter) => {
+      const q = [];
+      if (search) q.push(`search=${encodeURIComponent(search)}`);
+      if (labelFilter) q.push(`tag=${encodeURIComponent(labelFilter)}`);
+      const params = q.length ? `?${q.join('&')}` : '';
       const res = await api.get(`/songs${params}`);
       dispatch({ type: 'SET_SONGS', payload: res.data });
+    },
+
+    setReservasMode: (mode) => {
+      dispatch({ type: 'SET_RESERVAS_MODE', payload: mode });
+      socketRef.current?.emit('event:reservas_mode', mode);
     },
   };
 

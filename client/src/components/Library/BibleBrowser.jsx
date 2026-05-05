@@ -193,6 +193,9 @@ export default function BibleBrowser() {
   useEffect(() => {
     const handleKey = (e) => {
       if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (e.key === 'Escape') {
+        e.preventDefault?.(); actions.toggleBlank(true); return;
+      }
       if (e.key !== ' ' && e.key !== 'ArrowDown' && e.key !== 'ArrowRight' &&
           e.key !== 'ArrowUp'  && e.key !== 'ArrowLeft') return;
       if (verses.length === 0) return;

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Smartphone } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import StageControls   from '../Controls/StageControls';
+import OutputControls  from '../Controls/OutputControls';
 import VirtualControls from '../Controls/VirtualControls';
 
 export default function SettingsPanel({ mobileUrl, onClose }) {
@@ -61,8 +62,9 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
             )}
           </div>
 
-          <StageControls   defaultOpen />
-          <VirtualControls defaultOpen />
+          <StageControls />
+          <OutputControls />
+          <VirtualControls />
         </div>
       </aside>
     </>

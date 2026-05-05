@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
-import { stripChords } from '../utils/chordUtils';
+import { stripChords, stripComments } from '../utils/chordUtils';
 
 /**
  * Salida Virtual — diseñada para usarse como:
@@ -44,16 +44,17 @@ export default function VirtualPage() {
         /* Pantalla vacía: transparente o con el color de fondo elegido */
         <div className="w-full h-full" />
       ) : (
-        <VirtualSlideContent slideData={slideData} fontSize={fontSize} />
+        <VirtualSlideContent slideData={slideData} fontSize={fontSize} showComments={virtualConfig?.showComments ?? false} />
       )}
     </div>
   );
 }
 
 // ─── Contenido del slide ──────────────────────────────────────────────────────
-function VirtualSlideContent({ slideData, fontSize }) {
+function VirtualSlideContent({ slideData, fontSize, showComments = false }) {
   if (slideData.type === 'song') {
-    const cleanContent = stripChords(slideData.content ?? '');
+    const raw = showComments ? slideData.content ?? '' : stripComments(slideData.content ?? '');
+    const cleanContent = stripChords(raw);
     const lineCount = cleanContent.split('\n').filter(l => l.trim()).length;
     const autoSize =
       lineCount <= 3  ? 'clamp(2.2rem, 5.5vw, 5rem)'

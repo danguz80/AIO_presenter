@@ -1,6 +1,7 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { usePresenter } from '../../context/usePresenter';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Tag, Plus } from 'lucide-react';
+import api from '../../hooks/useApi';
 
 // Colores por tipo de label — hex para usar en style (evita purga de Tailwind)
 const LABEL_COLORS = {
@@ -98,10 +99,17 @@ export default function SongFormModal({ song, onClose }) {
   const [timeSig,     setTimeSig]     = useState(song?.time_sig || '');
   const [link,        setLink]        = useState(song?.link     || '');
   const [body,        setBody]        = useState(() => slidesToText(song?.slides));
+  const [tags,        setTags]        = useState(song?.tags || []);
+  const [allTags,     setAllTags]     = useState([]);
+  const [tagInput,    setTagInput]    = useState('');
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState('');
   const [confirmDel,  setConfirmDel]  = useState(false);
   const textareaRef = useRef(null);
+
+  useEffect(() => {
+    api.get('/songs/tags').then(r => setAllTags(r.data)).catch(() => {});
+  }, []);
 
   // Labels únicos: primero los del texto editado, luego los del song.slides original
   const uniqueLabels = useMemo(() => {
@@ -175,11 +183,11 @@ export default function SongFormModal({ song, onClose }) {
     setError('');
     try {
       if (isEdit) {
-        await actions.updateSong(song.id, { title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, slides });
+        await actions.updateSong(song.id, { title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, tags, slides });
         // Recargar el detalle completo para que el grid de slides se actualice
         await actions.loadSongDetail(song.id);
       } else {
-        await actions.createSong({ title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, slides });
+        await actions.createSong({ title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, tags, slides });
       }
       await actions.reloadSongs();
       onClose();
@@ -269,6 +277,45 @@ export default function SongFormModal({ song, onClose }) {
                 value={link}
                 onChange={e => setLink(e.target.value)}
                 placeholder="https://open.spotify.com/..."
+              />
+            </div>
+          </div>
+
+          {/* Etiquetas de categoría */}
+          <div className="px-6 py-3 border-b border-surface-700">
+            <label className="flex items-center gap-1 text-xs text-zinc-400 mb-2"><Tag size={11} />Etiquetas</label>
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {tags.map(t => (
+                <span key={t} className="flex items-center gap-1 bg-accent/20 border border-accent/40 text-accent text-xs px-2 py-0.5 rounded-full">
+                  {t}
+                  <button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="hover:text-white transition-colors"><X size={10} /></button>
+                </span>
+              ))}
+              {/* Sugerencias de tags existentes no aplicadas */}
+              {allTags.filter(t => !tags.includes(t)).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTags(prev => [...prev, t])}
+                  className="flex items-center gap-1 border border-dashed border-surface-500 text-zinc-500 hover:text-zinc-200 hover:border-zinc-400 text-xs px-2 py-0.5 rounded-full transition-colors"
+                >
+                  <Plus size={9} />{t}
+                </button>
+              ))}
+              {/* Input nueva etiqueta */}
+              <input
+                className="bg-transparent border-b border-surface-500 focus:border-accent outline-none text-xs text-zinc-300 placeholder-zinc-600 px-1 py-0.5 w-28"
+                placeholder="Nueva etiqueta..."
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => {
+                  if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                    e.preventDefault();
+                    const t = tagInput.trim().replace(/,$/, '');
+                    if (t && !tags.includes(t)) setTags(prev => [...prev, t]);
+                    setTagInput('');
+                  }
+                }}
               />
             </div>
           </div>

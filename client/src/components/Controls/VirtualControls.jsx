@@ -178,6 +178,23 @@ export default function VirtualControls({ defaultOpen = false }) {
             </div>
           </div>
 
+          {/* Mostrar comentarios */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-zinc-300">Mostrar comentarios (//)</span>
+            <button
+              onClick={() => update({ showComments: !(virtualConfig.showComments ?? false) })}
+              className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                (virtualConfig.showComments ?? false) ? 'bg-accent' : 'bg-surface-600'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                  (virtualConfig.showComments ?? false) ? 'translate-x-4' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
           {/* ── Estado NDI ───────────────────────────────────────────────── */}
           <div className="border-t border-surface-700 pt-2.5">
             <div className="flex items-center justify-between mb-2">

@@ -26,7 +26,7 @@ export default function LiveControls() {
   };
 
   return (
-    <div className="flex-1 p-3 overflow-y-auto space-y-3">
+    <div className="shrink-0 p-3 space-y-3">
       <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block">
         Controles
       </span>
@@ -94,21 +94,6 @@ export default function LiveControls() {
         )}
       </div>
 
-      {/* Info estado actual */}
-      {liveState.slideData && !liveState.isBlank && (
-        <div className="card p-3 text-xs space-y-1">
-          <p className="text-zinc-400 uppercase tracking-wide">En pantalla:</p>
-          {liveState.slideData.type === 'song' && (
-            <>
-              <p className="text-zinc-200 font-medium truncate">{liveState.slideData.songTitle}</p>
-              <p className="text-zinc-400">{liveState.slideData.label}</p>
-            </>
-          )}
-          {liveState.slideData.type === 'bible' && (
-            <p className="text-zinc-200 font-medium">{liveState.slideData.reference}</p>
-          )}
-        </div>
-      )}
     </div>
   );
 }

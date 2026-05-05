@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePresenter } from '../context/usePresenter';
-import { stripChords } from '../utils/chordUtils';
+import { stripChords, stripComments } from '../utils/chordUtils';
 import {
   ChevronLeft, ChevronRight, EyeOff, Eye,
   Wifi, WifiOff, Music, Radio, Settings, ArrowLeft, Search, X,
@@ -83,10 +83,10 @@ export default function MobileControllerPage() {
   };
 
   // ── Datos del slide actual ────────────────────────────────────────────────
-  const slideText      = slideData && (slideData.type === 'song' ? stripChords(slideData.content) : slideData.text);
+  const slideText      = slideData && (slideData.type === 'song' ? stripChords(stripComments(slideData.content)) : slideData.text);
   const slideLabel     = slideData && (slideData.type === 'song' ? slideData.label : slideData.reference);
   const slideSongTitle = slideData?.songTitle;
-  const nextText       = nextSlideData && (nextSlideData.type === 'song' ? stripChords(nextSlideData.content) : nextSlideData.text);
+  const nextText       = nextSlideData && (nextSlideData.type === 'song' ? stripChords(stripComments(nextSlideData.content)) : nextSlideData.text);
   const nextLabel      = nextSlideData && (nextSlideData.type === 'song' ? nextSlideData.label : nextSlideData.reference);
 
   const filteredSongs = (songs || []).filter(s => {
@@ -237,7 +237,7 @@ export default function MobileControllerPage() {
                     </span>
                   )}
                   <p className="text-zinc-300 text-sm leading-relaxed whitespace-pre-line line-clamp-3">
-                    {stripChords(slide.content)}
+                    {stripChords(stripComments(slide.content))}
                   </p>
                 </button>
               ))}

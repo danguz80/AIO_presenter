@@ -37,6 +37,7 @@ export default function StageControls({ defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
   const [fontInput, setFontInput] = useState('');
   const [templateName, setTemplateName] = useState('');
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   const saveTemplate = () => {
     const name = templateName.trim();
@@ -68,7 +69,15 @@ export default function StageControls({ defaultOpen = false }) {
     fontSizeNextLyrics = 32,
     fontSize           = 36,
     fontSizeChords     = 18,
+    fontFamilyTitle    = 'sans',
+    fontStrokeWidth    = 0,
+    fontStrokeColor    = '#000000',
     customFonts = [],
+    // Comentarios de director (líneas //)
+    showComments        = false,
+    commentColor        = '#facc15',
+    commentFontFamily   = 'sans',
+    commentFontSize     = 16,
   } = stageConfig;
 
   const addFont = () => {
@@ -126,25 +135,37 @@ export default function StageControls({ defaultOpen = false }) {
                 <Save size={12} />
               </button>
             </div>
+
             {stageTemplates.length > 0 && (
-              <div className="space-y-1 mt-1.5">
-                {stageTemplates.map(t => (
-                  <div key={t.name} className="flex items-center gap-1">
-                    <button
-                      onClick={() => applyTemplate(t)}
-                      className="flex-1 flex items-center gap-1.5 text-xs text-zinc-300 bg-surface-600 hover:bg-surface-500 rounded px-2 py-1.5 truncate transition-colors text-left"
-                    >
-                      <BookOpen size={10} className="shrink-0 text-accent" />
-                      <span className="truncate">{t.name}</span>
-                    </button>
-                    <button
-                      onClick={() => deleteTemplate(t.name)}
-                      className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-surface-600 transition-colors"
-                    >
-                      <X size={10} />
-                    </button>
+              <div className="mt-1">
+                <button
+                  onClick={() => setTemplatesOpen(v => !v)}
+                  className="w-full flex items-center justify-between text-[10px] text-zinc-400 hover:text-zinc-200 transition-colors py-1"
+                >
+                  <span>{stageTemplates.length} plantilla{stageTemplates.length !== 1 ? 's' : ''} guardada{stageTemplates.length !== 1 ? 's' : ''}</span>
+                  {templatesOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                </button>
+                {templatesOpen && (
+                  <div className="space-y-1 mt-1">
+                    {stageTemplates.map(t => (
+                      <div key={t.name} className="flex items-center gap-1">
+                        <button
+                          onClick={() => applyTemplate(t)}
+                          className="flex-1 flex items-center gap-1.5 text-xs text-zinc-300 bg-surface-600 hover:bg-surface-500 rounded px-2 py-1.5 truncate transition-colors text-left"
+                        >
+                          <BookOpen size={10} className="shrink-0 text-accent" />
+                          <span className="truncate">{t.name}</span>
+                        </button>
+                        <button
+                          onClick={() => deleteTemplate(t.name)}
+                          className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-surface-600 transition-colors"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
           </SubSection>
@@ -160,6 +181,7 @@ export default function StageControls({ defaultOpen = false }) {
 
           {/* TIPOGRAFÍA */}
           <SubSection title="Tipografía">
+            <p className="text-[10px] text-zinc-500 mb-1">Fuente letras</p>
             <div className="grid grid-cols-2 gap-1 mb-2">
               {allFontFamilies.map(({ value, label, custom }) => (
                 <div key={value} className="relative">
@@ -182,6 +204,24 @@ export default function StageControls({ defaultOpen = false }) {
                       <X size={9} />
                     </button>
                   )}
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-zinc-500 mb-1 mt-2">Fuente títulos</p>
+            <div className="grid grid-cols-2 gap-1 mb-2">
+              {allFontFamilies.map(({ value, label, custom }) => (
+                <div key={value} className="relative">
+                  <button
+                    onClick={() => update({ fontFamilyTitle: value })}
+                    className={`w-full py-1.5 text-xs rounded transition-colors font-medium pr-5 ${
+                      (fontFamilyTitle ?? 'sans') === value
+                        ? 'bg-accent text-white'
+                        : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'
+                    }`}
+                    style={custom ? { fontFamily: `'${label}', sans-serif` } : {}}
+                  >
+                    {label}
+                  </button>
                 </div>
               ))}
             </div>
@@ -250,6 +290,56 @@ export default function StageControls({ defaultOpen = false }) {
             <ColorRow label="Acordes"             value={chordsColor     ?? '#fde047'} onChange={v => update({ chordsColor: v })} />
             <ColorRow label="Reloj"               value={clockColor      ?? '#ef4444'} onChange={v => update({ clockColor: v })} />
             <ColorRow label="Próx. canción"       value={nextColor       ?? '#22c55e'} onChange={v => update({ nextColor: v })} />
+          </SubSection>
+
+          {/* COMENTARIOS DE DIRECTOR */}
+          <SubSection title="Comentarios (//)">
+            <ToggleRow
+              icon={null}
+              label="Mostrar en pantalla"
+              value={showComments}
+              onChange={v => update({ showComments: v })}
+            />
+            {showComments && (
+              <>
+                <ColorRow label="Color" value={commentColor ?? '#facc15'} onChange={v => update({ commentColor: v })} />
+                <SizeRow  label="Tamaño" value={commentFontSize ?? 16} onChange={v => update({ commentFontSize: v })} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-zinc-300 shrink-0">Fuente</span>
+                  <select
+                    value={commentFontFamily ?? 'sans'}
+                    onChange={e => update({ commentFontFamily: e.target.value })}
+                    className="bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-1.5 py-1 focus:outline-none focus:border-accent"
+                  >
+                    {allFontFamilies.map(f => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </>
+            )}
+          </SubSection>
+
+          {/* BORDE DE TEXTO */}
+          <SubSection title="Borde de texto">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-zinc-300 shrink-0">Grosor</span>
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="range"
+                  min={0}
+                  max={12}
+                  step={1}
+                  value={fontStrokeWidth}
+                  onChange={e => update({ fontStrokeWidth: Number(e.target.value) })}
+                  className="flex-1 accent-accent"
+                />
+                <span className="text-xs text-zinc-400 w-6 text-right">{fontStrokeWidth}px</span>
+              </div>
+            </div>
+            {fontStrokeWidth > 0 && (
+              <ColorRow label="Color borde" value={fontStrokeColor} onChange={v => update({ fontStrokeColor: v })} />
+            )}
           </SubSection>
 
           {/* FONDO */}

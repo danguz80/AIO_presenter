@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
-import { stripChords, parseChordLines } from '../utils/chordUtils';
+import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
 
 // Colores por etiqueta (misma paleta que en el controlador)
 const LABEL_COLORS = {
@@ -49,8 +49,9 @@ function injectGoogleFont(name) {
 
 export default function StagePage() {
   const { state } = usePresenter();
-  const { liveState, stageConfig, schedule } = state;
+  const { liveState, stageConfig, schedule, eventPlays, reservasMode } = state;
   const [time, setTime] = useState(new Date());
+  const [lastLabel, setLastLabel] = useState(null);
 
   useKeyboardRelay();
 
@@ -99,6 +100,13 @@ export default function StagePage() {
     fontSizeNextSong   = 16,
     fontSizeNextLyrics = 32,
     fontSizeChords     = 18,
+    fontFamilyTitle    = 'sans',
+    fontStrokeWidth    = 0,
+    fontStrokeColor    = '#000000',
+    showComments       = false,
+    commentColor       = '#facc15',
+    commentFontFamily  = 'sans',
+    commentFontSize    = 16,
   } = stageConfig;
 
   const bgStyle =
@@ -112,19 +120,75 @@ export default function StagePage() {
     fontStyle:  fontItalic ? 'italic' : 'normal',
   };
 
+  const titleFontFamily = resolveFontFamily(fontFamilyTitle ?? fontFamily);
+
   const sz = (val) => typeof val === 'number' ? `${val}pt` : '16pt';
 
   const hasContent   = !isBlank && !!slideData;
   const label        = slideData?.label;
-  const sectionColor = getSectionColor(label);
+
+  // Mantener el último label para que el color de la barra persista entre slides del mismo grupo
+  useEffect(() => {
+    if (label) setLastLabel(label);
+    if (!slideData) setLastLabel(null);
+  }, [label, slideData]);
+
+  const effectiveLabel = label || lastLabel;
+  const sectionColor = getSectionColor(effectiveLabel);
   const slideNum     = (slideIndex ?? 0) + 1;
 
-  // Siguiente canción del listado del día
+  // Siguiente canción del listado del día (saltando separadores y ya tocadas)
   const currentSongId = slideData?.songId;
   const currentIdx    = schedule.findIndex(s => s.song_id === currentSongId);
-  const nextSong      = (currentIdx >= 0 && currentIdx < schedule.length - 1)
-    ? schedule[currentIdx + 1]
-    : null;
+
+  // Helper: normalizar label para buscar "reservas" sin importar acento/case
+  const normLabel = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const reservasIdx = schedule.findIndex(s => s.item_type === 'separator' && normLabel(s.separator_label).includes('reserva'));
+  // Fin de la sección reservas (siguiente separador o fin del array)
+  const reservasEndIdx = (() => {
+    if (reservasIdx < 0) return -1;
+    const next = schedule.findIndex((s, i) => i > reservasIdx && s.item_type === 'separator');
+    return next >= 0 ? next : schedule.length;
+  })();
+  // ¿La canción actual ya está dentro de la sección reservas?
+  const currentInReservas = reservasIdx >= 0 && currentIdx > reservasIdx && currentIdx < reservasEndIdx;
+
+  const nextSong = (() => {
+    if (reservasMode && reservasIdx >= 0) {
+      if (!currentInReservas) {
+        // Aún no estamos en reservas: mostrar la primera no tocada de reservas
+        for (let i = reservasIdx + 1; i < reservasEndIdx; i++) {
+          const it = schedule[i];
+          if (!it.song_id) continue;
+          if (!eventPlays?.has(it.song_id)) return it;
+        }
+        // Todas las reservas tocadas → caer a lógica normal desde posición actual
+      } else {
+        // Dentro de reservas: siguiente no tocada dentro de la sección
+        for (let i = currentIdx + 1; i < reservasEndIdx; i++) {
+          const it = schedule[i];
+          if (!it.song_id) continue;
+          if (!eventPlays?.has(it.song_id)) return it;
+        }
+        // Reservas agotadas → primera no tocada de secciones ANTERIORES a reservas
+        for (let i = 0; i < reservasIdx; i++) {
+          const it = schedule[i];
+          if (it.item_type === 'separator' || !it.song_id) continue;
+          if (!eventPlays?.has(it.song_id)) return it;
+        }
+        return null;
+      }
+    }
+    // Lógica normal: primera no tocada en todo el schedule (excluyendo la actual)
+    for (let i = 0; i < schedule.length; i++) {
+      const it = schedule[i];
+      if (it.item_type === 'separator' || !it.song_id) continue;
+      if (it.song_id === currentSongId) continue; // saltar la actual
+      if (eventPlays?.has(it.song_id)) continue;
+      return it;
+    }
+    return null;
+  })();
 
   const showTopBar = showSongTitle || showSlideCounter || showSectionLabel;
 
@@ -146,7 +210,7 @@ export default function StagePage() {
             </span>
           )}
           {showSongTitle && hasContent && slideData.songTitle && (
-            <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle) }}>
+            <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
               {slideData.songTitle}{slideData.songKey ? ` - ${slideData.songKey}` : ''}
             </span>
           )}
@@ -161,23 +225,25 @@ export default function StagePage() {
         <div className={`flex overflow-hidden ${showNextSlide ? 'flex-1 border-b border-white/10' : 'flex-1'}`}>
 
           {/* Franja lateral de etiqueta */}
-          {showSideLabel && hasContent && label && (
+          {showSideLabel && hasContent && (
             <div
               className="w-14 shrink-0 flex items-center justify-center"
               style={{ backgroundColor: sectionColor }}
             >
-              <span
-                className="text-white tracking-widest uppercase select-none"
-                style={{
-                  writingMode: 'vertical-rl',
-                  transform: 'rotate(180deg)',
-                  fontFamily: fontStyles.fontFamily,
-                  fontWeight: fontStyles.fontWeight,
-                  fontSize: sz(fontSizeSideLabel),
-                }}
-              >
-                {label}
-              </span>
+              {effectiveLabel && (
+                <span
+                  className="text-white tracking-widest uppercase select-none"
+                  style={{
+                    writingMode: 'vertical-rl',
+                    transform: 'rotate(180deg)',
+                    fontFamily: fontStyles.fontFamily,
+                    fontWeight: fontStyles.fontWeight,
+                    fontSize: sz(fontSizeSideLabel),
+                  }}
+                >
+                  {effectiveLabel}
+                </span>
+              )}
             </div>
           )}
 
@@ -194,6 +260,12 @@ export default function StagePage() {
                 lyricsColor={lyricsColor}
                 chordsColor={chordsColor}
                 chordsSize={fontSizeChords}
+                strokeWidth={fontStrokeWidth}
+                strokeColor={fontStrokeColor}
+                showComments={showComments}
+                commentColor={commentColor}
+                commentFontFamily={commentFontFamily}
+                commentFontSize={commentFontSize}
               />
             )}
           </div>
@@ -234,8 +306,14 @@ export default function StagePage() {
                   lyricsColor={nextLyricsColor}
                   chordsColor={chordsColor}
                   chordsSize={fontSizeChords}
+                  strokeWidth={fontStrokeWidth}
+                  strokeColor={fontStrokeColor}
+                  showComments={showComments}
+                  commentColor={commentColor}
+                  commentFontFamily={commentFontFamily}
+                  commentFontSize={commentFontSize}
                 />
-              ) : nextSong && !isBlank ? (
+              ) : nextSong ? (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-10 text-center">
                   <span
                     className="text-xs uppercase tracking-widest font-semibold"
@@ -245,9 +323,9 @@ export default function StagePage() {
                   </span>
                   <span
                     className="text-3xl font-bold leading-tight"
-                    style={{ color: nextColor, fontFamily: fontStyles.fontFamily }}
+                    style={{ color: nextColor, fontFamily: titleFontFamily }}
                   >
-                    {nextSong.title}
+                    {nextSong.title}{nextSong.song_key ? ` — ${nextSong.song_key}` : ''}
                   </span>
                   {nextSong.author && (
                     <span className="text-base" style={{ color: `${nextColor}77` }}>
@@ -278,7 +356,7 @@ export default function StagePage() {
           {nextSong && (
             <span
               className="font-bold leading-tight text-center"
-              style={{ color: nextColor, fontFamily: fontStyles.fontFamily, fontSize: sz(fontSizeNextSong) }}
+              style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}
             >
               {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
             </span>
@@ -302,11 +380,33 @@ export default function StagePage() {
 }
 
 // ─── Contenido del slide actual ───────────────────────────────────────────────
-function StageSlideContent({ slideData, fontSize, fontStyles, lyricsColor, chordsColor, chordsSize = 18 }) {
+function StageSlideContent({ slideData, fontSize, fontStyles, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16 }) {
+  const stroke = strokeWidth > 0
+    ? `${Array.from({ length: 4 }, (_, i) => {
+        const angle = i * 90;
+        const x = Math.round(Math.cos(angle * Math.PI / 180) * strokeWidth);
+        const y = Math.round(Math.sin(angle * Math.PI / 180) * strokeWidth);
+        return `${strokeColor} ${x}px ${y}px 0, ${strokeColor} ${-x}px ${-y}px 0, ${strokeColor} ${x}px ${-y}px 0, ${strokeColor} ${-x}px ${y}px 0`;
+      }).join(', ')}, 0 2px 12px rgba(0,0,0,0.7)`
+    : '0 2px 12px rgba(0,0,0,0.7)';
   if (slideData.type === 'song') {
-    const cleanContent  = stripChords(slideData.content || '');
-    const lineCount     = cleanContent.split('\n').filter(l => l.trim()).length;
-    const chordLines    = parseChordLines(slideData.content || '');
+    const rawContent = slideData.content || '';
+    const rawLines   = rawContent.split('\n');
+
+    // Pre-procesar cada línea: extraer comentarios inline
+    const lineData = rawLines.map(line => {
+      if (isCommentLine(line)) {
+        return { visible: '', comment: line.replace(/^\s*\/\/\s?/, ''), isFullComment: true };
+      }
+      const { visible, comment } = extractInlineComment(line);
+      return { visible, comment, isFullComment: false };
+    });
+
+    // Parsear acordes solo sobre la parte visible de cada línea
+    const chordLines = parseChordLines(lineData.map(ld => ld.visible).join('\n'));
+
+    // Contar líneas reales (sin comentarios puros, sin vacías) para autosize
+    const lineCount     = lineData.filter(ld => !ld.isFullComment && stripChords(ld.visible).trim()).length;
     const hasAnyChords  = chordLines.some(line => line.some(seg => seg.chord));
     const effectiveLines = hasAnyChords ? Math.ceil(lineCount * 1.6) : lineCount;
 
@@ -319,34 +419,66 @@ function StageSlideContent({ slideData, fontSize, fontStyles, lyricsColor, chord
 
     const fSize = typeof fontSize === 'number' ? `${fontSize}pt` : autoSize;
 
+    const FONT_PRESETS_COMMENT = {
+      sans:      'system-ui, -apple-system, sans-serif',
+      serif:     "Georgia, 'Times New Roman', serif",
+      mono:      "'Courier New', monospace",
+      condensed: "'Arial Narrow', Arial, sans-serif",
+    };
+    const commentFF = FONT_PRESETS_COMMENT[commentFontFamily] ?? `'${commentFontFamily}', system-ui, sans-serif`;
+
+    const commentStyle = {
+      color: commentColor,
+      fontSize: `${commentFontSize}pt`,
+      fontFamily: commentFF,
+      fontWeight: 'normal',
+      fontStyle: 'italic',
+      textShadow: stroke,
+    };
+
     return (
       <div
         className="w-full h-full flex flex-col items-center justify-center px-14 text-center"
         style={{ fontSize: fSize, ...fontStyles }}
       >
         <div className="w-full">
-          {chordLines.map((line, li) => {
-            const lineText = line.map(s => s.text).join('');
-            if (!lineText.trim()) return <div key={li} style={{ height: '0.5em' }} />;
-            const hasChords = line.some(seg => seg.chord);
-
-            if (!hasChords) {
+          {lineData.map((ld, li) => {
+            // ── Línea de comentario completo ──────────────────────────
+            if (ld.isFullComment) {
+              if (!showComments) return null;
               return (
-                <div
-                  key={li}
-                  className="leading-relaxed"
-                  style={{ color: lyricsColor, textShadow: '0 2px 12px rgba(0,0,0,0.7)' }}
-                >
-                  {lineText}
+                <div key={li} style={{ ...commentStyle, marginBlock: '0.2em' }}>
+                  {ld.comment}
                 </div>
               );
             }
 
+            const line     = chordLines[li];
+            const lineText = line.map(s => s.text).join('');
+            const hasChords = line.some(seg => seg.chord);
+
+            // Línea vacía sin comentario inline
+            if (!lineText.trim() && !ld.comment) return <div key={li} style={{ height: '0.5em' }} />;
+
+            // Span de comentario inline (reutilizable)
+            const inlineComment = showComments && ld.comment
+              ? <span style={{ ...commentStyle, marginLeft: '0.5em' }}>{ld.comment}</span>
+              : null;
+
+            // ── Línea de letra sin acordes ────────────────────────────
+            if (!hasChords) {
+              return (
+                <div key={li} className="leading-relaxed" style={{ color: lyricsColor, textShadow: stroke }}>
+                  {lineText}{inlineComment}
+                </div>
+              );
+            }
+
+            // ── Línea con acordes ─────────────────────────────────────
             return (
               <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.15 }}>
                 {line.map((seg, si) => {
                   const hasRealText = seg.text && seg.text.trim().length > 0;
-                  // Para acordes sin texto real debajo, forzar ancho mínimo explícito
                   const outerStyle = (!hasRealText && seg.chord)
                     ? { minWidth: `${(seg.chord.length + 2) * 0.22}em` }
                     : {};
@@ -361,20 +493,19 @@ function StageSlideContent({ slideData, fontSize, fontStyles, lyricsColor, chord
                       <span
                         style={{
                           color: lyricsColor,
-                          textShadow: '0 2px 12px rgba(0,0,0,0.7)',
+                          textShadow: stroke,
                           lineHeight: 1.15,
                           whiteSpace: 'pre',
                         }}
                       >
                         {hasRealText
                           ? seg.text.replace(/ /g, '\u00a0')
-                          : seg.chord
-                            ? '\u00a0'
-                            : ''}
+                          : seg.chord ? '\u00a0' : ''}
                       </span>
                     </span>
                   );
                 })}
+                {inlineComment}
               </div>
             );
           })}

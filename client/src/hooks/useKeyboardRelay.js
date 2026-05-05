@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 const CHANNEL_NAME = 'aio-keyboard-relay';
-const NAV_KEYS = [' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+const NAV_KEYS = [' ', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Escape'];
 
 /**
  * Retransmite teclas de navegación desde ventanas de salida al controlador.

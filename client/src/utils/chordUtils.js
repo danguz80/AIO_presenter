@@ -4,7 +4,64 @@
  * Los acordes se almacenan en el content con la notación inline [X]texto.
  * - stripChords   → elimina los marcadores para pantalla principal/virtual
  * - parseChordLines → extrae posiciones para pantalla de escenario
+ *
+ * Comentarios: líneas que empiezan con "//" son comentarios de director.
+ * - isCommentLine → true si la línea es un comentario
+ * - stripComments → elimina líneas de comentario del texto
  */
+
+/**
+ * Devuelve true si la línea es un comentario de director completo
+ * (comienza por "//" con espacios opcionales al inicio).
+ */
+export function isCommentLine(line) {
+  return /^\s*\/\//.test(line);
+}
+
+/**
+ * Extrae el comentario inline de una línea.
+ * Reglas:
+ *   - `texto //comentario`     → visible: "texto",  comment: "comentario"
+ *   - `texto //comment// más`  → visible: "texto más", comment: "comment"
+ *   - Sin "//"                 → visible: línea completa, comment: null
+ */
+export function extractInlineComment(line) {
+  const idx = line.indexOf('//');
+  if (idx === -1) return { visible: line, comment: null };
+
+  const before = line.slice(0, idx);
+  const after  = line.slice(idx + 2);
+  const closeIdx = after.indexOf('//');
+
+  if (closeIdx === -1) {
+    // Sin cierre: desde // hasta el final es comentario
+    return { visible: before.trimEnd(), comment: after.trim() || null };
+  } else {
+    // Con cierre: //comentario// — la parte antes y después queda visible
+    const commentText = after.slice(0, closeIdx);
+    const rest = after.slice(closeIdx + 2);
+    const visible = (before.trimEnd() + (rest.trim() ? ' ' + rest.trimStart() : '')).trimEnd();
+    return { visible, comment: commentText.trim() || null };
+  }
+}
+
+/**
+ * Elimina todos los comentarios (//) del texto:
+ * - Líneas completas que empiezan con // → eliminadas
+ * - Comentarios inline → se elimina la parte de comentario
+ */
+export function stripComments(text) {
+  if (!text) return '';
+  return text
+    .split('\n')
+    .map(line => {
+      if (isCommentLine(line)) return null;
+      const { visible } = extractInlineComment(line);
+      return visible;
+    })
+    .filter(line => line !== null)
+    .join('\n');
+}
 
 /**
  * Elimina todos los marcadores de acorde [X] del texto.

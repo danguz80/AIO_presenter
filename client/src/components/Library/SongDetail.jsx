@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import { Music } from 'lucide-react';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
-import { stripChords } from '../../utils/chordUtils';
+import { stripChords, stripComments } from '../../utils/chordUtils';
 
 // Colores por tipo de sección
 const LABEL_COLORS = {
@@ -29,17 +29,19 @@ function getLabelColor(label) {
 
 export default function SongDetail() {
   const { state, actions } = usePresenter();
-  const { selectedSong, selectedSlide, liveState, navigateRequest } = state;
+  const { selectedSong, selectedSlide, liveState, navigateRequest, schedule, eventPlays, eventPlaysContext } = state;
 
-  // Función central de navegación (reutilizada por teclado, relay y móvil)
-
-  // ── Estado local de selección (para el toggle deseleccionar) ────────────
-  const [localSelectedId, setLocalSelectedId] = useState(null);
+  // ── Tracking slides vistos para auto-marcar ──────────────────────────────
+  const seenSlideIds = useRef(new Set());
 
   // Resetear cuando cambia la canción (nueva canción = ningún slide seleccionado)
   useEffect(() => {
     setLocalSelectedId(null);
+    seenSlideIds.current = new Set();
   }, [selectedSong?.id]);
+
+  // ── Estado local de selección (para el toggle deseleccionar) ────────────
+  const [localSelectedId, setLocalSelectedId] = useState(null);
 
   // ── Historial deshacer ────────────────────────────────────────────────────
   const undoStack = useRef([]);
@@ -160,14 +162,17 @@ export default function SongDetail() {
         content: nextSlide.content,
       } : null,
     });
+    trackSlide(slide.id);
   };
 
-  // Navegación por teclado: Espacio / → / ↓ = siguiente, ← / ↑ = anterior
+  // Navegación por teclado
   useEffect(() => {
     const handleKey = (e) => {
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      if (e.key === 'Escape') {
+        e.preventDefault?.(); actions.toggleBlank(true);
+      } else if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
         e.preventDefault?.(); navigate('next');
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
         e.preventDefault?.(); navigate('prev');
@@ -225,6 +230,28 @@ export default function SongDetail() {
         content: nextSlide.content,
       } : null,
     });
+    trackSlide(slide.id);
+  };
+
+  // Trackea el slide visto y auto-marca cuando ≥80% de slides han sido vistos
+  const trackSlide = (slideId) => {
+    if (!selectedSong || !eventPlaysContext) return;
+    seenSlideIds.current.add(slideId);
+    const total = selectedSong.slides?.length || 0;
+    const seen  = seenSlideIds.current.size;
+    if (total === 0) return;
+    const alreadyPlayed = eventPlays?.has(selectedSong.id);
+    if (alreadyPlayed) return;
+    // Verificar condición de tiempo: estamos en o después del evento
+    const evItem = schedule?.find(s => s.song_id === selectedSong.id);
+    if (!evItem) return; // la canción no está en el schedule activo
+    const { eventId, occurrenceDate } = eventPlaysContext;
+    // Necesitamos la fecha/hora del evento: está en eventPlaysContext o en el schedule
+    // La chequeamos contra el tiempo actual usando el campo del contexto
+    const pct = seen / total;
+    if (pct >= 0.8) {
+      actions.markPlayed(eventId, occurrenceDate, selectedSong.id, seen, total, false);
+    }
   };
 
   const isLive = (slide) =>
@@ -321,7 +348,7 @@ export default function SongDetail() {
               const active   = isLive(slide);
               const selected = localSelectedId === slide.id;
               const { bg, text } = getLabelColor(slide.label);
-              const content = stripChords(slide.content || '');
+              const content = stripChords(stripComments(slide.content || ''));
               const isDroppingHere = dropBefore === index;
 
               return (

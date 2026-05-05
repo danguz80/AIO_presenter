@@ -154,4 +154,58 @@ const deleteSong = async (req, res) => {
   }
 };
 
-module.exports = { getAllSongs, getSongById, createSong, updateSong, deleteSong };
+// GET /api/songs/tags
+const getAllTags = async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT DISTINCT unnest(tags) AS tag FROM songs WHERE tags IS NOT NULL ORDER BY tag ASC`
+    );
+    res.json(rows.map(r => r.tag));
+  } catch (err) {
+    console.error('[Songs] getAllTags:', err.message);
+    res.status(500).json({ error: 'Error al obtener etiquetas' });
+  }
+};
+
+// PATCH /api/songs/bulk-tag
+const bulkTag = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { ids, addTags = [], removeTags = [] } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids requerido' });
+    }
+    await client.query('BEGIN');
+    for (const id of ids) {
+      if (addTags.length > 0) {
+        await client.query(
+          `UPDATE songs SET tags = (
+             SELECT array_agg(DISTINCT t ORDER BY t)
+             FROM unnest(COALESCE(tags, '{}') || $1::text[]) t
+           ) WHERE id = $2`,
+          [addTags, id]
+        );
+      }
+      if (removeTags.length > 0) {
+        await client.query(
+          `UPDATE songs SET tags = (
+             SELECT COALESCE(array_agg(t ORDER BY t), '{}')
+             FROM unnest(COALESCE(tags, '{}')) t
+             WHERE t != ALL($1::text[])
+           ) WHERE id = $2`,
+          [removeTags, id]
+        );
+      }
+    }
+    await client.query('COMMIT');
+    res.json({ updated: ids.length });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Songs] bulkTag:', err.message);
+    res.status(500).json({ error: 'Error al etiquetar canciones' });
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { getAllSongs, getSongById, createSong, updateSong, deleteSong, getAllTags, bulkTag };

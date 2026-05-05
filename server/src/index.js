@@ -10,7 +10,9 @@ const pool       = require('./config/database');
 const songsRouter  = require('./routes/songs');
 const bibleRouter  = require('./routes/bible');
 const importRouter = require('./routes/import');
-const eventsRouter = require('./routes/events');
+const eventsRouter          = require('./routes/events');
+const eventTemplatesRouter  = require('./routes/eventTemplates');
+const playsRouter           = require('./routes/plays');
 const ndi          = require('./ndi/ndiSender');
 
 const app    = express();
@@ -53,8 +55,11 @@ const DEFAULT_STAGE_CONFIG = {
   nextColor:        '#22c55e',
   fontSize:         'auto',
   fontFamily:       'sans',
+  fontFamilyTitle:  'sans',
   fontBold:         true,
   fontItalic:       false,
+  fontStrokeWidth:  0,
+  fontStrokeColor:  '#000000',
   customFonts:      [],
 };
 
@@ -117,6 +122,15 @@ let virtualConfig = {
   chromaColor: '#00b140',
   fontSize:    'auto',
   ndiEnabled:  false,
+  showComments: false,
+};
+
+/** Configuración de la salida principal (proyector) */
+let outputConfig = {
+  showComments:      false,
+  commentColor:      '#facc15',
+  commentFontSize:   16,
+  commentFontFamily: 'sans',
 };
 
 /** Slides de la canción activa para navegación server-side */
@@ -124,6 +138,12 @@ let currentSong = null; // { slides: [...], slideIndex: 0, songTitle: '' }
 
 /** Lista de canciones del evento del día (para pantalla de escenario) */
 let schedule = [];
+
+/** Canciones ya tocadas en el evento activo (para todas las pantallas) */
+let eventPlays = { ids: [], ctx: null };
+
+/** Modo reservas activo */
+let reservasMode = false;
 
 // ─── NDI ─────────────────────────────────────────────────────────────────────
 (async () => {
@@ -142,8 +162,11 @@ io.on('connection', (socket) => {
   socket.emit('stage:config',    stageConfig);
   socket.emit('stage:templates', stageTemplates);
   socket.emit('virtual:config',  virtualConfig);
+  socket.emit('output:config',   outputConfig);
   socket.emit('ndi:status',      ndi.getStatus());
   socket.emit('schedule:update', schedule);
+  if (eventPlays.ids.length > 0) socket.emit('event:plays', eventPlays);
+  socket.emit('event:reservas_mode', reservasMode);
 
   // El operador envía un slide a proyectar
   socket.on('live:show', (data) => {
@@ -154,6 +177,7 @@ io.on('connection', (socket) => {
         slideIndex: data.slideIndex ?? 0,
         songTitle:  data.slideData?.songTitle || '',
         songId:     data.slideData?.songId   || null,
+        songKey:    data.slideData?.songKey  || null,
       };
     } else if (data.type !== 'song') {
       currentSong = null; // limpiar si se proyecta algo que no es canción
@@ -191,11 +215,29 @@ io.on('connection', (socket) => {
     io.emit('schedule:update', schedule);
   });
 
+  // Sincronizar canciones tocadas entre todas las ventanas
+  socket.on('event:plays', (data) => {
+    eventPlays = data;
+    io.emit('event:plays', data);
+  });
+
+  // Sincronizar modo reservas entre todas las ventanas
+  socket.on('event:reservas_mode', (mode) => {
+    reservasMode = mode;
+    io.emit('event:reservas_mode', mode);
+  });
+
   // Actualizar configuración de la pantalla de escenario
   socket.on('stage:config', (config) => {
     stageConfig = { ...stageConfig, ...config };
     saveStageConfig();
     io.emit('stage:config', stageConfig);
+  });
+
+  // Actualizar configuración de la salida principal
+  socket.on('output:config', (config) => {
+    outputConfig = { ...outputConfig, ...config };
+    io.emit('output:config', outputConfig);
   });
 
   // Actualizar configuración virtual / NDI
@@ -218,7 +260,7 @@ io.on('connection', (socket) => {
   socket.on('navigate', (dir) => {
     // Si hay una canción activa, el servidor calcula el siguiente slide
     if (currentSong && currentSong.slides.length > 0) {
-      const { slides, songId, slideIndex, songTitle } = currentSong;
+      const { slides, songId, slideIndex, songTitle, songKey } = currentSong;
       const newIndex = dir === 'next'
         ? Math.min(slideIndex + 1, slides.length - 1)
         : Math.max(slideIndex - 1, 0);
@@ -234,6 +276,7 @@ io.on('connection', (socket) => {
           songId,
           slideId:   slide.id,
           songTitle,
+          songKey:   songKey || null,
           label:     slide.label,
           content:   slide.content,
         },
@@ -260,7 +303,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/songs',  songsRouter);
 app.use('/api/bible',  bibleRouter);
 app.use('/api/import', importRouter);
-app.use('/api/events', eventsRouter);
+app.use('/api/events',          eventsRouter);
+app.use('/api/event-templates', eventTemplatesRouter);
+app.use('/api/events',          playsRouter); // plays nested under /api/events/:id/plays
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
