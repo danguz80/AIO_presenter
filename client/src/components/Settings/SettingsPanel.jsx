@@ -62,8 +62,8 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
             )}
           </div>
 
-          <StageControls />
           <OutputControls />
+          <StageControls />
           <VirtualControls />
         </div>
       </aside>

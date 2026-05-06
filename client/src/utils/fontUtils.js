@@ -17,7 +17,9 @@ export const FONT_PRESETS = {
  */
 export function resolveFont(family) {
   if (!family) return FONT_PRESETS.sans;
-  return FONT_PRESETS[family] ?? `'${family}', system-ui, sans-serif`;
+  // Normalizar a Title Case para consistencia con cómo Google Fonts define las familias
+  const normalized = family.replace(/\b\w/g, c => c.toUpperCase());
+  return FONT_PRESETS[family] ?? FONT_PRESETS[normalized] ?? `'${normalized}', system-ui, sans-serif`;
 }
 
 /**
@@ -26,12 +28,19 @@ export function resolveFont(family) {
  */
 export function injectGoogleFont(name) {
   if (!name || FONT_PRESETS[name]) return;
-  const id = `gf-${name.toLowerCase().replace(/\s+/g, '-')}`;
-  if (document.getElementById(id)) return;
+  // Google Fonts API es case-sensitive: normalizar a Title Case ("imperial script" → "Imperial Script")
+  const normalized = name.replace(/\b\w/g, c => c.toUpperCase());
+  const id   = `gf-${normalized.toLowerCase().replace(/\s+/g, '-')}`;
+  const href = `https://fonts.googleapis.com/css2?family=${normalized.replace(/\s+/g, '+')}&display=swap`;
+  const existing = document.getElementById(id);
+  if (existing) {
+    if (existing.href !== href) existing.href = href;
+    return;
+  }
   const link = document.createElement('link');
   link.id   = id;
   link.rel  = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name)}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
+  link.href = href;
   document.head.appendChild(link);
 }
 

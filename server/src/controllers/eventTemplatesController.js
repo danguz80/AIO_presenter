@@ -18,7 +18,9 @@ async function createTemplate(req, res) {
   if (!name || !name.trim()) return res.status(400).json({ error: 'name es requerido' });
   try {
     const { rows } = await pool.query(
-      'INSERT INTO event_templates (name, items) VALUES ($1, $2) RETURNING *',
+      `INSERT INTO event_templates (name, items) VALUES ($1, $2)
+       ON CONFLICT (name) DO UPDATE SET items = EXCLUDED.items
+       RETURNING *`,
       [name.trim(), JSON.stringify(items || [])]
     );
     res.status(201).json(rows[0]);

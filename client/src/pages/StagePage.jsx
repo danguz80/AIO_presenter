@@ -38,18 +38,25 @@ function resolveFontFamily(family) {
 }
 
 function injectGoogleFont(name) {
-  const id = `gf-${name.toLowerCase().replace(/\s+/g, '-')}`;
-  if (document.getElementById(id)) return;
+  if (!name) return;
+  const id   = `gf-${name.toLowerCase().replace(/\s+/g, '-')}`;
+  const href = `https://fonts.googleapis.com/css2?family=${name.replace(/\s+/g, '+')}&display=swap`;
+  const existing = document.getElementById(id);
+  if (existing) {
+    if (existing.href !== href) existing.href = href;
+    return;
+  }
   const link = document.createElement('link');
   link.id = id;
   link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name)}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
+  link.href = href;
   document.head.appendChild(link);
 }
 
 export default function StagePage() {
   const { state } = usePresenter();
   const { liveState, stageConfig, schedule, eventPlays, reservasMode } = state;
+  const outputCfg = state.outputConfig ?? {};
   const [time, setTime] = useState(new Date());
   const [lastLabel, setLastLabel] = useState(null);
 
@@ -64,15 +71,11 @@ export default function StagePage() {
     return () => clearInterval(id);
   }, []);
 
-  // Inyectar Google Fonts cuando cambia customFonts
   const customFonts = stageConfig.customFonts ?? [];
-  useEffect(() => {
-    customFonts.forEach(injectGoogleFont);
-  }, [customFonts]); // eslint-disable-line
 
   const {
     slideData, nextSlideData, isBlank,
-    slideIndex, totalSlides,
+    slideIndex, totalSlides, backgroundMedia,
   } = liveState;
 
   const {
@@ -107,7 +110,22 @@ export default function StagePage() {
     commentColor       = '#facc15',
     commentFontFamily  = 'sans',
     commentFontSize    = 16,
+    showVideo          = true,
   } = stageConfig;
+
+  // ── Inyectar Google Fonts (aquí, después del destructuring) ──────────────
+  useEffect(() => {
+    customFonts.forEach(injectGoogleFont);
+  }, [customFonts]); // eslint-disable-line
+  useEffect(() => {
+    if (fontFamilyTitle && fontFamilyTitle !== 'sans') injectGoogleFont(fontFamilyTitle);
+    if (fontFamily && fontFamily !== 'sans') injectGoogleFont(fontFamily);
+  }, [fontFamilyTitle, fontFamily]); // eslint-disable-line
+  // Fuentes de la diapositiva de título (outputConfig)
+  useEffect(() => {
+    if (outputCfg.titleFontFamily)  injectGoogleFont(outputCfg.titleFontFamily);
+    if (outputCfg.artistFontFamily) injectGoogleFont(outputCfg.artistFontFamily);
+  }, [outputCfg.titleFontFamily, outputCfg.artistFontFamily]); // eslint-disable-line
 
   const bgStyle =
     background.type === 'color'
@@ -124,7 +142,8 @@ export default function StagePage() {
 
   const sz = (val) => typeof val === 'number' ? `${val}pt` : '16pt';
 
-  const hasContent   = !isBlank && !!slideData;
+  const hasBgMedia  = !isBlank && !!backgroundMedia;
+  const hasContent   = !isBlank && !!slideData && (slideData.type !== 'media' || !hasBgMedia);
   const label        = slideData?.label;
 
   // Mantener el último label para que el color de la barra persista entre slides del mismo grupo
@@ -194,14 +213,22 @@ export default function StagePage() {
 
   return (
     <div
-      className="w-screen h-screen flex flex-col select-none overflow-hidden"
+      className="w-screen h-screen flex flex-col select-none overflow-hidden relative"
       style={bgStyle}
     >
+      {/* Capa de fondo multimedia (primerPlano=false) */}
+      {hasBgMedia && (
+        backgroundMedia.mediaType === 'video'
+          ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop muted playsInline
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+          : <img key={backgroundMedia.url} src={backgroundMedia.url} alt=""
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+      )}
       {/* ── BARRA SUPERIOR ─────────────────────────────────────────────── */}
       {showTopBar && (
         <div
           className="relative flex items-center justify-between px-5 py-2.5 bg-black/70 shrink-0 border-b border-white/10 gap-4"
-          style={{ fontFamily: fontStyles.fontFamily }}
+          style={{ fontFamily: fontStyles.fontFamily, zIndex: 1 }}
         >
         <div className="flex items-center min-w-0 flex-1">
           {showSlideCounter && hasContent && totalSlides != null && (
@@ -219,7 +246,7 @@ export default function StagePage() {
       )}
 
       {/* ── CONTENIDO PRINCIPAL: 50/50 arriba/abajo ───────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0" style={{ position: 'relative', zIndex: 1 }}>
 
         {/* MITAD SUPERIOR: slide actual */}
         <div className={`flex overflow-hidden ${showNextSlide ? 'flex-1 border-b border-white/10' : 'flex-1'}`}>
@@ -257,6 +284,8 @@ export default function StagePage() {
                 slideData={slideData}
                 fontSize={fontSize}
                 fontStyles={fontStyles}
+                titleFontFamily={titleFontFamily}
+                outputCfg={outputCfg}
                 lyricsColor={lyricsColor}
                 chordsColor={chordsColor}
                 chordsSize={fontSizeChords}
@@ -266,6 +295,7 @@ export default function StagePage() {
                 commentColor={commentColor}
                 commentFontFamily={commentFontFamily}
                 commentFontSize={commentFontSize}
+                showVideo={showVideo}
               />
             )}
           </div>
@@ -312,6 +342,7 @@ export default function StagePage() {
                   commentColor={commentColor}
                   commentFontFamily={commentFontFamily}
                   commentFontSize={commentFontSize}
+                  showVideo={showVideo}
                 />
               ) : nextSong ? (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-10 text-center">
@@ -347,7 +378,7 @@ export default function StagePage() {
       {(showClock || nextSong) && (
         <div
           className="shrink-0 bg-black/70 border-t border-white/10 px-5 py-2 flex items-center"
-          style={{ fontFamily: fontStyles.fontFamily }}
+          style={{ fontFamily: fontStyles.fontFamily, position: 'relative', zIndex: 1 }}
         >
           {/* Columna izquierda (spacer) */}
           <div className="flex-1" />
@@ -380,7 +411,7 @@ export default function StagePage() {
 }
 
 // ─── Contenido del slide actual ───────────────────────────────────────────────
-function StageSlideContent({ slideData, fontSize, fontStyles, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16 }) {
+function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true }) {
   const stroke = strokeWidth > 0
     ? `${Array.from({ length: 4 }, (_, i) => {
         const angle = i * 90;
@@ -550,6 +581,82 @@ function StageSlideContent({ slideData, fontSize, fontStyles, lyricsColor, chord
           </p>
         )}
       </div>
+    );
+  }
+
+  if (slideData.type === 'title') {
+    // Usar configuración del outputConfig para la diapositiva de título
+    const titleFF   = outputCfg.titleFontFamily
+      ? resolveFontFamily(outputCfg.titleFontFamily)
+      : (titleFontFamily ?? fontStyles.fontFamily);
+    const artistFF  = outputCfg.artistFontFamily
+      ? resolveFontFamily(outputCfg.artistFontFamily)
+      : titleFF;
+    const titleColor  = outputCfg.titleColor  ?? lyricsColor;
+    const artistColor = outputCfg.artistColor ?? `${lyricsColor}aa`;
+    const titleSize   = outputCfg.titleFontSize  ? `${outputCfg.titleFontSize}px`  : `${Math.max(fontSize, 48)}pt`;
+    const artistSize  = outputCfg.artistFontSize ? `${outputCfg.artistFontSize}px` : `${Math.max(Math.round(fontSize * 0.55), 26)}pt`;
+    const showArtist  = outputCfg.titleShowArtist ?? true;
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center px-14 text-center gap-6">
+        <div style={{
+          fontFamily: titleFF,
+          fontWeight: fontStyles.fontWeight,
+          fontStyle:  fontStyles.fontStyle,
+          color:      titleColor,
+          fontSize:   titleSize,
+          textShadow: stroke,
+          lineHeight: 1.2,
+        }}>
+          {slideData.songTitle}
+        </div>
+        {showArtist && slideData.songAuthor && (
+          <div style={{
+            fontFamily: artistFF,
+            fontWeight: fontStyles.fontWeight,
+            fontStyle:  fontStyles.fontStyle,
+            color:      artistColor,
+            fontSize:   artistSize,
+            textShadow: stroke,
+            lineHeight: 1.3,
+          }}>
+            {slideData.songAuthor}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (slideData.type === 'media') {
+    const { url, mediaType, fileName } = slideData;
+    if (mediaType === 'video') {
+      if (!showVideo) {
+        return (
+          <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-white/40">
+            <span style={{ fontSize: '2rem' }}>▶</span>
+            <span style={{ fontSize: '0.85rem', fontFamily: fontStyles.fontFamily }}>{fileName || 'Video'}</span>
+          </div>
+        );
+      }
+      return (
+        <video
+          key={url}
+          src={url}
+          autoPlay
+          loop
+          muted
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', display: 'block' }}
+        />
+      );
+    }
+    return (
+      <img
+        key={url}
+        src={url}
+        alt=""
+        style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', display: 'block' }}
+      />
     );
   }
 

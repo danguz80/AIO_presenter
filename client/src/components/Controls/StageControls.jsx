@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import {
   Clock, Eye, EyeOff, ChevronDown, ChevronUp, Type,
-  Hash, Tag, AlignLeft, Rows2, Music2, Plus, X, Save, BookOpen,
+  Hash, Tag, AlignLeft, Rows2, Music2, Plus, X, Save, BookOpen, Check, LayoutTemplate, Film,
 } from 'lucide-react';
 
 function injectGoogleFont(name) {
@@ -11,7 +11,7 @@ function injectGoogleFont(name) {
   const link = document.createElement('link');
   link.id = id;
   link.rel = 'stylesheet';
-  link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name)}:ital,wght@0,400;0,700;1,400;1,700&display=swap`;
+  link.href = `https://fonts.googleapis.com/css2?family=${name.replace(/\s+/g, '+')}&display=swap`;
   document.head.appendChild(link);
 }
 
@@ -38,22 +38,67 @@ export default function StageControls({ defaultOpen = false }) {
   const [fontInput, setFontInput] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templateDirty, setTemplateDirty] = useState(false);
+  const [saveSuccess,   setSaveSuccess]   = useState(false);
+  const successTimer = useRef(null);
+
+  // Plantilla activa persistida en stageConfig
+  const activeTemplateName = stageConfig?.activeTemplateName ?? null;
+
+  const showSuccess = () => {
+    setSaveSuccess(true);
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSaveSuccess(false), 2500);
+  };
+
+  const applyTemplate = (t) => {
+    actions.setStageConfig({ ...t.config, activeTemplateName: t.name });
+    setTemplateDirty(false);
+    setSaveSuccess(false);
+  };
+
+  const overwriteTemplate = () => {
+    if (!activeTemplateName) return;
+    // eslint-disable-next-line no-unused-vars
+    const { activeTemplateName: _omit, ...configToSave } = stageConfig;
+    const next = stageTemplates.map(t => t.name === activeTemplateName ? { name: activeTemplateName, config: configToSave } : t);
+    actions.setStageTemplates(next);
+    setTemplateDirty(false);
+    showSuccess();
+  };
 
   const saveTemplate = () => {
     const name = templateName.trim();
     if (!name) return;
-    const next = [{ name, config: stageConfig }, ...stageTemplates.filter(t => t.name !== name)];
+    // eslint-disable-next-line no-unused-vars
+    const { activeTemplateName: _omit, ...configToSave } = stageConfig;
+    const newTemplate = { name, config: configToSave };
+    const existing = stageTemplates.findIndex(t => t.name === name);
+    const next = existing >= 0
+      ? stageTemplates.map((t, i) => i === existing ? newTemplate : t)
+      : [...stageTemplates, newTemplate];
     actions.setStageTemplates(next);
+    actions.setStageConfig({ ...stageConfig, activeTemplateName: name });
+    setTemplateDirty(false);
     setTemplateName('');
+    showSuccess();
   };
-
-  const applyTemplate = (t) => actions.setStageConfig(t.config);
 
   const deleteTemplate = (name) => {
     actions.setStageTemplates(stageTemplates.filter(t => t.name !== name));
+    if (activeTemplateName === name) {
+      actions.setStageConfig({ ...stageConfig, activeTemplateName: null });
+      setTemplateDirty(false);
+    }
   };
 
-  const update = (patch) => actions.setStageConfig({ ...stageConfig, ...patch });
+  const update = (patch) => {
+    actions.setStageConfig({ ...stageConfig, ...patch });
+    if (activeTemplateName) {
+      setTemplateDirty(true);
+      setSaveSuccess(false);
+    }
+  };
 
   const {
     showClock, showNextSlide, showSongTitle, showSlideCounter,
@@ -78,6 +123,7 @@ export default function StageControls({ defaultOpen = false }) {
     commentColor        = '#facc15',
     commentFontFamily   = 'sans',
     commentFontSize     = 16,
+    showVideo           = true,
   } = stageConfig;
 
   const addFont = () => {
@@ -117,13 +163,38 @@ export default function StageControls({ defaultOpen = false }) {
 
           {/* PLANTILLAS */}
           <SubSection title="Plantillas">
+            {/* Banner plantilla activa */}
+            {activeTemplateName && (
+              <div className="rounded-lg border border-accent/30 bg-accent/5 px-2.5 py-2">
+                <div className="flex items-center gap-1.5">
+                  <LayoutTemplate size={11} className="text-accent shrink-0" />
+                  <span className="text-[11px] text-zinc-300 flex-1 min-w-0 truncate">
+                    <span className="text-accent font-semibold">{activeTemplateName}</span>
+                  </span>
+                  {saveSuccess ? (
+                    <span className="flex items-center gap-0.5 text-[10px] text-green-400 font-semibold shrink-0">
+                      <Check size={11} /> Guardado
+                    </span>
+                  ) : (
+                    <button
+                      onClick={overwriteTemplate}
+                      disabled={!templateDirty}
+                      title="Sobreescribir esta plantilla con la configuración actual"
+                      className="flex items-center gap-1 shrink-0 px-2 py-0.5 rounded text-[10px] font-medium bg-accent text-white hover:bg-accent-hover disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Save size={9} /> Guardar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex gap-1">
               <input
                 type="text"
                 value={templateName}
                 onChange={e => setTemplateName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && saveTemplate()}
-                placeholder="Nombre de plantilla"
+                placeholder={activeTemplateName ? 'Guardar con otro nombre…' : 'Nombre de plantilla'}
                 className="flex-1 bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-2 py-1.5 placeholder-zinc-500 focus:outline-none focus:border-accent"
               />
               <button
@@ -177,6 +248,7 @@ export default function StageControls({ defaultOpen = false }) {
             <ToggleRow icon={<AlignLeft size={12} />}  label="Etiqueta lateral"  value={showSideLabel    ?? true}  onChange={v => update({ showSideLabel: v })} />
             <ToggleRow icon={<Rows2 size={12} />}      label="Siguiente slide"   value={showNextSlide    ?? true}  onChange={v => update({ showNextSlide: v })} />
             <ToggleRow icon={<Clock size={12} />}      label="Reloj"             value={showClock        ?? true}  onChange={v => update({ showClock: v })} />
+            <ToggleRow icon={<Film size={12} />}       label="Reproducir video"  value={showVideo        ?? true}  onChange={v => update({ showVideo: v })} />
           </SubSection>
 
           {/* TIPOGRAFÍA */}

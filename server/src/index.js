@@ -10,6 +10,7 @@ const pool       = require('./config/database');
 const songsRouter  = require('./routes/songs');
 const bibleRouter  = require('./routes/bible');
 const importRouter = require('./routes/import');
+const mediaRouter  = require('./routes/media');
 const eventsRouter          = require('./routes/events');
 const eventTemplatesRouter  = require('./routes/eventTemplates');
 const playsRouter           = require('./routes/plays');
@@ -32,11 +33,12 @@ const io = new Server(server, {
  * En fases futuras esto puede persistirse en Redis o DB.
  */
 let liveState = {
-  type:          null,   // 'song' | 'bible' | 'blank' | null
-  slideData:     null,   // datos del slide actual
-  nextSlideData: null,   // datos del siguiente slide (para pantalla de escenario)
-  isBlank:       false,
-  background:    { color: '#000000', type: 'color' },
+  type:            null,   // 'song' | 'bible' | 'blank' | null
+  slideData:       null,   // datos del slide actual
+  nextSlideData:   null,   // datos del siguiente slide (para pantalla de escenario)
+  isBlank:         false,
+  background:      { color: '#000000', type: 'color' },
+  backgroundMedia: null,   // media en fondo (primerPlano=false) — persiste mientras no se blanquee
 };
 
 /** Configuración independiente de la pantalla de escenario */
@@ -80,14 +82,17 @@ let stageTemplates = [];
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS bpm        INTEGER`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS time_sig   VARCHAR(20)`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS link       TEXT`);
+    await pool.query(`ALTER TABLE song_slides ADD COLUMN IF NOT EXISTS slide_background JSONB`);
     const { rows } = await pool.query(
-      "SELECT key, value FROM app_settings WHERE key IN ('stageConfig','stageTemplates','outputConfig','outputTemplates')"
+      "SELECT key, value FROM app_settings WHERE key IN ('stageConfig','stageTemplates','outputConfig','outputTemplates','virtualConfig','virtualTemplates')"
     );
     for (const row of rows) {
       if (row.key === 'stageConfig')      { stageConfig    = { ...DEFAULT_STAGE_CONFIG, ...row.value }; console.log('[Settings] stageConfig cargado desde DB'); }
       if (row.key === 'stageTemplates')   { stageTemplates = row.value; }
       if (row.key === 'outputConfig')     { outputConfig   = { ...outputConfig, ...row.value };  console.log('[Settings] outputConfig cargado desde DB'); }
       if (row.key === 'outputTemplates')  { outputTemplates = Array.isArray(row.value) ? row.value : []; }
+      if (row.key === 'virtualConfig')    { virtualConfig   = { ...virtualConfig, ...row.value }; console.log('[Settings] virtualConfig cargado desde DB'); }
+      if (row.key === 'virtualTemplates') { virtualTemplates = Array.isArray(row.value) ? row.value : []; }
     }
   } catch (e) {
     console.error('[Settings] Error cargando settings desde DB:', e.message);
@@ -142,13 +147,59 @@ async function saveOutputTemplates() {
   }
 }
 
+async function saveVirtualConfig() {
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('virtualConfig', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(virtualConfig)]
+    );
+  } catch (e) {
+    console.error('[Settings] Error guardando virtualConfig:', e.message);
+  }
+}
+
+async function saveVirtualTemplates() {
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('virtualTemplates', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(virtualTemplates)]
+    );
+  } catch (e) {
+    console.error('[Settings] Error guardando virtualTemplates:', e.message);
+  }
+}
+
 /** Configuración de la salida virtual / NDI */
 let virtualConfig = {
   background:  { type: 'transparent' }, // 'transparent' | 'color' | 'chromakey'
   chromaColor: '#00b140',
   fontSize:    'auto',
+  fontSizePx:  48,
+  fontFamily:  'sans',
+  fontBold:    false,
+  fontItalic:  false,
+  fontColor:   '#ffffff',
+  fontStrokeWidth: 0,
+  fontStrokeColor: '#000000',
+  alignX:      'center', // 'left' | 'center' | 'right'
+  alignY:      'center', // 'top'  | 'center' | 'bottom'
+  textBg:         false,
+  textBgColor:    '#000000',
+  textBgOpacity:  0.5,
+  textBgShape:    'rectangle', // 'rectangle' | 'rounded' | 'pill'
+  textBgPadX:     24,
+  textBgPadY:     12,
   ndiEnabled:  false,
   showComments: false,
+  // Cita bíblica (referencia)
+  bibleRefEnabled:   false,
+  bibleRefFontSize:  24,
+  bibleRefBgColor:   '#000000',
+  bibleRefBgShape:   'rounded',
+  bibleRefBgOpacity: 0.6,
+  bibleRefPosition:  'bottom-right',
 };
 
 /** Configuración de la salida principal (proyector) */
@@ -175,8 +226,32 @@ let outputConfig = {
   artistFontFamily:   'sans',
   artistFontSize:     36,
   artistColor:        '#aaaaaa',
+  // Indicador de progreso de diapositivas
+  progressEnabled:  false,
+  progressPosition: 'bottom-right',
+  progressSize:     14,
+  progressColor:    '#ffffff',
+  // Ajuste de fondo multimedia
+  backgroundFit: 'contain',
+  // Plantilla especial para Biblia
+  bibleTemplateEnabled: false,
+  bibleBackground:      null,
+  bibleFontFamily:      'sans',
+  bibleFontSize:        'auto',
+  bibleColor:           '#ffffff',
+  bibleAlignment:       'center',
+  bibleAlignmentY:      'center',
+  bibleRefPosition:     'bottom',
+  bibleRefShowBg:       false,
+  bibleRefBgColor:      '#000000',
+  bibleRefBgOpacity:    0.6,
+  bibleRefColor:        '#cccccc',
+  bibleRefFontFamily:   'sans',
+  bibleRefFontSize:     24,
+  bibleVersionPosition: 'inline-right',
 };
 let outputTemplates = [];
+let virtualTemplates = [];
 
 /** Slides de la canción activa para navegación server-side */
 let currentSong = null; // { slides, slideIndex, songTitle, songAuthor, songId, songKey, titleSlideActive }
@@ -209,6 +284,7 @@ io.on('connection', (socket) => {
   socket.emit('virtual:config',  virtualConfig);
   socket.emit('output:config',   outputConfig);
   socket.emit('output:templates', outputTemplates);
+  socket.emit('virtual:templates', virtualTemplates);
   socket.emit('ndi:status',      ndi.getStatus());
   socket.emit('schedule:update', schedule);
   if (eventPlays.ids.length > 0) socket.emit('event:plays', eventPlays);
@@ -225,14 +301,29 @@ io.on('connection', (socket) => {
           songTitle:        data.slideData?.songTitle  || currentSong?.songTitle  || '',
           songAuthor:       data.slideData?.songAuthor || currentSong?.songAuthor || '',
           songId:           data.slideData?.songId     || currentSong?.songId     || null,
+          songKey:          data.slideData?.songKey    || currentSong?.songKey    || null,
           titleSlideActive: true,
           slideIndex:       -1,
         };
       }
-      liveState = { ...liveState, isBlank: false, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
+      // Fondo: usar el que manda el cliente (slideBackground), o el configurado en outputConfig
+      const bgMedia = data.slideData?.slideBackground ?? outputConfig.titleBackground ?? null;
+      liveState = { ...liveState, backgroundMedia: bgMedia, isBlank: false, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
       ndi.updateState(liveState, virtualConfig);
       io.emit('live:state', liveState);
       return;
+    }
+
+    // Media de fondo (primerPlano=false): setear backgroundMedia sin cambiar el slide actual
+    if (data.type === 'media' && data.slideData?.primerPlano === false) {
+      liveState = { ...liveState, backgroundMedia: data.slideData, isBlank: false };
+      ndi.updateState(liveState, virtualConfig);
+      io.emit('live:state', liveState);
+      return;
+    }
+    // Media en primer plano: limpiar backgroundMedia
+    if (data.type === 'media') {
+      liveState = { ...liveState, backgroundMedia: null };
     }
 
     // Guardar slides para navegación server-side (enviados por cualquier cliente)
@@ -253,19 +344,28 @@ io.on('connection', (socket) => {
         currentSong.slideIndex = -1; // posición especial: antes del primer slide
         const firstSlide = data.slides[0];
         const titleSlideData = {
-          type:       'title',
-          songTitle:  currentSong.songTitle,
-          songAuthor: currentSong.songAuthor,
-          songId:     currentSong.songId,
+          type:            'title',
+          songTitle:       currentSong.songTitle,
+          songAuthor:      currentSong.songAuthor,
+          songId:          currentSong.songId,
+          songKey:         currentSong.songKey || null,
+          slideBackground: outputConfig.titleBackground || null,
         };
+        const bgMedia = outputConfig.titleBackground || null;
         const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null;
-        liveState = { ...liveState, isBlank: false, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
+        liveState = { ...liveState, backgroundMedia: bgMedia, isBlank: false, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
         ndi.updateState(liveState, virtualConfig);
         io.emit('live:state', liveState);
         return;
       }
     } else if (data.type !== 'song') {
       currentSong = null; // limpiar si se proyecta algo que no es canción
+    }
+
+    // Fondo ligado al slide de canción — solo sobreescribir si el slide TIENE fondo definido
+    // Si no tiene, mantener el backgroundMedia anterior (heredar)
+    if (data.type === 'song' && data.slideData?.slideBackground) {
+      liveState = { ...liveState, backgroundMedia: data.slideData.slideBackground };
     }
     // No persistir el array completo de slides (demasiado grande), pero sí el índice y total
     const { slides, ...rest } = data;
@@ -277,6 +377,7 @@ io.on('connection', (socket) => {
   // Pantalla en negro / en blanco
   socket.on('live:blank', (isBlank) => {
     liveState.isBlank = isBlank;
+    if (isBlank) liveState.backgroundMedia = null; // blanquear limpia el fondo multimedia
     ndi.updateState(liveState, virtualConfig);
     io.emit('live:state', liveState);
   });
@@ -333,9 +434,17 @@ io.on('connection', (socket) => {
     io.emit('output:templates', outputTemplates);
   });
 
+  // Plantillas streaming/virtual
+  socket.on('virtual:templates', (templates) => {
+    virtualTemplates = Array.isArray(templates) ? templates : [];
+    saveVirtualTemplates();
+    io.emit('virtual:templates', virtualTemplates);
+  });
+
   // Actualizar configuración virtual / NDI
   socket.on('virtual:config', (config) => {
     virtualConfig = { ...virtualConfig, ...config };
+    saveVirtualConfig();
     ndi.updateState(liveState, virtualConfig);
 
     // Activar / desactivar emisión NDI
@@ -362,8 +471,11 @@ io.on('connection', (socket) => {
           currentSong.slideIndex = 0;
           const slide     = slides[0];
           const nextSlide = slides[1] || null;
+          // Fondo: el del slide si tiene, si no limpiar (salimos del título)
+          const bgMedia = slide.slide_background || null;
           liveState = {
             ...liveState,
+            backgroundMedia: bgMedia,
             isBlank: false,
             slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content },
             nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
@@ -386,8 +498,9 @@ io.on('connection', (socket) => {
         currentSong.slideIndex = -1;
         liveState = {
           ...liveState,
+          backgroundMedia: outputConfig.titleBackground || null,
           isBlank: false,
-          slideData: { type: 'title', songTitle, songAuthor, songId },
+          slideData: { type: 'title', songTitle, songAuthor, songId, songKey: songKey || null },
           nextSlideData: { type: 'song', label: slides[0].label, content: slides[0].content },
         };
         ndi.updateState(liveState, virtualConfig);
@@ -399,8 +512,11 @@ io.on('connection', (socket) => {
       currentSong.slideIndex = newIndex;
       const slide     = slides[newIndex];
       const nextSlide = slides[newIndex + 1] || null;
+      // Fondo: usar el del slide si tiene uno; si no, mantener el actual
+      const bgMedia = slide.slide_background || liveState.backgroundMedia;
       liveState = {
         ...liveState,
+        backgroundMedia: bgMedia,
         isBlank:       false,
         slideData: {
           type:      'song',
@@ -434,6 +550,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/songs',  songsRouter);
 app.use('/api/bible',  bibleRouter);
 app.use('/api/import', importRouter);
+app.use('/api/media',  mediaRouter);
 app.use('/api/events',          eventsRouter);
 app.use('/api/event-templates', eventTemplatesRouter);
 app.use('/api/events',          playsRouter); // plays nested under /api/events/:id/plays

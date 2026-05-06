@@ -77,8 +77,30 @@ const initialState = {
     background:  { type: 'transparent' },
     chromaColor: '#00b140',
     fontSize:    'auto',
+    fontSizePx:  48,
+    fontFamily:  'sans',
+    fontBold:    false,
+    fontItalic:  false,
+    fontColor:   '#ffffff',
+    fontStrokeWidth: 0,
+    fontStrokeColor: '#000000',
+    alignX:      'center',
+    alignY:      'center',
+    textBg:         false,
+    textBgColor:    '#000000',
+    textBgOpacity:  0.5,
+    textBgShape:    'rectangle',
+    textBgPadX:     24,
+    textBgPadY:     12,
     ndiEnabled:  false,
     showComments: false,
+    // Cita bíblica (referencia)
+    bibleRefEnabled:   false,
+    bibleRefFontSize:  24,
+    bibleRefBgColor:   '#000000',
+    bibleRefBgShape:   'rounded',
+    bibleRefBgOpacity: 0.6,
+    bibleRefPosition:  'bottom-right',
   },
 
   // Configuración pantalla principal (proyector)
@@ -108,10 +130,35 @@ const initialState = {
     artistFontFamily:   'sans',
     artistFontSize:     36,
     artistColor:        '#aaaaaa',
+    // Indicador de progreso de diapositivas
+    progressEnabled:  false,
+    progressPosition: 'bottom-right',
+    progressSize:     14,
+    progressColor:    '#ffffff',
+    // Ajuste de fondo multimedia
+    backgroundFit: 'contain',
+    // Plantilla especial para Biblia
+    bibleTemplateEnabled: false,
+    bibleBackground:      null,
+    bibleFontFamily:      'sans',
+    bibleFontSize:        'auto',
+    bibleColor:           '#ffffff',
+    bibleAlignment:       'center',
+    bibleAlignmentY:      'center',
+    bibleRefPosition:     'bottom',
+    bibleRefShowBg:       false,
+    bibleRefBgColor:      '#000000',
+    bibleRefBgOpacity:    0.6,
+    bibleRefColor:        '#cccccc',
+    bibleRefFontFamily:   'sans',
+    bibleRefFontSize:     24,
+    bibleVersionPosition: 'inline-right',
   },
 
   // Plantillas de la pantalla principal
   outputTemplates: [],
+  // Plantillas streaming/virtual
+  virtualTemplates: [],
 
   // Estado NDI (del servidor)
   ndiStatus: {
@@ -186,6 +233,8 @@ function reducer(state, action) {
       return { ...state, schedule: action.payload };
     case 'SET_VIRTUAL_CONFIG':
       return { ...state, virtualConfig: { ...state.virtualConfig, ...action.payload } };
+    case 'SET_VIRTUAL_TEMPLATES':
+      return { ...state, virtualTemplates: action.payload };
     case 'SET_OUTPUT_CONFIG':
       return { ...state, outputConfig: { ...state.outputConfig, ...action.payload } };
     case 'SET_OUTPUT_TEMPLATES':
@@ -220,6 +269,7 @@ export function PresenterProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const socketRef  = useRef(null);
   const scheduleRef = useRef(initialState.schedule);
+  const preBibleTemplateRef = useRef(null); // plantilla activa antes de entrar en modo bíblico
 
   // Mantener scheduleRef sincronizado con el estado
   useEffect(() => { scheduleRef.current = state.schedule; }, [state.schedule]);
@@ -256,7 +306,8 @@ export function PresenterProvider({ children }) {
     socket.on('schedule:update',  (data) => dispatch({ type: 'SET_SCHEDULE',        payload: data }));
     socket.on('virtual:config',  (data) => dispatch({ type: 'SET_VIRTUAL_CONFIG',  payload: data }));
     socket.on('output:config',   (data) => dispatch({ type: 'SET_OUTPUT_CONFIG',   payload: data }));
-    socket.on('output:templates', (data) => dispatch({ type: 'SET_OUTPUT_TEMPLATES', payload: data }));
+    socket.on('output:templates',  (data) => dispatch({ type: 'SET_OUTPUT_TEMPLATES',  payload: data }));
+    socket.on('virtual:templates', (data) => dispatch({ type: 'SET_VIRTUAL_TEMPLATES', payload: data }));
     socket.on('ndi:status',      (data) => dispatch({ type: 'SET_NDI_STATUS',      payload: data }));
     socket.on('navigate',          (dir)  => dispatch({ type: 'NAVIGATE',          payload: { dir, ts: Date.now() } }));
     socket.on('event:plays',       (data) => dispatch({ type: 'SET_EVENT_PLAYS',   payload: data }));
@@ -283,6 +334,47 @@ export function PresenterProvider({ children }) {
       dispatch({ type: 'SET_PENDING_SONG', payload: { song, slide } });
     }).catch(console.error);
   }, [state.pendingSongId, state.pendingSlideId]);
+
+  // ── Auto-swap de plantilla bíblica (siempre activo) ───────────────────────
+  useEffect(() => {
+    const type             = state.liveState?.slideData?.type;
+    const bibleTemplateName = state.virtualConfig?.bibleTemplateName;
+    const activeTemplate   = state.virtualConfig?.activeTemplateName ?? null;
+    const templates        = state.virtualTemplates ?? [];
+
+    if (!bibleTemplateName) return;
+
+    if (type === 'bible') {
+      if (activeTemplate !== bibleTemplateName) {
+        preBibleTemplateRef.current = activeTemplate;
+        const t = templates.find(tp => tp.name === bibleTemplateName);
+        if (t) {
+          const newConfig = { ...t.config, activeTemplateName: t.name };
+          dispatch({ type: 'SET_VIRTUAL_CONFIG', payload: newConfig });
+          socketRef.current?.emit('virtual:config', newConfig);
+        }
+      }
+    } else if (type !== null) {
+      // Saliendo del modo bíblico
+      if (activeTemplate === bibleTemplateName) {
+        const prev = preBibleTemplateRef.current;
+        preBibleTemplateRef.current = null;
+        if (prev) {
+          const t = templates.find(tp => tp.name === prev);
+          const newConfig = t
+            ? { ...t.config, activeTemplateName: t.name }
+            : { ...state.virtualConfig, activeTemplateName: prev };
+          dispatch({ type: 'SET_VIRTUAL_CONFIG', payload: newConfig });
+          socketRef.current?.emit('virtual:config', newConfig);
+        } else {
+          const newConfig = { ...state.virtualConfig, activeTemplateName: null };
+          dispatch({ type: 'SET_VIRTUAL_CONFIG', payload: newConfig });
+          socketRef.current?.emit('virtual:config', newConfig);
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.liveState?.slideData?.type]);
 
   // ─── Acciones ────────────────────────────────────────────────────────────
   const actions = {
@@ -347,6 +439,11 @@ export function PresenterProvider({ children }) {
     setVirtualConfig: (config) => {
       dispatch({ type: 'SET_VIRTUAL_CONFIG', payload: config });
       socketRef.current?.emit('virtual:config', config);
+    },
+
+    setVirtualTemplates: (templates) => {
+      socketRef.current?.emit('virtual:templates', templates);
+      dispatch({ type: 'SET_VIRTUAL_TEMPLATES', payload: templates });
     },
 
     setOutputConfig: (config) => {

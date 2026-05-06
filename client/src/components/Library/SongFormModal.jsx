@@ -178,7 +178,12 @@ export default function SongFormModal({ song, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!title.trim()) { setError('El título es requerido'); return; }
-    const slides = textToSlides(body);
+    const parsedSlides = textToSlides(body);
+    // Preservar slideBackground de los slides originales (por posición) para no perderlos al editar
+    const slides = parsedSlides.map((s, i) => ({
+      ...s,
+      slideBackground: song?.slides?.[i]?.slide_background ?? null,
+    }));
     setSaving(true);
     setError('');
     try {

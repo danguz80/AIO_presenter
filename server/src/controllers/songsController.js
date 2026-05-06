@@ -70,10 +70,10 @@ const createSong = async (req, res) => {
 
     if (slides && slides.length > 0) {
       for (let i = 0; i < slides.length; i++) {
-        const { label, content } = slides[i];
+        const { label, content, slideBackground } = slides[i];
         await client.query(
-          'INSERT INTO song_slides (song_id, label, content, position) VALUES ($1, $2, $3, $4)',
-          [song.id, label, content, i]
+          'INSERT INTO song_slides (song_id, label, content, position, slide_background) VALUES ($1, $2, $3, $4, $5)',
+          [song.id, label, content, i, slideBackground ? JSON.stringify(slideBackground) : null]
         );
       }
     }
@@ -116,10 +116,10 @@ const updateSong = async (req, res) => {
     if (slides) {
       await client.query('DELETE FROM song_slides WHERE song_id = $1', [id]);
       for (let i = 0; i < slides.length; i++) {
-        const { label, content } = slides[i];
+        const { label, content, slideBackground } = slides[i];
         await client.query(
-          'INSERT INTO song_slides (song_id, label, content, position) VALUES ($1, $2, $3, $4)',
-          [id, label, content, i]
+          'INSERT INTO song_slides (song_id, label, content, position, slide_background) VALUES ($1, $2, $3, $4, $5)',
+          [id, label, content, i, slideBackground ? JSON.stringify(slideBackground) : null]
         );
       }
     }

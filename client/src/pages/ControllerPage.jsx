@@ -3,19 +3,21 @@ import { usePresenter } from '../context/usePresenter';
 import SongLibrary     from '../components/Library/SongLibrary';
 import SongDetail      from '../components/Library/SongDetail';
 import BibleBrowser    from '../components/Library/BibleBrowser';
+import MediaLibrary    from '../components/Library/MediaLibrary';
 import LiveControls    from '../components/Controls/LiveControls';
 import LivePreview     from '../components/Controls/LivePreview';
 import SettingsPanel   from '../components/Settings/SettingsPanel';
 import SongFormModal   from '../components/Library/SongFormModal';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 const RECURRENCE_LABEL = { weekly: 'Semanal', biweekly: 'Cada 2 semanas', monthly: 'Mensual' };
 
-// ─── Hook: panel redimensionable arrastrando el borde derecho ────────────────
-function useResizablePanel(defaultWidth, minWidth = 140, maxWidth = 600) {
+// ─── Hook: panel redimensionable arrastrando el borde ───────────────────────
+// reversed=true: arrastrar borde izquierdo (panel en el extremo derecho)
+function useResizablePanel(defaultWidth, minWidth = 140, maxWidth = 600, reversed = false) {
   const [width, setWidth] = useState(defaultWidth);
   const dragging = useRef(false);
   const startX   = useRef(0);
@@ -29,7 +31,9 @@ function useResizablePanel(defaultWidth, minWidth = 140, maxWidth = 600) {
 
     const onMove = (ev) => {
       if (!dragging.current) return;
-      const delta = ev.clientX - startX.current;
+      const delta = reversed
+        ? startX.current - ev.clientX
+        : ev.clientX - startX.current;
       setWidth(Math.min(maxWidth, Math.max(minWidth, startW.current + delta)));
     };
     const onUp = () => {
@@ -39,7 +43,7 @@ function useResizablePanel(defaultWidth, minWidth = 140, maxWidth = 600) {
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-  }, [width, minWidth, maxWidth]);
+  }, [width, minWidth, maxWidth, reversed]);
 
   return { width, onMouseDown };
 }
@@ -54,9 +58,33 @@ function fmtDate(d) {
 export default function ControllerPage() {
   const { state } = usePresenter();
   const [activeTab, setActiveTab] = useState('songs'); // 'songs' | 'bible'
-  const [mobileUrl, setMobileUrl] = useState('');
+  const [mediaOpen, setMediaOpen] = useState(false);
+  const [mediaHeight, setMediaHeight] = useState(220);
+  const mediaDragging = useRef(false);
+  const mediaStartY   = useRef(0);
+  const mediaStartH   = useRef(0);
 
+  const onMediaResizeStart = useCallback((e) => {
+    e.preventDefault();
+    mediaDragging.current = true;
+    mediaStartY.current   = e.clientY;
+    mediaStartH.current   = mediaHeight;
+    const onMove = (ev) => {
+      if (!mediaDragging.current) return;
+      const delta = mediaStartY.current - ev.clientY;
+      setMediaHeight(Math.min(500, Math.max(120, mediaStartH.current + delta)));
+    };
+    const onUp = () => {
+      mediaDragging.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [mediaHeight]);
+  const [mobileUrl, setMobileUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const { width: previewWidth, onMouseDown: onPreviewResize } = useResizablePanel(384, 220, 700, true);
 
   // Obtener IP local del servidor para construir URL del móvil
   useEffect(() => {
@@ -137,9 +165,43 @@ export default function ControllerPage() {
             {/* Columna 1: Biblioteca de canciones (colapsable) */}
             <CollapsibleLibrary />
 
-            {/* Columna 2: Detalle / Slides */}
+            {/* Columna 2: Detalle / Slides + panel multimedia inferior */}
             <main className="flex-1 flex flex-col overflow-hidden border-r border-surface-700">
-              <SongDetail />
+              <div className="flex-1 overflow-hidden">
+                <SongDetail />
+              </div>
+
+              {/* ── Panel colapsable Multimedia ── */}
+              <div className="shrink-0 border-t border-surface-700">
+                {/* Cabecera / pestaña */}
+                <button
+                  onClick={() => setMediaOpen(v => !v)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 bg-surface-800 hover:bg-surface-700 transition-colors"
+                >
+                  <Film size={13} className="text-zinc-400" />
+                  <span className="text-xs font-semibold text-zinc-300">Multimedia</span>
+                  <span className="ml-auto">
+                    {mediaOpen
+                      ? <ChevronDown size={13} className="text-zinc-500" />
+                      : <ChevronUp size={13} className="text-zinc-500" />}
+                  </span>
+                </button>
+
+                {/* Contenido colapsable */}
+                {mediaOpen && (
+                  <div className="flex flex-col" style={{ height: mediaHeight }}>
+                    {/* Handle de redimensionado (borde superior) */}
+                    <div
+                      onMouseDown={onMediaResizeStart}
+                      className="h-1 w-full cursor-row-resize hover:bg-accent/50 transition-colors shrink-0"
+                      title="Arrastrar para redimensionar"
+                    />
+                    <div className="flex-1 overflow-hidden">
+                      <MediaLibrary />
+                    </div>
+                  </div>
+                )}
+              </div>
             </main>
           </>
         ) : (
@@ -149,8 +211,14 @@ export default function ControllerPage() {
           </div>
         )}
 
-        {/* Columna 3: Controles en vivo + Preview (siempre visible) */}
-        <aside className="w-96 shrink-0 flex flex-col overflow-hidden">
+        {/* Columna 3: Controles en vivo + Preview (redimensionable) */}
+        <aside className="shrink-0 flex flex-col overflow-hidden relative" style={{ width: previewWidth }}>
+          {/* Handle izquierdo de redimensionado */}
+          <div
+            onMouseDown={onPreviewResize}
+            className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-accent/50 transition-colors z-10"
+            title="Arrastrar para redimensionar"
+          />
           <LivePreview />
           <LiveControls />
         </aside>
@@ -243,6 +311,12 @@ function EventsPanel() {
   const [templateName,     setTemplateName]     = useState('');
   const [savingTemplate,   setSavingTemplate]   = useState(false);
   const [viewingTemplates, setViewingTemplates] = useState(false);
+  // Plantilla activa (para guardar cambios de vuelta a la misma plantilla)
+  const [activeTemplate,      setActiveTemplate]      = useState(null); // { id, name }
+  const [templateDirty,       setTemplateDirty]       = useState(false);
+  const [templateSaveSuccess, setTemplateSaveSuccess] = useState(false);
+  const [altTemplateName,     setAltTemplateName]     = useState('');
+  const [showAltNameInput,    setShowAltNameInput]    = useState(false);
   // Editar evento
   const [editingEv,    setEditingEv]    = useState(false);
   const [editEvData,   setEditEvData]   = useState({});
@@ -391,6 +465,7 @@ function EventsPanel() {
     try {
       await saveItemsToApi(newItems);
       applyNewItems(newItems);
+      if (activeTemplate) setTemplateDirty(true);
       setSongSearch('');
       searchRef.current?.focus();
     } catch (e) { console.error(e); }
@@ -406,6 +481,7 @@ function EventsPanel() {
     try {
       await saveItemsToApi(newItems);
       applyNewItems(newItems);
+      if (activeTemplate) setTemplateDirty(true);
       setSepLabel(''); setSepColor('#6366f1'); setShowSepForm(false);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
@@ -474,6 +550,7 @@ function EventsPanel() {
     try {
       await saveItemsToApi(newItems);
       applyNewItems(newItems);
+      if (activeTemplate) setTemplateDirty(true);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -484,6 +561,7 @@ function EventsPanel() {
     try {
       await saveItemsToApi(newItems);
       applyNewItems(newItems);
+      if (activeTemplate) setTemplateDirty(true);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -505,8 +583,70 @@ function EventsPanel() {
         body: JSON.stringify({ name: templateName.trim(), items }),
       });
       const tpl = await res.json();
-      setTemplates(ts => [tpl, ...ts]);
+      setTemplates(ts => {
+        const filtered = ts.filter(t => t.name !== tpl.name);
+        return [tpl, ...filtered];
+      });
+      setActiveTemplate({ id: tpl.id, name: tpl.name });
+      setTemplateDirty(false);
       setTemplateName(''); setShowSaveTemplate(false);
+    } catch (e) { console.error(e); }
+    finally { setSavingTemplate(false); }
+  };
+
+  const saveToActiveTemplate = async () => {
+    if (!activeTemplate) return;
+    setSavingTemplate(true);
+    try {
+      const items = (selectedEv.songs || []).map(s => ({
+        item_type:       s.item_type       || 'song',
+        song_id:         s.song_id         || null,
+        title:           s.title           || null,
+        author:          s.author          || null,
+        separator_label: s.separator_label || null,
+        separator_color: s.separator_color || null,
+      }));
+      const res = await fetch('/api/event-templates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: activeTemplate.name, items }),
+      });
+      const tpl = await res.json();
+      setTemplates(ts => ts.map(t => t.id === tpl.id || t.name === tpl.name ? tpl : t));
+      setActiveTemplate({ id: tpl.id, name: tpl.name });
+      setTemplateDirty(false);
+      setTemplateSaveSuccess(true);
+      setTimeout(() => setTemplateSaveSuccess(false), 2500);
+    } catch (e) { console.error(e); }
+    finally { setSavingTemplate(false); }
+  };
+
+  const saveUnderNewName = async () => {
+    if (!altTemplateName.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const items = (selectedEv.songs || []).map(s => ({
+        item_type:       s.item_type       || 'song',
+        song_id:         s.song_id         || null,
+        title:           s.title           || null,
+        author:          s.author          || null,
+        separator_label: s.separator_label || null,
+        separator_color: s.separator_color || null,
+      }));
+      const res = await fetch('/api/event-templates', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: altTemplateName.trim(), items }),
+      });
+      const tpl = await res.json();
+      setTemplates(ts => {
+        const filtered = ts.filter(t => t.name !== tpl.name);
+        return [tpl, ...filtered];
+      });
+      setActiveTemplate({ id: tpl.id, name: tpl.name });
+      setTemplateDirty(false);
+      setAltTemplateName('');
+      setShowAltNameInput(false);
+      setTemplateSaveSuccess(true);
+      setTimeout(() => setTemplateSaveSuccess(false), 2500);
     } catch (e) { console.error(e); }
     finally { setSavingTemplate(false); }
   };
@@ -578,6 +718,7 @@ function EventsPanel() {
     try {
       await saveItemsToApi(items);
       applyNewItems(items);
+      if (activeTemplate) setTemplateDirty(true);
       setEditingSepIdx(null);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
@@ -595,6 +736,7 @@ function EventsPanel() {
     try {
       await saveItemsToApi(items);
       applyNewItems(items);
+      if (activeTemplate) setTemplateDirty(true);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
@@ -902,7 +1044,7 @@ function EventsPanel() {
           {/* Header con botón volver */}
           <div className="flex items-center gap-1 px-2 py-2.5 border-b border-surface-700 shrink-0">
             <button
-              onClick={() => { setSelectedEv(null); setSongSearch(''); setShowSearch(false); setEditingEv(false); }}
+              onClick={() => { setSelectedEv(null); setSongSearch(''); setShowSearch(false); setEditingEv(false); setActiveTemplate(null); setTemplateDirty(false); setTemplateSaveSuccess(false); setAltTemplateName(''); setShowAltNameInput(false); }}
               className="text-zinc-400 hover:text-white transition-colors p-1 rounded hover:bg-surface-700 shrink-0"
               title="Volver a eventos"
             >
@@ -956,7 +1098,7 @@ function EventsPanel() {
                     <Pencil size={13} />
                   </button>
                   {/* Guardar como plantilla */}
-                  {(selectedEv.songs?.length > 0) && (
+                  {(selectedEv.songs?.length > 0 && !activeTemplate) && (
                     <button
                       onClick={() => { setShowSaveTemplate(s => !s); setTemplateName(''); }}
                       className={['p-1 rounded transition-colors',
@@ -990,6 +1132,59 @@ function EventsPanel() {
                 </div>
             )}
           </div>
+
+          {/* ── Banner plantilla activa ── */}
+          {!editingEv && activeTemplate && (
+            <div className="px-2 py-1.5 border-b border-surface-700 bg-accent/5 shrink-0">
+              <div className="flex items-center gap-1.5">
+                <LayoutTemplate size={10} className="text-accent shrink-0" />
+                <span className="text-[10px] text-zinc-400 flex-1 min-w-0 truncate">
+                  Plantilla: <span className="text-accent font-medium">{activeTemplate.name}</span>
+                </span>
+                {templateSaveSuccess ? (
+                  <span className="text-[10px] text-green-400 font-semibold flex items-center gap-0.5 shrink-0">
+                    <Check size={10} /> Guardado
+                  </span>
+                ) : (
+                  <button
+                    onClick={saveToActiveTemplate}
+                    disabled={!templateDirty || savingTemplate}
+                    className="shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors bg-accent text-white hover:bg-accent-hover disabled:opacity-35 disabled:cursor-not-allowed"
+                    title="Sobreescribir plantilla con los cambios actuales"
+                  >
+                    <Save size={9} />
+                    {savingTemplate ? '…' : 'Guardar'}
+                  </button>
+                )}
+                <button
+                  onClick={() => { setShowAltNameInput(s => !s); setAltTemplateName(''); }}
+                  className={`shrink-0 p-0.5 rounded transition-colors ${showAltNameInput ? 'text-accent bg-accent/15' : 'text-zinc-500 hover:text-zinc-300 hover:bg-surface-700'}`}
+                  title="Guardar con otro nombre"
+                >
+                  <Bookmark size={11} />
+                </button>
+              </div>
+              {showAltNameInput && (
+                <div className="flex items-center gap-1 mt-1.5">
+                  <input
+                    autoFocus
+                    className="flex-1 min-w-0 bg-surface-700 border border-surface-600 rounded px-2 py-1 text-[10px] focus:outline-none focus:border-accent"
+                    placeholder="Guardar con otro nombre…"
+                    value={altTemplateName}
+                    onChange={e => setAltTemplateName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && saveUnderNewName()}
+                  />
+                  <button
+                    onClick={saveUnderNewName}
+                    disabled={!altTemplateName.trim() || savingTemplate}
+                    className="shrink-0 px-2 py-1 rounded bg-surface-600 hover:bg-surface-500 text-zinc-300 text-[10px] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {savingTemplate ? '…' : '✓'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Formulario edición de evento ── */}
           {editingEv && (

@@ -1,8 +1,104 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { usePresenter } from '../../context/usePresenter';
-import { ChevronDown, ChevronUp, Monitor, Save, BookOpen, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Monitor, Save, BookOpen, X, Check, LayoutTemplate, Film, Image } from 'lucide-react';
 import GoogleFontPicker from '../shared/GoogleFontPicker';
 import { resolveFont } from '../../utils/fontUtils';
+import api from '../../hooks/useApi';
+
+const SERVER_BASE = (() => {
+  const savedIp   = localStorage.getItem('aio_server_ip');
+  const savedPort = localStorage.getItem('aio_server_port') || '3001';
+  const host      = savedIp || window.location.hostname;
+  return `http://${host}:${savedPort}`;
+})();
+
+// ─── Selector de media (carpetas + archivos) ──────────────────────────────────
+function MediaPickerModal({ onSelect, onClose }) {
+  const [folders,  setFolders]  = useState([]);
+  const [selFolder, setSelFolder] = useState(null);
+  const [files,    setFiles]    = useState([]);
+  const [loading,  setLoading]  = useState(false);
+
+  useEffect(() => {
+    api.get('/media/folders').then(r => {
+      setFolders(r.data);
+      if (r.data.length > 0) setSelFolder(r.data[0]);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!selFolder) return;
+    setLoading(true);
+    api.get(`/media/files?folder=${encodeURIComponent(selFolder.path)}`)
+      .then(r => setFiles(r.data))
+      .catch(() => setFiles([]))
+      .finally(() => setLoading(false));
+  }, [selFolder]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-surface-800 border border-surface-600 rounded-xl shadow-2xl w-[520px] max-h-[70vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700 shrink-0">
+          <span className="text-sm font-semibold text-zinc-200">Seleccionar fondo multimedia</span>
+          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X size={15} /></button>
+        </div>
+        {/* Carpetas */}
+        <div className="flex gap-1 px-3 pt-2 flex-wrap shrink-0">
+          {folders.map(f => (
+            <button key={f.path}
+              onClick={() => setSelFolder(f)}
+              className={`text-[11px] px-2 py-1 rounded border transition-colors ${
+                selFolder?.path === f.path
+                  ? 'bg-accent/20 text-accent border-accent/40'
+                  : 'bg-surface-700 text-zinc-400 border-surface-600 hover:text-zinc-200'
+              }`}
+            >{f.name}</button>
+          ))}
+        </div>
+        {/* Grid de archivos */}
+        <div className="flex-1 overflow-y-auto p-3">
+          {loading ? (
+            <p className="text-xs text-zinc-500 text-center py-6">Cargando...</p>
+          ) : files.length === 0 ? (
+            <p className="text-xs text-zinc-500 text-center py-6">Sin archivos en esta carpeta</p>
+          ) : (
+            <div className="grid grid-cols-4 gap-2">
+              {files.map(file => (
+                <button
+                  key={file.path}
+                  onClick={() => onSelect({
+                    mediaType: file.type,
+                    filePath:  file.path,
+                    fileName:  file.name,
+                    url: `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`,
+                  })}
+                  className="relative aspect-video rounded-lg overflow-hidden border-2 border-surface-600 hover:border-accent bg-surface-700 flex items-center justify-center group"
+                  title={file.name}
+                >
+                  <img
+                    src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(file.path)}`}
+                    alt={file.name}
+                    className="w-full h-full object-cover"
+                    onError={e => { e.currentTarget.style.display='none'; }}
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
+                    {file.type === 'video' ? <Film size={16} className="text-white opacity-0 group-hover:opacity-100" /> : <Image size={16} className="text-white opacity-0 group-hover:opacity-100" />}
+                  </div>
+                  <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                    <p className="text-[8px] text-white truncate">{file.name}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Componentes UI reutilizables ─────────────────────────────────────────────
 function SubSection({ title, children }) {
@@ -121,28 +217,73 @@ function SizeRow({ label, value, onChange, min = 8, max = 120 }) {
 export default function OutputControls({ defaultOpen = false }) {
   const { state, actions } = usePresenter();
   const { outputConfig, outputTemplates = [] } = state;
-  const [open, setOpen]           = useState(defaultOpen);
+  const [open, setOpen]             = useState(defaultOpen);
   const [templateName, setTemplateName] = useState('');
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [templateDirty, setTemplateDirty] = useState(false);
+  const [saveSuccess,   setSaveSuccess]   = useState(false);
+  // null | 'title' | 'bible'
+  const [mediaPickerTarget, setMediaPickerTarget] = useState(null);
+  const successTimer = useRef(null);
 
-  const update = (patch) => actions.setOutputConfig({ ...outputConfig, ...patch });
+  // Plantilla activa: persiste en outputConfig → sobrevive recargas
+  const activeTemplateName = outputConfig?.activeTemplateName ?? null;
+
+  const update = (patch) => {
+    actions.setOutputConfig({ ...outputConfig, ...patch });
+    if (activeTemplateName) {
+      setTemplateDirty(true);
+      setSaveSuccess(false);
+    }
+  };
+
+  const showSuccess = () => {
+    setSaveSuccess(true);
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSaveSuccess(false), 2500);
+  };
+
+  const applyTemplate = (t) => {
+    actions.setOutputConfig({ ...outputConfig, ...t.config, activeTemplateName: t.name });
+    setTemplateDirty(false);
+    setSaveSuccess(false);
+  };
+
+  const overwriteTemplate = () => {
+    if (!activeTemplateName) return;
+    // eslint-disable-next-line no-unused-vars
+    const { activeTemplateName: _omit, ...configToSave } = outputConfig;
+    const newTemplate = { name: activeTemplateName, config: configToSave };
+    const next = outputTemplates.map(t => t.name === activeTemplateName ? newTemplate : t);
+    actions.setOutputTemplates(next);
+    setTemplateDirty(false);
+    showSuccess();
+  };
 
   const saveTemplate = () => {
     const name = templateName.trim();
     if (!name) return;
+    // eslint-disable-next-line no-unused-vars
+    const { activeTemplateName: _omit, ...configToSave } = outputConfig;
+    const newTemplate = { name, config: configToSave };
     const existing = outputTemplates.findIndex(t => t.name === name);
-    const newTemplate = { name, config: { ...outputConfig } };
     const next = existing >= 0
       ? outputTemplates.map((t, i) => i === existing ? newTemplate : t)
       : [...outputTemplates, newTemplate];
     actions.setOutputTemplates(next);
+    actions.setOutputConfig({ ...outputConfig, activeTemplateName: name });
+    setTemplateDirty(false);
     setTemplateName('');
+    showSuccess();
   };
 
-  const applyTemplate = (t) => actions.setOutputConfig({ ...outputConfig, ...t.config });
-
-  const deleteTemplate = (name) =>
+  const deleteTemplate = (name) => {
     actions.setOutputTemplates(outputTemplates.filter(t => t.name !== name));
+    if (activeTemplateName === name) {
+      actions.setOutputConfig({ ...outputConfig, activeTemplateName: null });
+      setTemplateDirty(false);
+    }
+  };
 
   // Valores con defaults
   const lyricsColor     = outputConfig?.lyricsColor     ?? '#ffffff';
@@ -154,6 +295,8 @@ export default function OutputControls({ defaultOpen = false }) {
   const showLabel       = outputConfig?.showLabel       ?? true;
   const showSongTitle   = outputConfig?.showSongTitle   ?? true;
   const showComments    = outputConfig?.showComments    ?? false;
+  const showVideo       = outputConfig?.showVideo       ?? true;
+  const backgroundFit   = outputConfig?.backgroundFit   ?? 'contain';
   const commentColor    = outputConfig?.commentColor    ?? '#facc15';
   const commentFontSize = outputConfig?.commentFontSize ?? 16;
   const commentFamily   = outputConfig?.commentFontFamily ?? 'sans';
@@ -168,11 +311,36 @@ export default function OutputControls({ defaultOpen = false }) {
   const artistFontSize    = outputConfig?.artistFontSize    ?? 36;
   const artistColor       = outputConfig?.artistColor       ?? '#aaaaaa';
 
+  // Indicador de progreso
+  const progressEnabled  = outputConfig?.progressEnabled  ?? false;
+  const progressPosition = outputConfig?.progressPosition ?? 'bottom-right';
+  const progressSize     = outputConfig?.progressSize     ?? 14;
+  const progressColor    = outputConfig?.progressColor    ?? '#ffffff';
+
+  // Plantilla Biblia
+  const bibleTemplateEnabled = outputConfig?.bibleTemplateEnabled ?? false;
+  const bibleFontFamily      = outputConfig?.bibleFontFamily      ?? 'sans';
+  const bibleFontSizeRaw     = outputConfig?.bibleFontSize        ?? 'auto';
+  const bibleFontSizeIsAuto  = bibleFontSizeRaw === 'auto';
+  const bibleFontSizeValue   = bibleFontSizeIsAuto ? 48 : Number(bibleFontSizeRaw);
+  const bibleColor           = outputConfig?.bibleColor           ?? '#ffffff';
+  const bibleAlignment       = outputConfig?.bibleAlignment       ?? 'center';
+  const bibleAlignmentY      = outputConfig?.bibleAlignmentY      ?? 'center';
+  const bibleRefPosition     = outputConfig?.bibleRefPosition     ?? 'bottom';
+  const bibleRefShowBg       = outputConfig?.bibleRefShowBg       ?? false;
+  const bibleRefBgColor      = outputConfig?.bibleRefBgColor      ?? '#000000';
+  const bibleRefBgOpacity    = outputConfig?.bibleRefBgOpacity    ?? 0.6;
+  const bibleRefColor        = outputConfig?.bibleRefColor        ?? '#cccccc';
+  const bibleRefFontFamily   = outputConfig?.bibleRefFontFamily   ?? 'sans';
+  const bibleRefFontSize     = outputConfig?.bibleRefFontSize     ?? 24;
+  const bibleVersionPosition = outputConfig?.bibleVersionPosition ?? 'inline-right';
+
   // fontSize: 'auto' o número
   const fontSizeIsAuto = !outputConfig?.fontSize || outputConfig.fontSize === 'auto';
   const fontSizeValue  = fontSizeIsAuto ? 48 : Number(outputConfig.fontSize);
 
   return (
+    <>
     <div className="border-t border-surface-700">
       <button
         onClick={() => setOpen(v => !v)}
@@ -187,13 +355,40 @@ export default function OutputControls({ defaultOpen = false }) {
 
           {/* ── PLANTILLAS ─────────────────────────────────────────── */}
           <SubSection title="Plantillas">
+            {/* Banner plantilla activa */}
+            {activeTemplateName && (
+              <div className="rounded-lg border border-accent/30 bg-accent/5 px-2.5 py-2">
+                <div className="flex items-center gap-1.5">
+                  <LayoutTemplate size={11} className="text-accent shrink-0" />
+                  <span className="text-[11px] text-zinc-300 flex-1 min-w-0 truncate">
+                    <span className="text-accent font-semibold">{activeTemplateName}</span>
+                  </span>
+                  {saveSuccess ? (
+                    <span className="flex items-center gap-0.5 text-[10px] text-green-400 font-semibold shrink-0">
+                      <Check size={11} /> Guardado
+                    </span>
+                  ) : (
+                    <button
+                      onClick={overwriteTemplate}
+                      disabled={!templateDirty}
+                      title="Sobreescribir esta plantilla con la configuración actual"
+                      className="flex items-center gap-1 shrink-0 px-2 py-0.5 rounded text-[10px] font-medium bg-accent text-white hover:bg-accent-hover disabled:opacity-35 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Save size={9} /> Guardar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Input para guardar con otro nombre (o nueva si no hay activa) */}
             <div className="flex gap-1">
               <input
                 type="text"
                 value={templateName}
                 onChange={e => setTemplateName(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && saveTemplate()}
-                placeholder="Nombre de plantilla"
+                placeholder={activeTemplateName ? 'Guardar con otro nombre…' : 'Nombre de plantilla'}
                 className="flex-1 bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-2 py-1.5 placeholder-zinc-500 focus:outline-none focus:border-accent"
               />
               <button
@@ -254,6 +449,7 @@ export default function OutputControls({ defaultOpen = false }) {
           <SubSection title="Mostrar / Ocultar">
             <ToggleRow label="Etiqueta de sección" value={showLabel}     onChange={v => update({ showLabel: v })} />
             <ToggleRow label="Título de canción"   value={showSongTitle} onChange={v => update({ showSongTitle: v })} />
+            <ToggleRow label="Reproducir video"    value={showVideo}     onChange={v => update({ showVideo: v })} />
           </SubSection>
 
           {/* ── TIPOGRAFÍA ─────────────────────────────────────────── */}
@@ -332,6 +528,44 @@ export default function OutputControls({ defaultOpen = false }) {
               </>
             )}
           </SubSection>
+          {/* ── INDICADOR DE PROGRESO ────────────────────────────── */}
+          <SubSection title="Indicador de progreso">
+            <ToggleRow label="Mostrar en pantalla" value={progressEnabled}
+              onChange={v => update({ progressEnabled: v })} />
+            {progressEnabled && (
+              <>
+                {/* Posición: grid 3×2 */}
+                <div className="space-y-1">
+                  <span className="text-[10px] text-zinc-500">Posición</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { key: 'top-left',     label: '↖ Sup Izq' },
+                      { key: 'top-center',   label: '↑ Sup Cen' },
+                      { key: 'top-right',    label: '↗ Sup Der' },
+                      { key: 'bottom-left',  label: '↙ Inf Izq' },
+                      { key: 'bottom-center',label: '↓ Inf Cen' },
+                      { key: 'bottom-right', label: '↘ Inf Der' },
+                    ].map(({ key, label }) => (
+                      <button
+                        key={key}
+                        onClick={() => update({ progressPosition: key })}
+                        className={`py-1 text-[10px] rounded transition-colors ${
+                          progressPosition === key
+                            ? 'bg-accent text-white'
+                            : 'bg-surface-600 text-zinc-400 hover:text-zinc-200'
+                        }`}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+                <SizeRow label="Tamaño" value={progressSize}
+                  onChange={v => update({ progressSize: v })} min={8} max={48} />
+                <ColorRow label="Color" value={progressColor}
+                  onChange={v => update({ progressColor: v })} />
+              </>
+            )}
+          </SubSection>
+
           {/* ── DIAPOSITIVA DE TÍTULO ─────────────────────── */}
           <SubSection title="Diapositiva de título">
             <ToggleRow
@@ -387,11 +621,221 @@ export default function OutputControls({ defaultOpen = false }) {
                     </div>
                   )}
                 </div>
+
+                {/* Fondo multimedia */}
+                <div className="mt-2 space-y-1.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Fondo</p>
+                  {outputConfig?.titleBackground ? (
+                    <div className="flex items-center gap-2 bg-surface-700 rounded-lg px-2 py-1.5">
+                      <div className="w-12 h-7 rounded overflow-hidden shrink-0 bg-surface-600 flex items-center justify-center">
+                        {outputConfig.titleBackground.mediaType === 'video'
+                          ? <Film size={12} className="text-zinc-400" />
+                          : <img
+                              src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(outputConfig.titleBackground.filePath)}`}
+                              alt="" className="w-full h-full object-cover"
+                              onError={e => { e.currentTarget.style.display='none'; }}
+                            />
+                        }
+                      </div>
+                      <span className="text-[10px] text-zinc-300 flex-1 min-w-0 truncate">{outputConfig.titleBackground.fileName}</span>
+                      <button onClick={() => update({ titleBackground: null })}
+                        className="text-zinc-500 hover:text-red-400 transition-colors shrink-0">
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setMediaPickerTarget('title')}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs text-zinc-400 border border-dashed border-surface-500 hover:border-accent hover:text-accent rounded-lg py-2 transition-colors"
+                    >
+                      <Film size={11} /> Agregar fondo
+                    </button>
+                  )}
+                  {outputConfig?.titleBackground && (
+                    <button
+                      onClick={() => setMediaPickerTarget('title')}
+                      className="w-full text-[10px] text-zinc-500 hover:text-accent transition-colors"
+                    >Cambiar fondo…</button>
+                  )}
+                </div>
               </>
+            )}
+          </SubSection>
+
+          {/* ── PLANTILLA ESPECIAL PARA BIBLIA ─────────────────── */}
+          <SubSection title="Plantilla especial para Biblia">
+            <ToggleRow label="Activar plantilla para Biblia" value={bibleTemplateEnabled}
+              onChange={v => update({ bibleTemplateEnabled: v })} />
+            {bibleTemplateEnabled && (
+              <div className="space-y-3 mt-1">
+                {/* Fondo */}
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Fondo multimedia</p>
+                  {outputConfig?.bibleBackground ? (
+                    <div className="flex items-center gap-2 bg-surface-700 rounded-lg px-2 py-1.5">
+                      <div className="w-12 h-7 rounded overflow-hidden shrink-0 bg-surface-600 flex items-center justify-center">
+                        {outputConfig.bibleBackground.mediaType === 'video'
+                          ? <Film size={12} className="text-zinc-400" />
+                          : <img
+                              src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(outputConfig.bibleBackground.filePath)}`}
+                              alt="" className="w-full h-full object-cover"
+                              onError={e => { e.currentTarget.style.display='none'; }}
+                            />
+                        }
+                      </div>
+                      <span className="text-[10px] text-zinc-300 flex-1 min-w-0 truncate">{outputConfig.bibleBackground.fileName}</span>
+                      <button onClick={() => update({ bibleBackground: null })} className="text-zinc-500 hover:text-red-400 transition-colors shrink-0">
+                        <X size={11} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setMediaPickerTarget('bible')}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs text-zinc-400 border border-dashed border-surface-500 hover:border-accent hover:text-accent rounded-lg py-2 transition-colors"
+                    >
+                      <Film size={11} /> Agregar fondo
+                    </button>
+                  )}
+                  {outputConfig?.bibleBackground && (
+                    <button onClick={() => setMediaPickerTarget('bible')}
+                      className="w-full text-[10px] text-zinc-500 hover:text-accent transition-colors"
+                    >Cambiar fondo…</button>
+                  )}
+                  {/* Ajuste del fondo */}
+                  <div className="space-y-1 pt-0.5">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Ajuste del fondo</span>
+                    <div className="flex gap-1">
+                      {[['contain','Contener'],['cover','Llenar'],['fill','Estirar']].map(([val, lbl]) => (
+                        <button key={val}
+                          onClick={() => update({ backgroundFit: val })}
+                          className={`flex-1 py-1.5 text-xs rounded transition-colors ${
+                            backgroundFit === val ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'
+                          }`}
+                        >{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tipografía */}
+                <div className="border-l-2 border-surface-600 pl-2 space-y-1.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Tipografía</p>
+                  <GoogleFontPicker label="Fuente" value={bibleFontFamily}
+                    onChange={v => update({ bibleFontFamily: v })} />
+                  <ColorRow label="Color texto" value={bibleColor}
+                    onChange={v => update({ bibleColor: v })} />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-zinc-300 shrink-0">Tamaño</span>
+                    <div className="flex gap-1">
+                      <button onClick={() => update({ bibleFontSize: 'auto' })}
+                        className={`px-2 py-1 text-xs rounded transition-colors ${bibleFontSizeIsAuto ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'}`}
+                      >Auto</button>
+                      <button onClick={() => update({ bibleFontSize: bibleFontSizeValue })}
+                        className={`px-2 py-1 text-xs rounded transition-colors ${!bibleFontSizeIsAuto ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'}`}
+                      >Fijo</button>
+                    </div>
+                  </div>
+                  {!bibleFontSizeIsAuto && (
+                    <FontSizeControl value={bibleFontSizeValue} onChange={v => update({ bibleFontSize: v })} />
+                  )}
+                </div>
+
+                {/* Alineación */}
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Alineación texto</p>
+                  <div className="flex gap-1">
+                    {[['left','⬅ Izq'],['center','≡ Cen'],['right','➡ Der']].map(([val, lbl]) => (
+                      <button key={val}
+                        onClick={() => update({ bibleAlignment: val })}
+                        className={`flex-1 py-1.5 text-xs rounded transition-colors ${bibleAlignment === val ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'}`}
+                      >{lbl}</button>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    {[['flex-start','↑ Arriba'],['center','↔ Centro'],['flex-end','↓ Abajo']].map(([val, lbl]) => (
+                      <button key={val}
+                        onClick={() => update({ bibleAlignmentY: val })}
+                        className={`flex-1 py-1.5 text-xs rounded transition-colors ${bibleAlignmentY === val ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'}`}
+                      >{lbl}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Posición de la cita */}
+                <div className="space-y-1.5">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Posición de la cita bíblica</p>
+                  <div className="flex gap-1">
+                    {[['top','↑ Arriba'],['bottom','↓ Abajo']].map(([val, lbl]) => (
+                      <button key={val}
+                        onClick={() => update({ bibleRefPosition: val })}
+                        className={`flex-1 py-1.5 text-xs rounded transition-colors ${bibleRefPosition === val ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'}`}
+                      >{lbl}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Fondo de la cita */}
+                <div className="border-l-2 border-surface-600 pl-2 space-y-1.5">
+                  <ToggleRow label="Fondo detrás de la cita" value={bibleRefShowBg}
+                    onChange={v => update({ bibleRefShowBg: v })} />
+                  {bibleRefShowBg && (
+                    <>
+                      <ColorRow label="Color fondo" value={bibleRefBgColor}
+                        onChange={v => update({ bibleRefBgColor: v })} />
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-zinc-300 shrink-0">Opacidad</span>
+                        <div className="flex items-center gap-2 flex-1">
+                          <input type="range" min={0} max={1} step={0.05} value={bibleRefBgOpacity}
+                            onChange={e => update({ bibleRefBgOpacity: Number(e.target.value) })}
+                            className="flex-1 accent-accent" />
+                          <span className="text-xs text-zinc-400 w-8 text-right">{Math.round(bibleRefBgOpacity * 100)}%</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <ColorRow label="Color cita" value={bibleRefColor}
+                    onChange={v => update({ bibleRefColor: v })} />
+                  <GoogleFontPicker label="Fuente cita" value={bibleRefFontFamily}
+                    onChange={v => update({ bibleRefFontFamily: v })} />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-zinc-300 shrink-0">Tamaño cita</span>
+                    <div className="flex items-center gap-2 flex-1">
+                      <input type="range" min={10} max={80} step={1} value={bibleRefFontSize}
+                        onChange={e => update({ bibleRefFontSize: Number(e.target.value) })}
+                        className="flex-1 accent-accent" />
+                      <span className="text-xs text-zinc-400 w-8 text-right">{bibleRefFontSize}px</span>
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Posición de la versión</span>
+                    <div className="flex gap-1">
+                      {[['edge-left','⇤ Tope izq'],['edge-right','Tope der ⇥'],['inline-right','Contiguo →']].map(([val, lbl]) => (
+                        <button key={val}
+                          onClick={() => update({ bibleVersionPosition: val })}
+                          className={`flex-1 py-1.5 text-[10px] rounded transition-colors ${
+                            bibleVersionPosition === val ? 'bg-accent text-white' : 'bg-surface-600 text-zinc-300 hover:bg-surface-500'
+                          }`}
+                        >{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </SubSection>
         </div>
       )}
     </div>
+    {mediaPickerTarget && (
+      <MediaPickerModal
+        onSelect={media => {
+          if (mediaPickerTarget === 'title') update({ titleBackground: media });
+          if (mediaPickerTarget === 'bible') update({ bibleBackground: media });
+          setMediaPickerTarget(null);
+        }}
+        onClose={() => setMediaPickerTarget(null)}
+      />
+    )}
+    </>
   );
 }

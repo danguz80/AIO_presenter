@@ -37,10 +37,23 @@ async function migrate() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS event_templates (
         id         SERIAL PRIMARY KEY,
-        name       TEXT NOT NULL,
+        name       TEXT NOT NULL UNIQUE,
         items      JSONB NOT NULL DEFAULT '[]',
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+    `);
+
+    // Agregar restricción UNIQUE en name si no existe (para tablas ya creadas)
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conrelid = 'event_templates'::regclass AND contype = 'u' AND conname = 'event_templates_name_key'
+        ) THEN
+          ALTER TABLE event_templates ADD CONSTRAINT event_templates_name_key UNIQUE (name);
+        END IF;
+      END$$;
     `);
 
     console.log('✅ Migración completada correctamente');

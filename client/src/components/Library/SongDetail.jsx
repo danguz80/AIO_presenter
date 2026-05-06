@@ -39,8 +39,12 @@ export default function SongDetail() {
   const thumbBold      = outputCfg.fontBold  ?? false;
   const thumbItalic    = outputCfg.fontItalic ?? false;
 
-  // Inyectar Google Font si es necesario
-  useEffect(() => { injectGoogleFont(outputCfg.fontFamily); }, [outputCfg.fontFamily]);
+  // Inyectar Google Fonts para thumbnails
+  useEffect(() => {
+    injectGoogleFont(outputCfg.fontFamily);
+    injectGoogleFont(outputCfg.titleFontFamily);
+    injectGoogleFont(outputCfg.artistFontFamily);
+  }, [outputCfg.fontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
 
   // ── Tracking slides vistos para auto-marcar ──────────────────────────────
   const seenSlideIds = useRef(new Set());
@@ -61,7 +65,7 @@ export default function SongDetail() {
   const saveSong = useCallback(async (newSlides, pushUndo = true) => {
     if (pushUndo) {
       undoStack.current.push(
-        selectedSong.slides.map(s => ({ label: s.label, content: s.content }))
+        selectedSong.slides.map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }))
       );
       setUndoCount(undoStack.current.length);
     }
@@ -91,7 +95,7 @@ export default function SongDetail() {
     closeCtx();
     const newSlides = selectedSong.slides
       .filter((_, i) => i !== index)
-      .map(s => ({ label: s.label, content: s.content }));
+      .map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }));
     await saveSong(newSlides);
   };
 
@@ -99,23 +103,25 @@ export default function SongDetail() {
     closeCtx();
     const newSlides = selectedSong.slides
       .filter(s => s.label?.trim() !== label)
-      .map(s => ({ label: s.label, content: s.content }));
+      .map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }));
     await saveSong(newSlides);
   };
 
   const renameLabel = async (oldLabel, newLabel) => {
     if (!newLabel.trim() || newLabel.trim() === oldLabel) return;
     const newSlides = selectedSong.slides.map(s => ({
-      label:   s.label?.trim() === oldLabel ? newLabel.trim() : s.label,
-      content: s.content,
+      label:           s.label?.trim() === oldLabel ? newLabel.trim() : s.label,
+      content:         s.content,
+      slideBackground: s.slide_background ?? null,
     }));
     await saveSong(newSlides);
   };
 
   // ── Drag & drop de grupos ─────────────────────────────────────────────────
-  const [dragLabel,   setDragLabel]   = useState(null);
-  const [dropBefore,  setDropBefore]  = useState(null);
-  const [dropping,    setDropping]    = useState(false);
+  const [dragLabel,      setDragLabel]      = useState(null);
+  const [dropBefore,     setDropBefore]     = useState(null);
+  const [dropping,       setDropping]       = useState(false);
+  const [mediaDropIdx,   setMediaDropIdx]   = useState(null); // index del slide con drag-over de media
   // ── Zoom de thumbnails (número de columnas: 3-8) ──────────────────────
   const [thumbCols, setThumbCols] = useState(5);
   const handleGroupDrop = async (label, insertIdx) => {
@@ -124,8 +130,8 @@ export default function SongDetail() {
     const slides = selectedSong.slides;
     const groupSlides = slides
       .filter(s => s.label?.trim() === label)
-      .map(s => ({ label: s.label, content: s.content }));
-    const rest = slides.map(s => ({ label: s.label, content: s.content }));
+      .map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }));
+    const rest = slides.map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }));
     const newSlides = [
       ...rest.slice(0, insertIdx),
       ...groupSlides,
@@ -138,6 +144,16 @@ export default function SongDetail() {
       setDropBefore(null);
       setDropping(false);
     }
+  };
+
+  // Asignar (o quitar) fondo de media a un slide
+  const handleSlideMediaDrop = async (slideIndex, mediaObj) => {
+    const newSlides = selectedSong.slides.map((s, i) => ({
+      label:           s.label,
+      content:         s.content,
+      slideBackground: i === slideIndex ? mediaObj : (s.slide_background ?? null),
+    }));
+    await saveSong(newSlides);
   };
 
   // Función central de navegación (reutilizada por teclado, relay y móvil)
@@ -160,14 +176,15 @@ export default function SongDetail() {
       slides,            // para que el servidor guarde el contexto de navegación
       slideIndex: nextIndex,
       slideData: {
-        type:       'song',
-        songId:     selectedSong.id,
-        slideId:    slide.id,
-        songTitle:  selectedSong.title,
-        songAuthor: selectedSong.author || '',
-        songKey:    selectedSong.song_key || null,
-        label:      slide.label,
-        content:    slide.content,
+        type:            'song',
+        songId:          selectedSong.id,
+        slideId:         slide.id,
+        songTitle:       selectedSong.title,
+        songAuthor:      selectedSong.author || '',
+        songKey:         selectedSong.song_key || null,
+        label:           slide.label,
+        content:         slide.content,
+        slideBackground: slide.slide_background ?? null,
       },
       nextSlideData: nextSlide ? {
         type:    'song',
@@ -229,14 +246,15 @@ export default function SongDetail() {
       slides,
       slideIndex: index,
       slideData: {
-        type:       'song',
-        songId:     selectedSong.id,
-        slideId:    slide.id,
-        songTitle:  selectedSong.title,
-        songAuthor: selectedSong.author || '',
-        songKey:    selectedSong.song_key || null,
-        label:      slide.label,
-        content:    slide.content,
+        type:            'song',
+        songId:          selectedSong.id,
+        slideId:         slide.id,
+        songTitle:       selectedSong.title,
+        songAuthor:      selectedSong.author || '',
+        songKey:         selectedSong.song_key || null,
+        label:           slide.label,
+        content:         slide.content,
+        slideBackground: slide.slide_background ?? null,
       },
       nextSlideData: nextSlide ? {
         type:    'song',
@@ -383,11 +401,13 @@ export default function SongDetail() {
               const titleColor  = outputCfg.titleColor      ?? '#ffffff';
               const artistColor = outputCfg.artistColor     ?? '#aaaaaa';
               const showArtist  = outputCfg.titleShowArtist ?? false;
-              const colScale    = 5 / thumbCols;
-              const cfgFontSize = outputCfg.fontSize;
-              const fontScale   = (!cfgFontSize || cfgFontSize === 'auto') ? 1 : Number(cfgFontSize) / 72;
-              const titleSize   = `${Math.max(0.22, Math.min(2.0, 0.62 * colScale * fontScale)).toFixed(3)}rem`;
-              const artistSize  = `${Math.max(0.16, Math.min(1.4,  0.44 * colScale * fontScale)).toFixed(3)}rem`;
+              const colScale      = 5 / thumbCols;
+              const titleCfgSize  = outputCfg.titleFontSize;
+              const titleScale    = titleCfgSize ? Number(titleCfgSize) / 72 : 1;
+              const titleSize     = `${Math.max(0.22, Math.min(2.0, 0.62 * colScale * titleScale)).toFixed(3)}rem`;
+              const artistCfgSize = outputCfg.artistFontSize;
+              const artistScale   = artistCfgSize ? Number(artistCfgSize) / 36 : 1;
+              const artistSize    = `${Math.max(0.16, Math.min(1.4, 0.44 * colScale * artistScale)).toFixed(3)}rem`;
 
               const handleTitleClick = () => {
                 // Si ya está activo, blanquear; si no, proyectar diapositiva de título
@@ -402,10 +422,12 @@ export default function SongDetail() {
                   slides: selectedSong.slides,
                   slideIndex: -1,
                   slideData: {
-                    type:       'title',
-                    songId:     selectedSong.id,
-                    songTitle:  selectedSong.title,
-                    songAuthor: selectedSong.author || '',
+                    type:            'title',
+                    songId:          selectedSong.id,
+                    songTitle:       selectedSong.title,
+                    songAuthor:      selectedSong.author || '',
+                    songKey:         selectedSong.song_key || null,
+                    slideBackground: outputCfg.titleBackground || null,
                   },
                   nextSlideData: selectedSong.slides[0]
                     ? { type: 'song', label: selectedSong.slides[0].label, content: selectedSong.slides[0].content }
@@ -425,7 +447,17 @@ export default function SongDetail() {
                   ].join(' ')}
                   style={{ aspectRatio: '16/10' }}
                 >
-                  <div className="absolute inset-0 bg-zinc-900" />
+                  {/* Fondo: imagen/video del titleBackground o color sólido */}
+                  {outputCfg.titleBackground ? (
+                    outputCfg.titleBackground.mediaType === 'video'
+                      ? <video src={outputCfg.titleBackground.url} muted playsInline preload="metadata"
+                          className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
+                      : <img src={outputCfg.titleBackground.url} alt=""
+                          className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
+                  ) : (
+                    <div className="absolute inset-0 bg-zinc-900" style={{ zIndex: 0 }} />
+                  )}
+                  {outputCfg.titleBackground && <div className="absolute inset-0 bg-black/40" style={{ zIndex: 1 }} />}
                   {/* Ícono T */}
                   <span className="absolute top-1 left-1.5 text-[9px] font-bold text-zinc-500 z-10 leading-none">T</span>
                   {titleActive && (
@@ -475,39 +507,78 @@ export default function SongDetail() {
               const fontScale     = (!cfgFontSize || cfgFontSize === 'auto') ? 1 : Number(cfgFontSize) / 72;
               const thumbFontSize = `${Math.max(0.18, Math.min(2.4, baseSize * colScale * fontScale)).toFixed(3)}rem`;
               const isDroppingHere = dropBefore === index;
+              const isMediaDropHere = mediaDropIdx === index;
+              const slideBg = slide.slide_background ?? null;
 
               return (
                 <div key={slide.id} style={{ display: 'contents' }}>
                   <div
                     onClick={() => handleSlideClick(slide, index)}
                     onContextMenu={e => openCtx(e, slide, index)}
-                    onDragOver={e => { if (dragLabel) { e.preventDefault(); setDropBefore(index); } }}
+                    onDragOver={e => {
+                      // Media drag tiene prioridad
+                      if (e.dataTransfer.types.includes('application/aio-media')) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'copy';
+                        setMediaDropIdx(index);
+                        return;
+                      }
+                      if (dragLabel) { e.preventDefault(); setDropBefore(index); }
+                    }}
+                    onDragLeave={() => setMediaDropIdx(null)}
                     onDrop={e => {
                       e.preventDefault();
                       e.stopPropagation();
+                      setMediaDropIdx(null);
+                      // Media drop
+                      const raw = e.dataTransfer.getData('application/aio-media');
+                      if (raw) {
+                        try {
+                          const media = JSON.parse(raw);
+                          handleSlideMediaDrop(index, { mediaType: media.type, filePath: media.path, fileName: media.name, url: media.url });
+                        } catch {}
+                        return;
+                      }
+                      // Group label drop
                       const lbl = e.dataTransfer.getData('text/plain');
-                      handleGroupDrop(lbl, index);
+                      if (lbl) handleGroupDrop(lbl, index);
                     }}
                     className={[
                       'relative flex flex-col cursor-pointer rounded-md overflow-hidden transition-all select-none',
                       'border-2',
+                      isMediaDropHere ? 'border-blue-400 shadow-lg shadow-blue-900/40' :
                       active   ? 'border-green-400 shadow-lg shadow-green-900/40' :
                       selected ? 'border-accent shadow-md shadow-accent/20' :
                                  'border-transparent hover:border-zinc-500',
                     ].join(' ')}
                     style={{ aspectRatio: '16/10' }}
                   >
-                  {/* Fondo oscuro tipo presentación */}
-                  <div className="absolute inset-0 bg-zinc-900" />
+                  {/* Fondo del slide (color base o media guardada) */}
+                  {slideBg ? (
+                    slideBg.mediaType === 'video'
+                      ? <video key={slideBg.url} src={slideBg.url} muted playsInline preload="metadata"
+                          className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
+                      : <img src={slideBg.url} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
+                  ) : (
+                    <div className="absolute inset-0 bg-zinc-900" />
+                  )}
+
+                  {/* Overlay semitransparente cuando hay fondo para legibilidad del texto */}
+                  {slideBg && <div className="absolute inset-0 bg-black/40" style={{ zIndex: 1 }} />}
 
                   {/* Número */}
-                  <span className="absolute top-1 left-1.5 text-[9px] font-bold text-zinc-500 z-10 leading-none">
+                  <span className="absolute top-1 left-1.5 text-[9px] font-bold text-zinc-300 z-10 leading-none drop-shadow">
                     {index + 1}
                   </span>
 
                   {/* Indicador EN VIVO */}
                   {active && (
                     <span className="absolute top-1 right-1 z-10 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  )}
+
+                  {/* Indicador de fondo asignado */}
+                  {slideBg && !active && (
+                    <span className="absolute top-1 right-1 z-10 text-[8px] text-blue-300 leading-none drop-shadow" title={slideBg.fileName}>▶</span>
                   )}
 
                   {/* Texto del slide centrado — línea por línea como el proyector */}
@@ -536,6 +607,13 @@ export default function SongDetail() {
                       <p className={`text-[8px] font-semibold text-center truncate ${text}`}>
                         {slide.label}
                       </p>
+                    </div>
+                  )}
+
+                  {/* Overlay de media-drop */}
+                  {isMediaDropHere && (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-blue-500/30 rounded-md">
+                      <span className="text-[9px] font-bold text-blue-200 drop-shadow">Soltar como fondo</span>
                     </div>
                   )}
 
@@ -587,6 +665,15 @@ export default function SongDetail() {
               </div>
             )}
             <div className="h-px bg-surface-700 my-1" />
+            {/* Quitar fondo si tiene uno asignado */}
+            {ctxMenu.slide.slide_background && (
+              <button
+                className="w-full text-left px-3 py-1.5 hover:bg-surface-700 text-zinc-300 transition-colors"
+                onClick={() => { handleSlideMediaDrop(ctxMenu.index, null); closeCtx(); }}
+              >
+                🖼 Quitar fondo de media
+              </button>
+            )}
             <button
               className="w-full text-left px-3 py-1.5 hover:bg-red-900/40 text-red-400 transition-colors"
               onClick={() => deleteSlide(ctxMenu.index)}
