@@ -14,6 +14,8 @@ const mediaRouter  = require('./routes/media');
 const eventsRouter          = require('./routes/events');
 const eventTemplatesRouter  = require('./routes/eventTemplates');
 const playsRouter           = require('./routes/plays');
+const authRouter   = require('./routes/auth');
+const syncRouter   = require('./routes/sync');
 const ndi          = require('./ndi/ndiSender');
 
 const app    = express();
@@ -83,6 +85,44 @@ let stageTemplates = [];
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS time_sig   VARCHAR(20)`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS link       TEXT`);
     await pool.query(`ALTER TABLE song_slides ADD COLUMN IF NOT EXISTS slide_background JSONB`);
+    // Migraciones sync con Google Drive
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_file_id  TEXT`);
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sync_users (
+        id              SERIAL PRIMARY KEY,
+        google_id       TEXT UNIQUE NOT NULL,
+        email           TEXT NOT NULL,
+        display_name    TEXT,
+        avatar_url      TEXT,
+        is_admin        BOOLEAN DEFAULT FALSE,
+        can_push        BOOLEAN DEFAULT FALSE,
+        can_push_all    BOOLEAN DEFAULT FALSE,
+        sync_direction  TEXT DEFAULT 'pull',
+        drive_folder_id TEXT,
+        last_sync_at    TIMESTAMPTZ,
+        access_token    TEXT,
+        refresh_token   TEXT,
+        token_expiry    BIGINT,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sync_invitations (
+        id          SERIAL PRIMARY KEY,
+        code        TEXT UNIQUE NOT NULL,
+        label       TEXT,
+        email       TEXT,
+        can_push    BOOLEAN DEFAULT FALSE,
+        can_push_all BOOLEAN DEFAULT FALSE,
+        created_by  INT REFERENCES sync_users(id) ON DELETE SET NULL,
+        used_by     INT REFERENCES sync_users(id) ON DELETE SET NULL,
+        used_at     TIMESTAMPTZ,
+        expires_at  TIMESTAMPTZ,
+        created_at  TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
     const { rows } = await pool.query(
       "SELECT key, value FROM app_settings WHERE key IN ('stageConfig','stageTemplates','outputConfig','outputTemplates','virtualConfig','virtualTemplates','displayConfig','appTheme')"
     );
@@ -609,6 +649,8 @@ app.use('/api/media',  mediaRouter);
 app.use('/api/events',          eventsRouter);
 app.use('/api/event-templates', eventTemplatesRouter);
 app.use('/api/events',          playsRouter); // plays nested under /api/events/:id/plays
+app.use('/auth',      authRouter);
+app.use('/api/sync',  syncRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
