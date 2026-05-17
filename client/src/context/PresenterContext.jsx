@@ -1,8 +1,7 @@
-import { createContext, useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import { io } from 'socket.io-client';
 import api from '../hooks/useApi';
-
-export const PresenterContext = createContext(null);
+import { PresenterContext } from './presenterContextInstance';
 
 // ─── stageConfig por defecto + persistencia en localStorage ─────────────────
 const DEFAULT_STAGE_CONFIG = {
@@ -174,8 +173,21 @@ const initialState = {
   eventPlays: new Set(),        // song_ids ya tocadas
   eventPlaysContext: null,      // { eventId, occurrenceDate } para saber a qué evento pertenecen
 
+  // Configuración de asignación de pantallas físicas
+  displayConfig: {
+    principalScreenId:   null,
+    escenarioScreenId:   null,
+    principalResolution: { width: 1920, height: 1080 },
+    escenarioResolution: { width: 1920, height: 1080 },
+    virtualResolution:   { width: 1920, height: 1080 },
+    virtualOutputs:      [],
+  },
+
   // Modo reservas: nextSong salta al separador de reservas
   reservasMode: false,
+
+  // Tema de color de la UI
+  appTheme: localStorage.getItem('aio_theme') ?? 'oscuro',
 
   // Solicitud de navegación desde móvil (u otro cliente)
   navigateRequest: null, // { dir: 'next'|'prev', ts: number }
@@ -258,6 +270,10 @@ function reducer(state, action) {
     }
     case 'SET_RESERVAS_MODE':
       return { ...state, reservasMode: action.payload };
+    case 'SET_DISPLAY_CONFIG':
+      return { ...state, displayConfig: { ...state.displayConfig, ...action.payload } };
+    case 'SET_APP_THEME':
+      return { ...state, appTheme: action.payload };
     default:
       return state;
   }
@@ -312,6 +328,8 @@ export function PresenterProvider({ children }) {
     socket.on('navigate',          (dir)  => dispatch({ type: 'NAVIGATE',          payload: { dir, ts: Date.now() } }));
     socket.on('event:plays',       (data) => dispatch({ type: 'SET_EVENT_PLAYS',   payload: data }));
     socket.on('event:reservas_mode', (mode) => dispatch({ type: 'SET_RESERVAS_MODE', payload: mode }));
+    socket.on('display:config',      (data) => dispatch({ type: 'SET_DISPLAY_CONFIG', payload: data }));
+    socket.on('app:theme',           (theme) => dispatch({ type: 'SET_APP_THEME',     payload: theme }));
     return () => socket.disconnect();
   }, []);
 
@@ -511,6 +529,16 @@ export function PresenterProvider({ children }) {
     setReservasMode: (mode) => {
       dispatch({ type: 'SET_RESERVAS_MODE', payload: mode });
       socketRef.current?.emit('event:reservas_mode', mode);
+    },
+
+    setDisplayConfig: (config) => {
+      dispatch({ type: 'SET_DISPLAY_CONFIG', payload: config });
+      socketRef.current?.emit('settings:displays:save', config);
+    },
+
+    setAppTheme: (theme) => {
+      dispatch({ type: 'SET_APP_THEME', payload: theme });
+      socketRef.current?.emit('settings:theme', theme);
     },
   };
 

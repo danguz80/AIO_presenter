@@ -1,12 +1,16 @@
 import { useState } from 'react';
-import { X, Smartphone } from 'lucide-react';
+import { X, Smartphone, ChevronDown } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import StageControls   from '../Controls/StageControls';
 import OutputControls  from '../Controls/OutputControls';
 import VirtualControls from '../Controls/VirtualControls';
+import DisplaysPanel   from './DisplaysPanel';
+import ThemePanel      from './ThemePanel';
 
 export default function SettingsPanel({ mobileUrl, onClose }) {
-  const [showQR, setShowQR] = useState(false);
+  const [showQR, setShowQR]             = useState(false);
+  const [showSalidas, setShowSalidas]   = useState(false);
+  const [showTema, setShowTema]         = useState(false);
 
   return (
     <>
@@ -65,6 +69,44 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
           <OutputControls />
           <StageControls />
           <VirtualControls />
+
+          {/* Sección: Tema (colapsable) */}
+          <div className="border-b border-surface-700">
+            <button
+              onClick={() => setShowTema(v => !v)}
+              className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-surface-700/50 transition-colors"
+            >
+              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Tema de color</span>
+              <ChevronDown
+                size={14}
+                className={`text-zinc-500 transition-transform duration-200 ${showTema ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {showTema && (
+              <div className="px-4 pb-4">
+                <ThemePanel />
+              </div>
+            )}
+          </div>
+
+          {/* Sección: Salidas (colapsable) */}
+          <div className="border-b border-surface-700">
+            <button
+              onClick={() => setShowSalidas(v => !v)}
+              className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-surface-700/50 transition-colors"
+            >
+              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Salidas</span>
+              <ChevronDown
+                size={14}
+                className={`text-zinc-500 transition-transform duration-200 ${showSalidas ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {showSalidas && (
+              <div className="px-4 pb-4">
+                <DisplaysPanel />
+              </div>
+            )}
+          </div>
         </div>
       </aside>
     </>

@@ -5,15 +5,15 @@ module.exports = {
     extend: {
       colors: {
         surface: {
-          900: '#0f0f11',
-          800: '#18181b',
-          700: '#27272a',
-          600: '#3f3f46',
+          900: 'rgb(var(--surface-900) / <alpha-value>)',
+          800: 'rgb(var(--surface-800) / <alpha-value>)',
+          700: 'rgb(var(--surface-700) / <alpha-value>)',
+          600: 'rgb(var(--surface-600) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#6366f1',
-          hover:   '#4f46e5',
-          light:   '#a5b4fc',
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          hover:   'rgb(var(--accent-hover) / <alpha-value>)',
+          light:   'rgb(var(--accent-light) / <alpha-value>)',
         },
       },
       fontFamily: {

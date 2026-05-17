@@ -84,7 +84,7 @@ let stageTemplates = [];
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS link       TEXT`);
     await pool.query(`ALTER TABLE song_slides ADD COLUMN IF NOT EXISTS slide_background JSONB`);
     const { rows } = await pool.query(
-      "SELECT key, value FROM app_settings WHERE key IN ('stageConfig','stageTemplates','outputConfig','outputTemplates','virtualConfig','virtualTemplates')"
+      "SELECT key, value FROM app_settings WHERE key IN ('stageConfig','stageTemplates','outputConfig','outputTemplates','virtualConfig','virtualTemplates','displayConfig','appTheme')"
     );
     for (const row of rows) {
       if (row.key === 'stageConfig')      { stageConfig    = { ...DEFAULT_STAGE_CONFIG, ...row.value }; console.log('[Settings] stageConfig cargado desde DB'); }
@@ -93,6 +93,8 @@ let stageTemplates = [];
       if (row.key === 'outputTemplates')  { outputTemplates = Array.isArray(row.value) ? row.value : []; }
       if (row.key === 'virtualConfig')    { virtualConfig   = { ...virtualConfig, ...row.value }; console.log('[Settings] virtualConfig cargado desde DB'); }
       if (row.key === 'virtualTemplates') { virtualTemplates = Array.isArray(row.value) ? row.value : []; }
+      if (row.key === 'displayConfig')    { displayConfig = { ...displayConfig, ...row.value }; console.log('[Settings] displayConfig cargado desde DB'); }
+      if (row.key === 'appTheme')         { appTheme = typeof row.value === 'string' ? row.value : (row.value?.theme ?? 'oscuro'); console.log('[Settings] appTheme cargado:', appTheme); }
     }
   } catch (e) {
     console.error('[Settings] Error cargando settings desde DB:', e.message);
@@ -202,6 +204,43 @@ let virtualConfig = {
   bibleRefPosition:  'bottom-right',
 };
 
+/** Tema de color de la UI */
+let appTheme = 'oscuro';
+
+async function saveAppTheme() {
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('appTheme', $1::jsonb)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(appTheme)]
+    );
+  } catch (e) {
+    console.error('[Settings] Error guardando appTheme:', e.message);
+  }
+}
+
+/** Configuración de asignación de pantallas físicas */
+let displayConfig = {
+  principalScreenId:   null,  // id de pantalla asignada como Principal
+  escenarioScreenId:   null,  // id de pantalla asignada como Escenario
+  principalResolution: { width: 1920, height: 1080 },
+  escenarioResolution: { width: 1920, height: 1080 },
+  virtualResolution:   { width: 1920, height: 1080 },
+  virtualOutputs:      [],    // [{ id, name, enabled }]
+};
+
+async function saveDisplayConfig() {
+  try {
+    await pool.query(
+      `INSERT INTO app_settings (key, value) VALUES ('displayConfig', $1)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [JSON.stringify(displayConfig)]
+    );
+  } catch (e) {
+    console.error('[Settings] Error guardando displayConfig:', e.message);
+  }
+}
+
 /** Configuración de la salida principal (proyector) */
 let outputConfig = {
   lyricsColor:      '#ffffff',
@@ -279,6 +318,8 @@ io.on('connection', (socket) => {
 
   // Enviar estado actual al cliente que se conecta
   socket.emit('live:state',      liveState);
+  socket.emit('display:config',  displayConfig);
+  socket.emit('app:theme',       appTheme);
   socket.emit('stage:config',    stageConfig);
   socket.emit('stage:templates', stageTemplates);
   socket.emit('virtual:config',  virtualConfig);
@@ -439,6 +480,20 @@ io.on('connection', (socket) => {
     virtualTemplates = Array.isArray(templates) ? templates : [];
     saveVirtualTemplates();
     io.emit('virtual:templates', virtualTemplates);
+  });
+
+  // Guardar tema de la UI
+  socket.on('settings:theme', (theme) => {
+    appTheme = String(theme);
+    saveAppTheme();
+    io.emit('app:theme', appTheme);
+  });
+
+  // Guardar configuración de pantallas físicas
+  socket.on('settings:displays:save', (config) => {
+    displayConfig = { ...displayConfig, ...config };
+    saveDisplayConfig();
+    io.emit('display:config', displayConfig);
   });
 
   // Actualizar configuración virtual / NDI

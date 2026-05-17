@@ -4,29 +4,7 @@ import { Music, ZoomIn, ZoomOut } from 'lucide-react';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
 import { stripChords, stripComments, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
-
-// Colores por tipo de sección
-const LABEL_COLORS = {
-  intro:     { bg: 'bg-indigo-600',  text: 'text-white' },
-  verso:     { bg: 'bg-blue-600',    text: 'text-white' },
-  'pre-coro':{ bg: 'bg-fuchsia-600', text: 'text-white' },
-  precoro:   { bg: 'bg-fuchsia-600', text: 'text-white' },
-  coro:      { bg: 'bg-purple-600',  text: 'text-white' },
-  puente:    { bg: 'bg-pink-600',    text: 'text-white' },
-  bridge:    { bg: 'bg-pink-600',    text: 'text-white' },
-  outro:     { bg: 'bg-orange-600',  text: 'text-white' },
-  final:     { bg: 'bg-orange-600',  text: 'text-white' },
-  titulo:    { bg: 'bg-zinc-700',    text: 'text-white' },
-  title:     { bg: 'bg-zinc-700',    text: 'text-white' },
-};
-
-function getLabelColor(label) {
-  if (!label) return { bg: 'bg-zinc-700', text: 'text-white' };
-  const key = label.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s*\d+$/, '').trim();
-  return LABEL_COLORS[key] || { bg: 'bg-zinc-600', text: 'text-white' };
-}
+import { getLabelColor } from '../../utils/labelColors';
 
 export default function SongDetail() {
   const { state, actions } = usePresenter();
@@ -157,42 +135,92 @@ export default function SongDetail() {
   };
 
   // Función central de navegación (reutilizada por teclado, relay y móvil)
-  const navigate = (dir) => {
+  const navigate = async (dir) => {
     const slides = selectedSong?.slides;
     if (!slides || slides.length === 0) return;
     const currentIndex = selectedSlide
       ? slides.findIndex(s => s.id === selectedSlide.id)
       : -1;
     let nextIndex = null;
-    if (dir === 'next') nextIndex = currentIndex < slides.length - 1 ? currentIndex + 1 : currentIndex;
+    if (dir === 'next') nextIndex = currentIndex < slides.length - 1 ? currentIndex + 1 : null;
     else if (dir === 'prev') nextIndex = currentIndex > 0 ? currentIndex - 1 : 0;
-    if (nextIndex === null || nextIndex === currentIndex) return;
-    const slide = slides[nextIndex];
-    const nextSlide = slides[nextIndex + 1] || null;
-    setLocalSelectedId(slide.id);
-    actions.selectSlide(slide);
-    actions.showSlide({
-      type:       'song',
-      slides,            // para que el servidor guarde el contexto de navegación
-      slideIndex: nextIndex,
-      slideData: {
-        type:            'song',
-        songId:          selectedSong.id,
-        slideId:         slide.id,
-        songTitle:       selectedSong.title,
-        songAuthor:      selectedSong.author || '',
-        songKey:         selectedSong.song_key || null,
-        label:           slide.label,
-        content:         slide.content,
-        slideBackground: slide.slide_background ?? null,
-      },
-      nextSlideData: nextSlide ? {
-        type:    'song',
-        label:   nextSlide.label,
-        content: nextSlide.content,
-      } : null,
-    });
-    trackSlide(slide.id);
+
+    // Si hay siguiente slide en la misma canción, navegar normalmente
+    if (nextIndex !== null && nextIndex !== currentIndex) {
+      const slide = slides[nextIndex];
+      const nextSlide = slides[nextIndex + 1] || null;
+      setLocalSelectedId(slide.id);
+      actions.selectSlide(slide);
+      actions.showSlide({
+        type:       'song',
+        slides,
+        slideIndex: nextIndex,
+        slideData: {
+          type:            'song',
+          songId:          selectedSong.id,
+          slideId:         slide.id,
+          songTitle:       selectedSong.title,
+          songAuthor:      selectedSong.author || '',
+          songKey:         selectedSong.song_key || null,
+          label:           slide.label,
+          content:         slide.content,
+          slideBackground: slide.slide_background ?? null,
+        },
+        nextSlideData: nextSlide ? {
+          type:    'song',
+          label:   nextSlide.label,
+          content: nextSlide.content,
+        } : null,
+      });
+      trackSlide(slide.id);
+      return;
+    }
+
+    // Estamos en el último slide y se pide 'next' → saltar a la primera diapo de la siguiente canción del setlist
+    if (dir === 'next' && nextIndex === null && schedule?.length > 0) {
+      const currentSongId = selectedSong.id;
+      const currentScheduleIdx = schedule.findIndex(s => s.song_id === currentSongId);
+      if (currentScheduleIdx === -1) return;
+      // Buscar la siguiente entrada con song_id (saltando separadores)
+      let nextSongItem = null;
+      for (let i = currentScheduleIdx + 1; i < schedule.length; i++) {
+        if (schedule[i].song_id) { nextSongItem = schedule[i]; break; }
+      }
+      if (!nextSongItem) return;
+      // Cargar la siguiente canción completa (con sus slides)
+      try {
+        const nextSong = await actions.loadSongDetail(nextSongItem.song_id);
+        if (!nextSong?.slides?.length) return;
+        const firstSlide = nextSong.slides[0];
+        const secondSlide = nextSong.slides[1] || null;
+        setLocalSelectedId(firstSlide.id);
+        actions.selectSlide(firstSlide);
+        actions.showSlide({
+          type:       'song',
+          slides:     nextSong.slides,
+          slideIndex: 0,
+          slideData: {
+            type:            'song',
+            songId:          nextSong.id,
+            slideId:         firstSlide.id,
+            songTitle:       nextSong.title,
+            songAuthor:      nextSong.author || '',
+            songKey:         nextSong.song_key || null,
+            label:           firstSlide.label,
+            content:         firstSlide.content,
+            slideBackground: firstSlide.slide_background ?? null,
+          },
+          nextSlideData: secondSlide ? {
+            type:    'song',
+            label:   secondSlide.label,
+            content: secondSlide.content,
+          } : null,
+        });
+        trackSlide(firstSlide.id);
+      } catch (err) {
+        console.error('Error al cargar la siguiente canción:', err);
+      }
+    }
   };
 
   // Navegación por teclado
@@ -215,7 +243,7 @@ export default function SongDetail() {
       window.removeEventListener('keydown', handleKey);
       relay.close();
     };
-  }, [selectedSong, selectedSlide, actions]);
+  }, [selectedSong, selectedSlide, schedule, actions]);
 
   if (!selectedSong) {
     return (
@@ -344,7 +372,7 @@ export default function SongDetail() {
         return (
           <div className="px-3 pt-2 pb-1 border-b border-surface-700 flex flex-wrap gap-1 shrink-0">
             {labels.map(lbl => {
-              const { bg, text } = getLabelColor(lbl);
+              const color = getLabelColor(lbl);
               const count = selectedSong.slides.filter(s => s.label?.trim() === lbl).length;
               const firstSlide = selectedSong.slides.find(s => s.label?.trim() === lbl);
               return (
@@ -364,7 +392,8 @@ export default function SongDetail() {
                       : selectedSong.slides.length;
                     handleGroupDrop(lbl, insertIdx);
                   }}
-                  className={`${bg} ${text} px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity cursor-grab active:cursor-grabbing`}
+                  className="px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity cursor-grab active:cursor-grabbing text-white"
+                  style={{ backgroundColor: color }}
                   title="Clic para insertar · Arrastra al grid para insertar en posición"
                 >
                   {lbl}
@@ -484,7 +513,7 @@ export default function SongDetail() {
             {selectedSong.slides.map((slide, index) => {
               const active   = isLive(slide);
               const selected = localSelectedId === slide.id;
-              const { bg, text } = getLabelColor(slide.label);
+              const labelColor = getLabelColor(slide.label);
               // Preprocesar líneas igual que el proyector: respetar saltos, filtrar comentarios
               const rawLines = (slide.content || '').split('\n');
               const visibleLines = rawLines
@@ -603,8 +632,8 @@ export default function SongDetail() {
 
                   {/* Banner de etiqueta */}
                   {slide.label && (
-                    <div className={`absolute bottom-0 inset-x-0 z-10 px-1 py-0.5 ${bg}`}>
-                      <p className={`text-[8px] font-semibold text-center truncate ${text}`}>
+                    <div className="absolute bottom-0 inset-x-0 z-10 px-1 py-0.5" style={{ backgroundColor: labelColor }}>
+                      <p className="text-[8px] font-semibold text-center truncate text-white">
                         {slide.label}
                       </p>
                     </div>

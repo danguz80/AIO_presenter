@@ -2,29 +2,7 @@ import { useEffect, useState } from 'react';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
-
-// Colores por etiqueta (misma paleta que en el controlador)
-const LABEL_COLORS = {
-  intro:      '#4f46e5',
-  verso:      '#2563eb',
-  'pre-coro': '#c026d3',
-  precoro:    '#c026d3',
-  coro:       '#9333ea',
-  puente:     '#db2777',
-  bridge:     '#db2777',
-  outro:      '#e11d48',
-  final:      '#e11d48',
-  titulo:     '#52525b',
-  title:      '#52525b',
-};
-
-function getSectionColor(label) {
-  if (!label) return '#52525b';
-  const key = label.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s*\d+$/, '').trim();
-  return LABEL_COLORS[key] ?? '#52525b';
-}
+import { getLabelColor } from '../utils/labelColors';
 
 const FONT_PRESETS = {
   sans:      'system-ui, -apple-system, sans-serif',
@@ -153,7 +131,7 @@ export default function StagePage() {
   }, [label, slideData]);
 
   const effectiveLabel = label || lastLabel;
-  const sectionColor = getSectionColor(effectiveLabel);
+  const sectionColor = getLabelColor(effectiveLabel);
   const slideNum     = (slideIndex ?? 0) + 1;
 
   // Siguiente canción del listado del día (saltando separadores y ya tocadas)
@@ -219,8 +197,10 @@ export default function StagePage() {
       {/* Capa de fondo multimedia (primerPlano=false) */}
       {hasBgMedia && (
         backgroundMedia.mediaType === 'video'
-          ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop muted playsInline
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+          ? showVideo
+            ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop muted playsInline
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+            : null
           : <img key={backgroundMedia.url} src={backgroundMedia.url} alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
       )}
@@ -309,7 +289,7 @@ export default function StagePage() {
             {showSideLabel && nextSlideData && !isBlank && nextSlideData.label && (
               <div
                 className="w-14 shrink-0 flex items-center justify-center"
-                style={{ backgroundColor: `${getSectionColor(nextSlideData.label)}88` }}
+                style={{ backgroundColor: `${getLabelColor(nextSlideData.label)}88` }}
               >
                 <span
                   className="text-white/70 tracking-widest uppercase select-none"

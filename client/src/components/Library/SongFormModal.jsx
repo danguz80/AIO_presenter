@@ -2,27 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import { X, Trash2, Tag, Plus } from 'lucide-react';
 import api from '../../hooks/useApi';
-
-// Colores por tipo de label — hex para usar en style (evita purga de Tailwind)
-const LABEL_COLORS = {
-  intro:      '#4f46e5',
-  verso:      '#2563eb',
-  'pre-coro': '#c026d3',
-  precoro:    '#c026d3',
-  coro:       '#9333ea',
-  puente:     '#db2777',
-  bridge:     '#db2777',
-  outro:      '#e11d48',
-  final:      '#e11d48',
-  tag:        '#f97316',
-  titulo:     '#52525b',
-  título:     '#52525b',
-};
-
-function getLabelColor(label) {
-  const key = label.toLowerCase().replace(/\s*\d+$/, '').trim();
-  return LABEL_COLORS[key] || '#3f3f46';
-}
+import { getLabelColor } from '../../utils/labelColors';
 
 // Convierte array de slides → texto editable
 // Slides del mismo label separados por línea en blanco.

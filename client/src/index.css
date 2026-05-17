@@ -2,6 +2,108 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Variables de tema ── */
+/* Los valores son canales RGB separados por espacio para compatibilidad
+   con los modificadores de opacidad de Tailwind (e.g. bg-accent/15).  */
+
+:root,
+html.theme-oscuro {
+  --surface-900: 15 15 17;
+  --surface-800: 24 24 27;
+  --surface-700: 39 39 42;
+  --surface-600: 63 63 70;
+  --accent:       99 102 241;
+  --accent-hover: 79 70 229;
+  --accent-light: 165 180 252;
+  --bg-root: #0f0f11;
+  /* Colores de etiquetas de sección */
+  --label-a: #9333ea;
+  --label-b: #2563eb;
+  --label-c: #c026d3;
+  --label-d: #e11d48;
+  --label-n: #52525b;
+}
+
+html.theme-azul {
+  --surface-900: 5 12 28;
+  --surface-800: 10 20 48;
+  --surface-700: 15 32 72;
+  --surface-600: 28 50 100;
+  --accent:       56 189 248;
+  --accent-hover: 14 165 233;
+  --accent-light: 186 230 253;
+  --bg-root: #050c1c;
+  --label-a: #0ea5e9;
+  --label-b: #3b82f6;
+  --label-c: #6366f1;
+  --label-d: #0891b2;
+  --label-n: #334155;
+}
+
+html.theme-verde {
+  --surface-900: 5 14 10;
+  --surface-800: 9 22 15;
+  --surface-700: 15 38 25;
+  --surface-600: 25 58 38;
+  --accent:       16 185 129;
+  --accent-hover: 5 150 105;
+  --accent-light: 110 231 183;
+  --bg-root: #050e0a;
+  --label-a: #059669;
+  --label-b: #0d9488;
+  --label-c: #16a34a;
+  --label-d: #65a30d;
+  --label-n: #374151;
+}
+
+html.theme-violeta {
+  --surface-900: 12 8 20;
+  --surface-800: 20 13 36;
+  --surface-700: 32 20 58;
+  --surface-600: 50 32 88;
+  --accent:       167 139 250;
+  --accent-hover: 139 92 246;
+  --accent-light: 221 214 254;
+  --bg-root: #0c0814;
+  --label-a: #7c3aed;
+  --label-b: #4f46e5;
+  --label-c: #a21caf;
+  --label-d: #db2777;
+  --label-n: #4b5563;
+}
+
+html.theme-rojo {
+  --surface-900: 20 8 8;
+  --surface-800: 32 10 10;
+  --surface-700: 52 16 16;
+  --surface-600: 78 25 25;
+  --accent:       244 63 94;
+  --accent-hover: 225 29 72;
+  --accent-light: 253 164 175;
+  --bg-root: #140808;
+  --label-a: #dc2626;
+  --label-b: #ea580c;
+  --label-c: #be185d;
+  --label-d: #b45309;
+  --label-n: #52525b;
+}
+
+html.theme-ambar {
+  --surface-900: 20 15 5;
+  --surface-800: 32 24 8;
+  --surface-700: 50 38 14;
+  --surface-600: 72 56 20;
+  --accent:       251 191 36;
+  --accent-hover: 245 158 11;
+  --accent-light: 253 230 138;
+  --bg-root: #140f05;
+  --label-a: #d97706;
+  --label-b: #ca8a04;
+  --label-c: #c2410c;
+  --label-d: #78350f;
+  --label-n: #4b5563;
+}
+
 @layer base {
   * {
     box-sizing: border-box;
@@ -12,7 +114,7 @@
   html, body, #root {
     height: 100%;
     width: 100%;
-    background-color: #0f0f11;
+    background-color: var(--bg-root, #0f0f11);
     color: #e4e4e7;
     font-family: 'Inter', sans-serif;
   }
@@ -29,14 +131,14 @@
     width: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #18181b;
+    background: rgb(var(--surface-800));
   }
   ::-webkit-scrollbar-thumb {
-    background: #3f3f46;
+    background: rgb(var(--surface-600));
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #52525b;
+    background: rgb(var(--surface-600) / 0.8);
   }
 }
 

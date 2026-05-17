@@ -5,21 +5,13 @@ import { injectGoogleFont } from '../../utils/fontUtils';
 import VirtualRenderer from '../shared/VirtualRenderer';
 import OutputRenderer from '../shared/OutputRenderer';
 
-const LABEL_COLORS = {
-  intro: '#4f46e5', verso: '#2563eb', 'pre-coro': '#c026d3', precoro: '#c026d3',
-  coro: '#9333ea', puente: '#db2777', bridge: '#db2777',
-  outro: '#e11d48', final: '#e11d48', titulo: '#52525b', title: '#52525b',
-};
-function getSectionColor(label) {
-  if (!label) return '#52525b';
-  const key = label.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s*\d+$/, '').trim();
-  return LABEL_COLORS[key] ?? '#52525b';
-}
+import { getLabelColor } from '../../utils/labelColors';
 
 export default function LivePreview() {
   const { state } = usePresenter();
   const { liveState, stageConfig, virtualConfig, schedule, eventPlays, reservasMode } = state;
-  const outputCfg = state.outputConfig ?? {};
+  const outputCfg    = state.outputConfig  ?? {};
+  const displayCfg   = state.displayConfig ?? {};
 
   // Medir el contenedor del preview Principal para canvas escalado
   const principalRef = useRef(null);
@@ -72,8 +64,27 @@ export default function LivePreview() {
     };
   })();
 
-  const openWindow = (path) =>
-    window.open(path, '_blank', 'width=1280,height=720,menubar=no,toolbar=no,location=no');
+  const openWindow = (path, screenId, windowName, resolution) => {
+    const res = resolution ?? { width: 1920, height: 1080 };
+    // Intentar abrir en la pantalla asignada si getScreenDetails está disponible
+    if (screenId && 'getScreenDetails' in window) {
+      window.getScreenDetails().then(sd => {
+        const [, sLeft, sTop] = (screenId ?? '').split(':');
+        const target = Array.from(sd.screens).find(
+          s => String(s.left ?? 0) === sLeft && String(s.top ?? 0) === sTop
+        );
+        if (target) {
+          window.open(path, windowName, `left=${target.left},top=${target.top},width=${target.width},height=${target.height},menubar=no,toolbar=no,location=no`);
+          return;
+        }
+        window.open(path, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+      }).catch(() => {
+        window.open(path, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+      });
+    } else {
+      window.open(path, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+    }
+  };
 
   return (
     <div className="flex-1 min-h-0 border-b border-surface-700 p-3 flex flex-col gap-2 overflow-hidden">
@@ -84,32 +95,36 @@ export default function LivePreview() {
         dotColor="bg-orange-400"
         borderColor={live ? 'border-orange-400' : 'border-surface-600'}
         live={live}
-        onClick={() => openWindow('/output')}
+        onClick={() => openWindow('/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution)}
       >
         {/* Canvas escalado: mismo render que /output, reducido proporcionalmente */}
         <div ref={principalRef} className="w-full h-full relative overflow-hidden">
-          {principalW > 0 && (
-            <div style={{
-              position:        'absolute',
-              top:             0,
-              left:            0,
-              width:           '1280px',
-              height:          '720px',
-              transform:       `scale(${principalW / 1280})`,
-              transformOrigin: 'top left',
-              pointerEvents:   'none',
-            }}>
-              <OutputRenderer
-                cfg={outputCfg}
-                slideData={liveState.slideData}
-                isBlank={liveState.isBlank}
-                background={liveState.background}
-                slideIndex={liveState.slideIndex}
-                totalSlides={liveState.totalSlides}
-                backgroundMedia={liveState.backgroundMedia}
-              />
-            </div>
-          )}
+          {principalW > 0 && (() => {
+            const res = displayCfg.principalResolution ?? { width: 1920, height: 1080 };
+            const scale = principalW / res.width;
+            return (
+              <div style={{
+                position:        'absolute',
+                top:             0,
+                left:            0,
+                width:           `${res.width}px`,
+                height:          `${res.height}px`,
+                transform:       `scale(${scale})`,
+                transformOrigin: 'top left',
+                pointerEvents:   'none',
+              }}>
+                <OutputRenderer
+                  cfg={outputCfg}
+                  slideData={liveState.slideData}
+                  isBlank={liveState.isBlank}
+                  background={liveState.background}
+                  slideIndex={liveState.slideIndex}
+                  totalSlides={liveState.totalSlides}
+                  backgroundMedia={liveState.backgroundMedia}
+                />
+              </div>
+            );
+          })()}
         </div>
       </PreviewBox>
 
@@ -119,7 +134,7 @@ export default function LivePreview() {
         dotColor="bg-orange-400"
         borderColor={live ? 'border-orange-400' : 'border-surface-600'}
         live={live}
-        onClick={() => openWindow('/stage')}
+        onClick={() => openWindow('/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution)}
       >
         <StagePreview
           stageBgStyle={stageBgStyle}
@@ -140,21 +155,24 @@ export default function LivePreview() {
         dotColor="bg-cyan-400"
         borderColor={live ? 'border-cyan-400' : 'border-surface-600'}
         live={live}
-        onClick={() => openWindow('/virtual')}
+        onClick={() => openWindow('/virtual', null, 'aio-virtual', displayCfg.virtualResolution)}
       >
         {/* Canvas escalado: mismo render que /virtual, pero reducido proporcionalmente */}
         <div ref={streamRef} className="w-full h-full relative overflow-hidden">
-          {streamW > 0 && (
-            <div style={{
-              position:        'absolute',
-              top:             0,
-              left:            0,
-              width:           '1280px',
-              height:          '720px',
-              transform:       `scale(${streamW / 1280})`,
-              transformOrigin: 'top left',
-              pointerEvents:   'none',
-            }}>
+          {streamW > 0 && (() => {
+            const res = displayCfg.virtualResolution ?? { width: 1920, height: 1080 };
+            const scale = streamW / res.width;
+            return (
+              <div style={{
+                position:        'absolute',
+                top:             0,
+                left:            0,
+                width:           `${res.width}px`,
+                height:          `${res.height}px`,
+                transform:       `scale(${scale})`,
+                transformOrigin: 'top left',
+                pointerEvents:   'none',
+              }}>
               <VirtualRenderer
                 vc={virtualConfig}
                 slideData={liveState.slideData}
@@ -162,7 +180,8 @@ export default function LivePreview() {
                 backgroundMedia={liveState.backgroundMedia}
               />
             </div>
-          )}
+            );
+          })()}
           {/* Indicador de transparente cuando no hay contenido */}
           {virtualConfig.background?.type === 'transparent' && !live && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -232,7 +251,7 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
     return null;
   })();
 
-  const sectionColor = getSectionColor(slideData?.label);
+  const sectionColor = getLabelColor(slideData?.label);
 
   const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
