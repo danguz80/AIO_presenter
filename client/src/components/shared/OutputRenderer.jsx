@@ -227,14 +227,17 @@ function SlideContent({ slideData, cfg }) {
       ? `0 0 ${fontStrokeWidth}px ${fontStrokeColor}, 0 0 ${fontStrokeWidth}px ${fontStrokeColor}, 0 2px 8px rgba(0,0,0,0.8)`
       : '0 2px 8px rgba(0,0,0,0.8)';
 
-    const lineCount = (slideData.text || '').split('\n').filter(l => l.trim()).length;
+    const rawText   = slideData.text || '';
+    const charLines  = Math.ceil(rawText.length / 46);
+    const lineCount  = Math.max(rawText.split('\n').filter(l => l.trim()).length, charLines);
     let fontSize;
     if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
       fontSize = `${cfg.bibleFontSize}px`;
     } else {
       fontSize = lineCount <= 3 ? 'clamp(1.8rem, 4.5vw, 4rem)'
-               : lineCount <= 6 ? 'clamp(1.4rem, 3.5vw, 3rem)'
-               : 'clamp(1rem, 2.5vw, 2.2rem)';
+               : lineCount <= 5 ? 'clamp(1.4rem, 3.5vw, 3rem)'
+               : lineCount <= 8 ? 'clamp(1rem, 2.5vw, 2.2rem)'
+               : 'clamp(0.75rem, 1.8vw, 1.6rem)';
     }
 
     const alignItems  = bibleAlign === 'left' ? 'flex-start' : bibleAlign === 'right' ? 'flex-end' : 'center';

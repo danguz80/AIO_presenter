@@ -397,7 +397,7 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, show
               );
             }
             const lineText = line.map(s => s.text).join('');
-            if (!lineText.trim() && !ld.comment) return <div key={li} style={{ height: '0.3em' }} />;
+            if (!lineText.trim() && !ld.comment && !line.some(s => s.chord)) return <div key={li} style={{ height: '0.3em' }} />;
             const hasC = line.some(s => s.chord);
             const inlineComment = showComments && ld.comment
               ? <span style={{ color: commentColor, fontSize: '0.75em', fontStyle: 'italic', marginLeft: '0.3em' }}>{ld.comment}</span>
@@ -548,7 +548,7 @@ function SlidePreviewContent({ slideData, isBlank, transparent = false, showChor
                   return <div key={li} style={commentStyle}>{ld.comment}</div>;
                 }
                 const lineText = line.map(s => s.text).join('');
-                if (!lineText.trim() && !ld.comment) return <div key={li} style={{ height: '0.4em' }} />;
+                if (!lineText.trim() && !ld.comment && !line.some(s => s.chord)) return <div key={li} style={{ height: '0.4em' }} />;
                 const hasC = line.some(s => s.chord);
                 const inlineC = styledComments && ld.comment
                   ? <span style={{ ...commentStyle, marginLeft: '0.2em' }}>{ld.comment}</span>

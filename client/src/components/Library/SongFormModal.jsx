@@ -3,6 +3,7 @@ import { usePresenter } from '../../context/usePresenter';
 import { X, Trash2, Tag, Plus } from 'lucide-react';
 import api from '../../hooks/useApi';
 import { getLabelColor } from '../../utils/labelColors';
+import { buildScaleChords } from '../../utils/chordUtils';
 
 // Convierte array de slides → texto editable
 // Slides del mismo label separados por línea en blanco.
@@ -85,7 +86,24 @@ export default function SongFormModal({ song, onClose }) {
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState('');
   const [confirmDel,  setConfirmDel]  = useState(false);
-  const textareaRef = useRef(null);
+  const textareaRef     = useRef(null);
+  const savedCursorPos  = useRef(null);
+
+  const insertChord = (chord) => {
+    const ta  = textareaRef.current;
+    const scrollTop = ta?.scrollTop ?? 0;
+    const pos = (ta && document.activeElement === ta)
+      ? ta.selectionStart
+      : (savedCursorPos.current ?? (body || '').length);
+    const ins     = `[${chord}]`;
+    const newBody = body.slice(0, pos) + ins + body.slice(pos);
+    const newPos  = pos + ins.length;
+    savedCursorPos.current = newPos;
+    setBody(newBody);
+    requestAnimationFrame(() => {
+      if (ta) { ta.focus({ preventScroll: true }); ta.scrollTop = scrollTop; ta.setSelectionRange(newPos, newPos); }
+    });
+  };
 
   useEffect(() => {
     api.get('/songs/tags').then(r => setAllTags(r.data)).catch(() => {});
@@ -123,22 +141,15 @@ export default function SongFormModal({ song, onClose }) {
     const ta = textareaRef.current;
     if (!ta) return;
 
-    // Reunir todo el contenido de los slides con este label
-    const existingContent = (song?.slides || [])
-      .filter(s => s.label?.trim() === lbl)
-      .map(s => s.content?.trim())
-      .filter(Boolean)
-      .join('\n\n');
-
+    const scrollTop = ta.scrollTop;
     const start  = ta.selectionStart;
     const end    = ta.selectionEnd;
-    const insert = existingContent
-      ? `{${lbl}}\n${existingContent}\n\n`
-      : `{${lbl}}\n`;
+    const insert = `{${lbl}}\n`;
     const newVal = body.slice(0, start) + insert + body.slice(end);
     setBody(newVal);
     requestAnimationFrame(() => {
-      ta.focus();
+      ta.focus({ preventScroll: true });
+      ta.scrollTop = scrollTop;
       ta.setSelectionRange(start + insert.length, start + insert.length);
     });
   };
@@ -200,6 +211,8 @@ export default function SongFormModal({ song, onClose }) {
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden" style={{ height: 'calc(85vh - 65px)' }}>
+          <div className="flex-1 overflow-hidden flex">
+          <div className="flex-1 overflow-y-auto min-w-0">
           {/* Campos básicos */}
           <div className="px-6 py-4 grid grid-cols-2 gap-4 border-b border-surface-700">
             <div>
@@ -306,29 +319,62 @@ export default function SongFormModal({ song, onClose }) {
           </div>
 
           {/* Editor de letra */}
-          <div className="flex-1 overflow-hidden flex gap-3 px-6 py-4">
-            {/* Textarea */}
-            <div className="flex-1 flex flex-col gap-2 min-w-0">
+          <div className="px-6 pt-2 pb-6 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-zinc-400">Letra</label>
+                <label className="text-xs text-zinc-400">
+                  Letra
+                  {songKey && (
+                    <span className="ml-2 text-accent font-semibold">{songKey}</span>
+                  )}
+                </label>
                 <span className="text-xs text-zinc-600">
                   Línea en blanco = nueva diapositiva.{' '}
                   <code className="bg-surface-700 px-1 rounded">{'{Verso}'}</code>{' '}
                   para marcar secciones
                 </span>
               </div>
+              {/* Paleta de acordes */}
+              {(() => {
+                const groups = buildScaleChords(songKey);
+                if (!groups) return null;
+                return (
+                  <div className="border border-surface-600 rounded-xl overflow-y-auto bg-surface-900/50 shrink-0" style={{ maxHeight: '11rem' }}>
+                    {groups.map(group => (
+                      <div key={group.label} className="px-3 pt-1.5 pb-2 border-b border-surface-700/50 last:border-b-0">
+                        <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">{group.label}</p>
+                        <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                          {group.chords.map(chord => (
+                            <button
+                              key={chord}
+                              type="button"
+                              onClick={() => insertChord(chord)}
+                              className="shrink-0 px-2 py-1 rounded-md bg-surface-700 hover:bg-accent/20 border border-surface-600 hover:border-accent/50 text-zinc-300 text-xs font-mono transition-colors"
+                            >
+                              {chord}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               <textarea
                 ref={textareaRef}
-                className="input flex-1 resize-none font-mono text-sm leading-relaxed"
+                rows={25}
+                className="input resize-none font-mono text-sm leading-relaxed"
                 value={body}
                 onChange={e => setBody(e.target.value)}
+                onBlur={() => { savedCursorPos.current = textareaRef.current?.selectionStart ?? null; }}
+                onSelect={() => { savedCursorPos.current = textareaRef.current?.selectionStart ?? null; }}
                 placeholder={`{Verso 1}\nPrimera línea del verso\nSegunda línea\n\n{Coro}\nLetra del coro`}
                 spellCheck={false}
               />
-            </div>
+          </div>{/* end editor */}
+          </div>{/* end scroll */}
 
             {/* Columna derecha: borrar + etiquetas */}
-            <div className="w-36 shrink-0 flex flex-col gap-2 pt-5 border-l border-surface-700 pl-3">
+            <div className="w-36 shrink-0 flex flex-col gap-2 py-4 border-l border-surface-700 pl-3 pr-3 overflow-y-auto">
               {/* Botón borrar (solo en edición) */}
               {isEdit && (
                 <button
@@ -349,8 +395,13 @@ export default function SongFormModal({ song, onClose }) {
               {/* Etiquetas */}
               <p className="text-[10px] text-zinc-500 uppercase tracking-wide mt-1">Etiquetas</p>
               <div className="flex flex-col overflow-y-auto flex-1">
-                {uniqueLabels.length > 0 ? (
-                  uniqueLabels.map(lbl => {
+                {(() => {
+                  const DEFAULT_LABELS = ['Intro', 'Verso', 'Pre-Coro', 'Coro', 'Puente', 'Instrumental', 'Interludio', 'Final'];
+                  const combined = [
+                    ...DEFAULT_LABELS,
+                    ...uniqueLabels.filter(l => !DEFAULT_LABELS.includes(l)),
+                  ];
+                  return combined.map(lbl => {
                     const color = getLabelColor(lbl);
                     const count = song?.slides?.filter(s => s.label?.trim() === lbl).length || 0;
                     return (
@@ -366,12 +417,8 @@ export default function SongFormModal({ song, onClose }) {
                         {count > 0 && <span className="text-[10px] text-zinc-400 ml-1 shrink-0">{count}</span>}
                       </button>
                     );
-                  })
-                ) : (
-                  <p className="text-[10px] text-zinc-600 leading-tight px-1">
-                    Escribe <code className="bg-surface-700 px-0.5 rounded text-zinc-400">{'{Verso}'}</code> para agregar etiquetas
-                  </p>
-                )}
+                  });
+                })()}
               </div>
             </div>
           </div>

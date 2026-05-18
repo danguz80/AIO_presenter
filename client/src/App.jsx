@@ -2,6 +2,9 @@ import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { PresenterProvider } from './context/PresenterContext';
 import { usePresenter } from './context/usePresenter';
+import LandingPage          from './pages/LandingPage';
+import LoginPage            from './pages/LoginPage';
+import ModeSelectPage       from './pages/ModeSelectPage';
 import ControllerPage       from './pages/ControllerPage';
 import OutputPage           from './pages/OutputPage';
 import StagePage            from './pages/StagePage';
@@ -28,12 +31,17 @@ export default function App() {
     <PresenterProvider>
       <ThemeApplier />
       <Routes>
-        <Route path="/"          element={<ControllerPage />} />
-        <Route path="/output"    element={<OutputPage />} />
-        <Route path="/stage"     element={<StagePage />} />
-        <Route path="/virtual"   element={<VirtualPage />} />
-        <Route path="/mobile"    element={<MobileControllerPage />} />
-        <Route path="/calendar"  element={<CalendarPage />} />
+        {/* Páginas públicas (sin PresenterProvider) */}
+        <Route path="/"            element={<LandingPage />} />
+        <Route path="/login"        element={<LoginPage />} />
+        <Route path="/mode-select" element={<ModeSelectPage />} />
+        {/* App principal */}
+        <Route path="/app"         element={<ControllerPage />} />
+        <Route path="/output"      element={<OutputPage />} />
+        <Route path="/stage"       element={<StagePage />} />
+        <Route path="/virtual"     element={<VirtualPage />} />
+        <Route path="/mobile"      element={<MobileControllerPage />} />
+        <Route path="/calendar"    element={<CalendarPage />} />
       </Routes>
     </PresenterProvider>
   );

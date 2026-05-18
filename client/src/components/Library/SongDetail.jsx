@@ -48,9 +48,14 @@ export default function SongDetail() {
       setUndoCount(undoStack.current.length);
     }
     await actions.updateSong(selectedSong.id, {
-      title:  selectedSong.title,
-      author: selectedSong.author,
-      slides: newSlides,
+      title:    selectedSong.title,
+      author:   selectedSong.author,
+      song_key: selectedSong.song_key ?? null,
+      bpm:      selectedSong.bpm ?? null,
+      time_sig: selectedSong.time_sig ?? null,
+      link:     selectedSong.link ?? null,
+      tags:     selectedSong.tags ?? [],
+      slides:   newSlides,
     });
     await actions.loadSongDetail(selectedSong.id);
   }, [selectedSong, actions]);
@@ -106,9 +111,19 @@ export default function SongDetail() {
     if (!label) return;
     setDropping(true);
     const slides = selectedSong.slides;
-    const groupSlides = slides
-      .filter(s => s.label?.trim() === label)
-      .map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }));
+
+    // Tomar solo la PRIMERA ocurrencia consecutiva del label (el bloque canónico)
+    const groupSlides = [];
+    let found = false;
+    for (const s of slides) {
+      if (s.label?.trim() === label) {
+        found = true;
+        groupSlides.push({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null });
+      } else if (found) {
+        break;
+      }
+    }
+
     const rest = slides.map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }));
     const newSlides = [
       ...rest.slice(0, insertIdx),

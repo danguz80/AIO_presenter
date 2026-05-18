@@ -111,7 +111,7 @@ async function uploadSongToDrive(drive, song, folderId, existingFileId = null) {
     song_key:    song.song_key,
     tags:        song.tags,
     updated_at:  song.updated_at,
-    slides: (song.slides || []).map(s => ({
+    slides: (song.slides || []).filter(Boolean).map(s => ({
       label:    s.label,
       content:  s.content,
       position: s.position,
@@ -266,7 +266,7 @@ router.post('/smart', async (req, res) => {
     const { rows: localSongs } = await pool.query(`
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.song_key, s.tags,
              s.updated_at, s.drive_file_id, s.drive_synced_at,
-             json_agg(ss ORDER BY ss.position) AS slides
+             COALESCE(json_agg(ss ORDER BY ss.position) FILTER (WHERE ss.id IS NOT NULL), '[]'::json) AS slides
       FROM songs s LEFT JOIN song_slides ss ON ss.song_id=s.id
       GROUP BY s.id
     `);
@@ -446,7 +446,7 @@ router.post('/push', async (req, res) => {
     // Canciones sin subir o modificadas desde último sync
     const { rows: songsToSync } = await pool.query(`
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.song_key, s.tags, s.updated_at, s.drive_file_id,
-             json_agg(ss ORDER BY ss.position) AS slides
+             COALESCE(json_agg(ss ORDER BY ss.position) FILTER (WHERE ss.id IS NOT NULL), '[]'::json) AS slides
       FROM songs s
       LEFT JOIN song_slides ss ON ss.song_id = s.id
       WHERE s.drive_file_id IS NULL
@@ -494,7 +494,7 @@ router.post('/replace-all', async (req, res) => {
     // Obtener todas las canciones locales con sus slides
     const { rows: allSongs } = await pool.query(`
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.song_key, s.tags, s.updated_at, s.drive_file_id,
-             json_agg(ss ORDER BY ss.position) AS slides
+             COALESCE(json_agg(ss ORDER BY ss.position) FILTER (WHERE ss.id IS NOT NULL), '[]'::json) AS slides
       FROM songs s
       LEFT JOIN song_slides ss ON ss.song_id = s.id
       GROUP BY s.id
@@ -552,7 +552,7 @@ router.post('/backup/drive', async (req, res) => {
 
     const { rows: allSongs } = await pool.query(`
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.song_key, s.tags, s.updated_at,
-             json_agg(ss ORDER BY ss.position) AS slides
+             COALESCE(json_agg(ss ORDER BY ss.position) FILTER (WHERE ss.id IS NOT NULL), '[]'::json) AS slides
       FROM songs s LEFT JOIN song_slides ss ON ss.song_id=s.id GROUP BY s.id
     `);
 
@@ -589,7 +589,7 @@ router.post('/backup/local', async (req, res) => {
   try {
     const { rows: allSongs } = await pool.query(`
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.song_key, s.tags, s.updated_at,
-             json_agg(ss ORDER BY ss.position) AS slides
+             COALESCE(json_agg(ss ORDER BY ss.position) FILTER (WHERE ss.id IS NOT NULL), '[]'::json) AS slides
       FROM songs s LEFT JOIN song_slides ss ON ss.song_id=s.id
       GROUP BY s.id ORDER BY s.title
     `);

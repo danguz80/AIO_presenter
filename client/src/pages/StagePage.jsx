@@ -469,7 +469,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
             const hasChords = line.some(seg => seg.chord);
 
             // Línea vacía sin comentario inline
-            if (!lineText.trim() && !ld.comment) return <div key={li} style={{ height: '0.5em' }} />;
+            if (!lineText.trim() && !ld.comment && !hasChords) return <div key={li} style={{ height: '0.5em' }} />;
 
             // Span de comentario inline (reutilizable)
             const inlineComment = showComments && ld.comment
@@ -526,11 +526,15 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
   }
 
   if (slideData.type === 'bible') {
-    const lineCount = (slideData.text || '').split('\n').filter(l => l.trim()).length;
+    const rawText    = slideData.text || '';
+    // Estimar líneas visuales: usar la mayor entre \n reales y estimado por número de caracteres
+    const charLines  = Math.ceil(rawText.length / 46); // ~46 chars por línea a font grande
+    const lineCount  = Math.max(rawText.split('\n').filter(l => l.trim()).length, charLines);
     const autoSize =
       lineCount <= 3 ? 'clamp(2rem, 4.8vw, 4.5rem)'
-      : lineCount <= 6 ? 'clamp(1.5rem, 3.6vw, 3.2rem)'
-      : 'clamp(1.1rem, 2.6vw, 2.4rem)';
+      : lineCount <= 5 ? 'clamp(1.5rem, 3.6vw, 3.2rem)'
+      : lineCount <= 8 ? 'clamp(1.1rem, 2.6vw, 2.4rem)'
+      : 'clamp(0.85rem, 2vw, 1.8rem)';
 
     const sizeMap = {
       small:  'clamp(0.9rem, 2vw, 1.6rem)',
@@ -544,7 +548,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
         <p
           className="leading-relaxed whitespace-pre-line w-full"
           style={{
-            fontSize: typeof fontSize === 'number' ? `${fontSize}pt` : autoSize,
+            fontSize: autoSize,
             color: lyricsColor,
             textShadow: '0 2px 12px rgba(0,0,0,0.7)',
             ...fontStyles,

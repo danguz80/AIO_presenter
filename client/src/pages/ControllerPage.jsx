@@ -9,7 +9,7 @@ import LivePreview     from '../components/Controls/LivePreview';
 import SettingsPanel   from '../components/Settings/SettingsPanel';
 import SongFormModal   from '../components/Library/SongFormModal';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -104,6 +104,13 @@ export default function ControllerPage() {
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-4 py-3 bg-surface-800 border-b border-surface-700 shrink-0">
         <div className="flex items-center gap-3">
+          <Link
+            to="/"
+            title="Volver al inicio"
+            className="flex items-center gap-1.5 text-zinc-400 hover:text-accent transition-colors"
+          >
+            <Home size={15} />
+          </Link>
           <span className="text-accent font-bold text-lg tracking-tight">AIO Presenter</span>
           <span className="text-xs text-zinc-500 bg-surface-700 px-2 py-0.5 rounded">Beta</span>
         </div>
@@ -307,8 +314,9 @@ function EventsPanel() {
   // Plantillas
   const [templates,        setTemplates]        = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
-  const [templateName,     setTemplateName]     = useState('');
+  const [showSaveTemplate,  setShowSaveTemplate]  = useState(false);
+  const [showLoadTemplate,  setShowLoadTemplate]  = useState(false);
+  const [templateName,      setTemplateName]      = useState('');
   const [savingTemplate,   setSavingTemplate]   = useState(false);
   const [viewingTemplates, setViewingTemplates] = useState(false);
   // Plantilla activa (para guardar cambios de vuelta a la misma plantilla)
@@ -657,6 +665,29 @@ function EventsPanel() {
       setTemplates(ts => ts.filter(t => t.id !== id));
       if (selectedTemplate?.id === id) setSelectedTemplate(null);
     } catch (e) { console.error(e); }
+  };
+
+  const applyTemplateToExisting = async (tpl, mode = 'replace') => {
+    const tplItems = (tpl.items || []).map((item, i) => ({
+      song_id:         item.song_id         || null,
+      item_type:       item.item_type       || 'song',
+      title:           item.title           || null,
+      author:          item.author          || null,
+      separator_label: item.separator_label || null,
+      separator_color: item.separator_color || null,
+      position:        i,
+    }));
+    const newItems = mode === 'replace'
+      ? tplItems
+      : [...(selectedEv.songs || []), ...tplItems];
+    setSaving(true);
+    try {
+      await saveItemsToApi(newItems);
+      applyNewItems(newItems);
+      setActiveTemplate({ id: tpl.id, name: tpl.name });
+      setTemplateDirty(false);
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); setShowLoadTemplate(false); }
   };
 
   const saveEditEvent = async () => {
@@ -1097,6 +1128,18 @@ function EventsPanel() {
                   >
                     <Pencil size={13} />
                   </button>
+                  {/* Cargar plantilla en evento existente */}
+                  {templates.length > 0 && (
+                    <button
+                      onClick={() => setShowLoadTemplate(s => !s)}
+                      className={['p-1 rounded transition-colors',
+                        showLoadTemplate ? 'text-accent bg-accent/15' : 'text-zinc-400 hover:text-white hover:bg-surface-700'
+                      ].join(' ')}
+                      title="Cargar plantilla"
+                    >
+                      <LayoutTemplate size={13} />
+                    </button>
+                  )}
                   {/* Guardar como plantilla */}
                   {(selectedEv.songs?.length > 0 && !activeTemplate) && (
                     <button
@@ -1296,6 +1339,35 @@ function EventsPanel() {
                 Sin resultados
               </div>
             )}
+          </div>
+          )}
+
+          {/* Panel: cargar plantilla en evento existente */}
+          {!editingEv && showLoadTemplate && (
+          <div className="px-2 py-2.5 border-b border-surface-700 shrink-0">
+            <div className="flex items-center gap-1.5 mb-2">
+              <LayoutTemplate size={11} className="text-accent shrink-0" />
+              <span className="text-[10px] text-zinc-400 flex-1 font-medium">Cargar plantilla</span>
+              <button onClick={() => setShowLoadTemplate(false)} className="text-zinc-500 hover:text-white text-xs rounded hover:bg-surface-700 transition-colors p-0.5">✕</button>
+            </div>
+            <div className="flex flex-col gap-1 max-h-40 overflow-y-auto">
+              {templates.map(tpl => (
+                <div key={tpl.id} className="flex items-center gap-1 bg-surface-700 rounded-lg px-2 py-1.5">
+                  <span className="flex-1 text-xs text-zinc-200 truncate">{tpl.name}</span>
+                  <span className="text-[9px] text-zinc-500 shrink-0 mr-1">{tpl.items?.length || 0}</span>
+                  <button
+                    onClick={() => applyTemplateToExisting(tpl, 'append')}
+                    className="shrink-0 px-1.5 py-0.5 rounded text-[10px] text-zinc-300 bg-surface-600 hover:bg-surface-500 transition-colors"
+                    title="Agregar al final de la lista actual"
+                  >+ Agregar</button>
+                  <button
+                    onClick={() => applyTemplateToExisting(tpl, 'replace')}
+                    className="shrink-0 px-1.5 py-0.5 rounded text-[10px] text-white bg-accent/80 hover:bg-accent transition-colors"
+                    title="Reemplazar toda la lista con esta plantilla"
+                  >Reemplazar</button>
+                </div>
+              ))}
+            </div>
           </div>
           )}
 
