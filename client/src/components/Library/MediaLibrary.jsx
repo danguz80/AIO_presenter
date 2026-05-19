@@ -6,7 +6,7 @@ import api from '../../hooks/useApi';
 const SERVER_BASE = (() => {
   const savedIp   = localStorage.getItem('aio_server_ip');
   const savedPort = localStorage.getItem('aio_server_port') || '3001';
-  const host      = savedIp || window.location.hostname;
+  const host      = savedIp || 'localhost';
   return `http://${host}:${savedPort}`;
 })();
 
@@ -145,24 +145,28 @@ export default function MediaLibrary() {
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [showAddModal, setShowAddModal]     = useState(false);
   const [filter, setFilter]           = useState('all'); // 'all' | 'image' | 'video'
+  const [localServerUp, setLocalServerUp]  = useState(null); // null=checking, true, false
 
   const activeFilePath = state.liveState?.slideData?.type === 'media'
     ? state.liveState.slideData.filePath
     : state.liveState?.backgroundMedia?.filePath ?? null;
 
-  // Cargar carpetas guardadas
+  // Cargar carpetas guardadas desde el servidor local
   const loadFolders = useCallback(async () => {
     setLoadingFolders(true);
     try {
-      const res = await api.get('/media/folders');
-      setFolders(res.data);
-      // Si había una carpeta seleccionada, mantenerla si sigue existiendo
+      const res = await fetch(`${SERVER_BASE}/api/media/folders`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setLocalServerUp(true);
+      setFolders(data);
       setSelectedFolder(prev => {
-        if (!prev) return res.data[0] || null;
-        return res.data.find(f => f.path === prev.path) || res.data[0] || null;
+        if (!prev) return data[0] || null;
+        return data.find(f => f.path === prev.path) || data[0] || null;
       });
     } catch (err) {
-      console.error('Error cargando carpetas:', err);
+      console.error('Error cargando carpetas (servidor local no disponible):', err);
+      setLocalServerUp(false);
     } finally {
       setLoadingFolders(false);
     }
@@ -174,25 +178,40 @@ export default function MediaLibrary() {
   useEffect(() => {
     if (!selectedFolder) { setFiles([]); return; }
     setLoading(true);
-    api.get(`/media/files?folder=${encodeURIComponent(selectedFolder.path)}`)
-      .then(res => setFiles(res.data))
+    fetch(`${SERVER_BASE}/api/media/files?folder=${encodeURIComponent(selectedFolder.path)}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => setFiles(data))
       .catch(() => setFiles([]))
       .finally(() => setLoading(false));
   }, [selectedFolder]);
 
   const handleAddFolder = async (folderPath) => {
-    const res = await api.post('/media/folders', { folderPath });
-    setFolders(res.data);
-    const added = res.data.find(f => f.path === folderPath);
+    const res = await fetch(`${SERVER_BASE}/api/media/folders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderPath }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || 'Error al agregar carpeta');
+    }
+    const data = await res.json();
+    setFolders(data);
+    const added = data.find(f => f.path === folderPath);
     if (added) setSelectedFolder(added);
   };
 
   const handleRemoveFolder = async (folder) => {
     if (!window.confirm(`¿Quitar "${folder.name}" de la lista?`)) return;
-    const res = await api.delete('/media/folders', { data: { folderPath: folder.path } });
-    setFolders(res.data);
+    const res = await fetch(`${SERVER_BASE}/api/media/folders`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ folderPath: folder.path }),
+    });
+    const data = res.ok ? await res.json() : folders.filter(f => f.path !== folder.path);
+    setFolders(data);
     setSelectedFolder(prev => {
-      if (prev?.path === folder.path) return res.data[0] || null;
+      if (prev?.path === folder.path) return data[0] || null;
       return prev;
     });
   };
@@ -232,6 +251,30 @@ export default function MediaLibrary() {
 
   const imageCount = files.filter(f => f.type === 'image').length;
   const videoCount = files.filter(f => f.type === 'video').length;
+
+  if (localServerUp === false) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
+        <FolderX size={40} className="text-zinc-600" />
+        <p className="text-sm text-zinc-400 font-medium">Servidor local no disponible</p>
+        <p className="text-xs text-zinc-500 leading-relaxed max-w-xs">
+          Para ver tus videos e imágenes, inicia el servidor local en tu Mac:
+        </p>
+        <code className="text-xs bg-surface-700 text-zinc-300 rounded px-3 py-1.5 font-mono">
+          cd server &amp;&amp; npm start
+        </code>
+        <p className="text-[11px] text-zinc-600">
+          Luego recarga esta página
+        </p>
+        <button
+          onClick={loadFolders}
+          className="mt-2 flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover transition-colors"
+        >
+          <RefreshCw size={12} /> Reintentar
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full overflow-hidden">
