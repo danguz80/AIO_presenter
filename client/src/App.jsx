@@ -17,9 +17,10 @@ function OAuthCallbackHandler() {
   const navigate = useNavigate();
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('sync_token');
-    const err   = params.get('sync_error');
-    if (!token && !err) return;
+    const token  = params.get('sync_token');
+    const err    = params.get('sync_error');
+    const hasErr = params.has('sync_error');
+    if (!token && !hasErr) return;
 
     if (token) {
       localStorage.setItem('aio_sync_token', token);
@@ -30,7 +31,7 @@ function OAuthCallbackHandler() {
     }
 
     // Redirigir a /app preservando solo el error si lo hay
-    const dest = err ? `/app?sync_error=${err}` : '/app';
+    const dest = hasErr ? `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}` : '/app';
     navigate(dest, { replace: true });
   }, [navigate]);
   return null;

@@ -187,7 +187,7 @@ router.get('/google/callback', async (req, res) => {
     );
     res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
   } catch (err) {
-    console.error('[Auth] Error en callback OAuth:', err.message);
+    console.error('[Auth] Error en callback OAuth:', err?.message || err);
     res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(err.message)}`);
   }
 });

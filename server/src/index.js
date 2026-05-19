@@ -158,13 +158,7 @@ async function saveOrgSetting(orgId, key, value) {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
-    await pool.query(`ALTER TABLE sync_users      ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
-    await pool.query(`ALTER TABLE songs           ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
-    await pool.query(`ALTER TABLE events          ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
-    await pool.query(`ALTER TABLE sync_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
-    // Migraciones sync con Google Drive
-    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_file_id  TEXT`);
-    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);
+    // sync_users y sync_invitations deben crearse ANTES de los ALTER TABLE que los referencian
     await pool.query(`
       CREATE TABLE IF NOT EXISTS sync_users (
         id              SERIAL PRIMARY KEY,
@@ -200,6 +194,13 @@ async function saveOrgSetting(orgId, key, value) {
         created_at  TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    await pool.query(`ALTER TABLE sync_users      ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await pool.query(`ALTER TABLE songs           ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await pool.query(`ALTER TABLE events          ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    await pool.query(`ALTER TABLE sync_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    // Migraciones sync con Google Drive
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_file_id  TEXT`);
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);
     const { rows } = await pool.query("SELECT key, value FROM app_settings");
     for (const row of rows) {
       const colonIdx = row.key.indexOf(':');
@@ -219,7 +220,7 @@ async function saveOrgSetting(orgId, key, value) {
     }
     console.log('[Settings] Estados por org cargados desde DB');
   } catch (e) {
-    console.error('[Settings] Error cargando settings desde DB:', e.message);
+    console.error('[Settings] Error cargando settings desde DB:', e?.message || e);
   }
 })();
 
