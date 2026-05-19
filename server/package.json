@@ -5,7 +5,9 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "install-service": "bash scripts/install-mac-service.command",
+    "uninstall-service": "bash scripts/uninstall-mac-service.command"
   },
   "dependencies": {
     "cors": "^2.8.5",

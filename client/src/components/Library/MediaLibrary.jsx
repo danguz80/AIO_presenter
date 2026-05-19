@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FolderOpen, Plus, Trash2, Film, Image, Play, RefreshCw, FolderX, X, Layers } from 'lucide-react';
+import { FolderOpen, Plus, Trash2, Film, Image, Play, RefreshCw, FolderX, X, Layers, MonitorCheck, Terminal, Download } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
 
@@ -10,8 +10,109 @@ const SERVER_BASE = (() => {
   return `http://${host}:${savedPort}`;
 })();
 
+const INSTALLER_URL = 'https://raw.githubusercontent.com/danguz80/AIO_presenter/main/server/scripts/install-mac-service.command';
+
 function thumbUrl(filePath) {
   return `${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(filePath)}`;
+}
+
+// ── Pantalla de configuración primera vez ────────────────────────────────────
+function LocalServerSetup({ onRetry, retrying }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-5 px-8 text-center">
+      <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
+        <MonitorCheck size={24} className="text-amber-400" />
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold text-zinc-200 mb-1">
+          Configura el acceso a medios locales
+        </p>
+        <p className="text-xs text-zinc-500 leading-relaxed max-w-sm">
+          Para reproducir videos e imágenes desde tu Mac, necesitas instalar
+          el servidor local de AIO Presenter. Solo se hace <strong className="text-zinc-400">una vez</strong>.
+        </p>
+      </div>
+
+      {/* Pasos */}
+      <div className="w-full max-w-sm space-y-2 text-left">
+        <Step n={1} label="Descarga el instalador">
+          <a
+            href={INSTALLER_URL}
+            download="install-mac-service.command"
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-colors"
+          >
+            <Download size={12} /> Descargar instalador
+          </a>
+        </Step>
+
+        <Step n={2} label='Haz doble clic en el archivo descargado'>
+          <p className="text-xs text-zinc-500">
+            Abre Finder → Descargas → doble clic en{' '}
+            <code className="text-zinc-300 bg-surface-700 px-1 rounded text-[10px]">
+              install-mac-service.command
+            </code>
+          </p>
+          <p className="text-[11px] text-zinc-600 mt-0.5">
+            Si macOS pide permiso, haz clic en "Abrir"
+          </p>
+        </Step>
+
+        <Step n={3} label='Recarga esta página'>
+          <p className="text-xs text-zinc-500">
+            El servidor arrancará solo, incluso cuando reinicies tu Mac.
+          </p>
+        </Step>
+      </div>
+
+      <button
+        onClick={onRetry}
+        disabled={retrying}
+        className="flex items-center gap-2 text-xs px-4 py-2 rounded-lg bg-surface-700 hover:bg-surface-600 text-zinc-300 transition-colors disabled:opacity-50"
+      >
+        <RefreshCw size={12} className={retrying ? 'animate-spin' : ''} />
+        {retrying ? 'Verificando…' : 'Ya lo instalé — verificar conexión'}
+      </button>
+
+      {/* Sección avanzada para desarrolladores */}
+      <button
+        onClick={() => setShowAdvanced(v => !v)}
+        className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors"
+      >
+        {showAdvanced ? '▲' : '▼'} Opciones para desarrolladores
+      </button>
+      {showAdvanced && (
+        <div className="w-full max-w-sm bg-surface-900 rounded-lg p-3 text-left space-y-2">
+          <p className="text-[11px] text-zinc-500">Desde la carpeta del proyecto:</p>
+          <code className="block text-[11px] text-zinc-300 font-mono bg-black/30 rounded px-3 py-2">
+            cd server && npm run install-service
+          </code>
+          <p className="text-[11px] text-zinc-600 mt-1">
+            O para iniciar manualmente sin instalar:
+          </p>
+          <code className="block text-[11px] text-zinc-300 font-mono bg-black/30 rounded px-3 py-2">
+            cd server && npm start
+          </code>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Step({ n, label, children }) {
+  return (
+    <div className="flex gap-3">
+      <div className="w-6 h-6 shrink-0 rounded-full bg-surface-700 border border-surface-500 flex items-center justify-center text-[11px] font-bold text-zinc-400 mt-0.5">
+        {n}
+      </div>
+      <div className="flex-1">
+        <p className="text-xs font-medium text-zinc-300 mb-1">{label}</p>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 // ── Modal para ingresar ruta de carpeta ──────────────────────────────────────
@@ -253,27 +354,7 @@ export default function MediaLibrary() {
   const videoCount = files.filter(f => f.type === 'video').length;
 
   if (localServerUp === false) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 px-6 text-center">
-        <FolderX size={40} className="text-zinc-600" />
-        <p className="text-sm text-zinc-400 font-medium">Servidor local no disponible</p>
-        <p className="text-xs text-zinc-500 leading-relaxed max-w-xs">
-          Para ver tus videos e imágenes, inicia el servidor local en tu Mac:
-        </p>
-        <code className="text-xs bg-surface-700 text-zinc-300 rounded px-3 py-1.5 font-mono">
-          cd server &amp;&amp; npm start
-        </code>
-        <p className="text-[11px] text-zinc-600">
-          Luego recarga esta página
-        </p>
-        <button
-          onClick={loadFolders}
-          className="mt-2 flex items-center gap-1.5 text-xs text-accent hover:text-accent-hover transition-colors"
-        >
-          <RefreshCw size={12} /> Reintentar
-        </button>
-      </div>
-    );
+    return <LocalServerSetup onRetry={loadFolders} retrying={loadingFolders} />;
   }
 
   return (
