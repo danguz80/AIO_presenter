@@ -1,7 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { FolderOpen, Plus, Trash2, Film, Image, Play, RefreshCw, FolderX, X, Layers, MonitorCheck, Terminal, Download } from 'lucide-react';
+import {
+  FolderOpen, Plus, Trash2, Film, Image, Play, RefreshCw,
+  FolderX, X, Layers, MonitorCheck, Terminal, Download,
+  ShieldCheck, AlertTriangle,
+} from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
+import {
+  FSA_SUPPORTED,
+  pickFolder,
+  saveFolder,
+  listFolders as fsaListFolders,
+  removeFolder as fsaRemoveFolder,
+  listMediaFiles,
+  generateThumbnail,
+  cacheMediaFile,
+  verifyPermission,
+} from '../../utils/fsaUtils';
 
 const SERVER_BASE = (() => {
   const savedIp   = localStorage.getItem('aio_server_ip');
@@ -31,6 +46,12 @@ const clientOs = (() => {
 function thumbUrl(filePath) {
   return `${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(filePath)}`;
 }
+
+// ── Helpers para primerPlano en FSA mode (localStorage) ─────────────────────
+const getFsaPrimerPlano = (folderKey) =>
+  JSON.parse(localStorage.getItem(`aio-media-primerPlano:${folderKey}`) ?? 'true');
+const setFsaPrimerPlano = (folderKey, val) =>
+  localStorage.setItem(`aio-media-primerPlano:${folderKey}`, JSON.stringify(val));
 
 // ── Pantalla de configuración primera vez ────────────────────────────────────
 function LocalServerSetup({ onRetry, retrying }) {
@@ -260,7 +281,65 @@ function AddFolderModal({ onAdd, onClose }) {
   );
 }
 
-// ── Miniatura de archivo ─────────────────────────────────────────────────────
+// ── Miniatura FSA (modo directo — thumbnail async con IntersectionObserver) ──
+function FsaMediaThumb({ file, isActive, onSend }) {
+  const [thumb, setThumb] = useState(null);
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
+  const isVideo = file.type === 'video';
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); observer.disconnect(); } },
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    let canceled = false;
+    generateThumbnail(file.handle, file.type)
+      .then(url => { if (!canceled) setThumb(url); })
+      .catch(() => {});
+    return () => { canceled = true; };
+  }, [visible, file.handle, file.type]);
+
+  return (
+    <button
+      ref={ref}
+      onClick={() => onSend(file)}
+      className={`group relative rounded-lg overflow-hidden border-2 transition-all aspect-video flex items-center justify-center bg-surface-700 ${
+        isActive
+          ? 'border-accent shadow-lg shadow-accent/30'
+          : 'border-surface-600 hover:border-zinc-500'
+      }`}
+      title={file.name}
+    >
+      {thumb ? (
+        <img src={thumb} alt={file.name} className="w-full h-full object-cover" />
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-1">
+          {isVideo
+            ? <Film size={20} className="text-zinc-500" />
+            : <Image size={20} className="text-zinc-500" />}
+        </div>
+      )}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
+        <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <p className="text-[9px] text-white truncate">{file.name}</p>
+      </div>
+      {isActive && <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow" />}
+    </button>
+  );
+}
+
+// ── Miniatura servidor (modo fallback — URL desde servidor local) ─────────────
 function MediaThumb({ file, isActive, onSend }) {
   const isVideo = file.type === 'video';
   const url = thumbUrl(file.path);
@@ -270,9 +349,9 @@ function MediaThumb({ file, isActive, onSend }) {
       onClick={() => onSend(file)}
       draggable
       onDragStart={e => {
-        const url = `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`;
+        const mediaUrl = `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`;
         e.dataTransfer.setData('application/aio-media', JSON.stringify({
-          type: file.type, path: file.path, name: file.name, url,
+          type: file.type, path: file.path, name: file.name, url: mediaUrl,
         }));
         e.dataTransfer.effectAllowed = 'copy';
       }}
@@ -292,22 +371,17 @@ function MediaThumb({ file, isActive, onSend }) {
           e.currentTarget.nextSibling.style.display = 'flex';
         }}
       />
-      {/* Fallback icono (oculto por defecto, visible si falla la carga) */}
       <div className="absolute inset-0 items-center justify-center flex-col gap-1 hidden" aria-hidden>
         {isVideo ? <Film size={20} className="text-zinc-400" /> : <Image size={20} className="text-zinc-400" />}
         <span className="text-[9px] text-zinc-500 text-center break-all px-1 line-clamp-2">{file.name}</span>
       </div>
-      {/* Overlay hover */}
       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
         <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
       </div>
-      {/* Label inferior */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
         <p className="text-[9px] text-white truncate">{file.name}</p>
       </div>
-      {isActive && (
-        <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow" />
-      )}
+      {isActive && <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow" />}
     </button>
   );
 }
@@ -315,21 +389,65 @@ function MediaThumb({ file, isActive, onSend }) {
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function MediaLibrary() {
   const { state, actions } = usePresenter();
-  const [folders, setFolders]         = useState([]);
-  const [selectedFolder, setSelectedFolder] = useState(null); // { name, path }
-  const [files, setFiles]             = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [loadingFolders, setLoadingFolders] = useState(false);
-  const [showAddModal, setShowAddModal]     = useState(false);
-  const [filter, setFilter]           = useState('all'); // 'all' | 'image' | 'video'
-  const [localServerUp, setLocalServerUp]  = useState(null); // null=checking, true, false
 
+  // 'fsa' = File System Access API (Chrome/Edge, sin servidor)
+  // 'server' = servidor local (Firefox / fallback manual)
+  const [mode, setMode] = useState(() => FSA_SUPPORTED ? 'fsa' : 'server');
+
+  // Carpetas:
+  //   FSA mode:    { key, name, handle, permissionState }
+  //   Server mode: { name, path, primerPlano }
+  const [folders, setFolders]           = useState([]);
+  const [selectedFolder, setSelectedFolder] = useState(null);
+
+  // Archivos:
+  //   FSA mode:    { name, ext, type, handle }
+  //   Server mode: { name, path, type }
+  const [files, setFiles]               = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [filter, setFilter]             = useState('all'); // 'all' | 'image' | 'video'
+  const [localServerUp, setLocalServerUp] = useState(null); // null=checking, true, false
+  const [sendError, setSendError]       = useState(null);
+  // Para forzar re-render cuando cambia primerPlano en localStorage
+  const [primerPlanoVersion, setPrimerPlanoVersion] = useState(0);
+
+  // Archivo activo en output
+  const activeFileName = state.liveState?.slideData?.type === 'media'
+    ? state.liveState.slideData.fileName ?? null
+    : null;
   const activeFilePath = state.liveState?.slideData?.type === 'media'
-    ? state.liveState.slideData.filePath
+    ? state.liveState.slideData.filePath ?? null
     : state.liveState?.backgroundMedia?.filePath ?? null;
 
-  // Cargar carpetas guardadas desde el servidor local
-  const loadFolders = useCallback(async () => {
+  // ── FSA: cargar carpetas desde IndexedDB ───────────────────────────────────
+  const loadFsaFolders = useCallback(async () => {
+    setLoadingFolders(true);
+    try {
+      const handles = await fsaListFolders();
+      const withPerms = await Promise.all(
+        handles.map(async (h) => {
+          try {
+            const perm = await h.handle.queryPermission({ mode: 'read' });
+            return { ...h, permissionState: perm };
+          } catch {
+            return { ...h, permissionState: 'error' };
+          }
+        })
+      );
+      setFolders(withPerms);
+      setSelectedFolder(prev => {
+        if (!prev) return withPerms[0] ?? null;
+        return withPerms.find(f => f.key === prev.key) ?? withPerms[0] ?? null;
+      });
+    } finally {
+      setLoadingFolders(false);
+    }
+  }, []);
+
+  // ── Server: cargar carpetas desde servidor local ───────────────────────────
+  const loadServerFolders = useCallback(async () => {
     setLoadingFolders(true);
     try {
       const res = await fetch(`${SERVER_BASE}/api/media/folders`);
@@ -338,35 +456,78 @@ export default function MediaLibrary() {
       setLocalServerUp(true);
       setFolders(data);
       setSelectedFolder(prev => {
-        if (!prev) return data[0] || null;
-        return data.find(f => f.path === prev.path) || data[0] || null;
+        if (!prev) return data[0] ?? null;
+        return data.find(f => f.path === prev.path) ?? data[0] ?? null;
       });
-    } catch (err) {
-      console.error('Error cargando carpetas (servidor local no disponible):', err);
+    } catch {
       setLocalServerUp(false);
     } finally {
       setLoadingFolders(false);
     }
   }, []);
 
-  useEffect(() => { loadFolders(); }, [loadFolders]);
+  // Carga inicial cuando cambia el modo
+  useEffect(() => {
+    setFolders([]);
+    setSelectedFolder(null);
+    setFiles([]);
+    if (mode === 'fsa') loadFsaFolders();
+    else loadServerFolders();
+  }, [mode, loadFsaFolders, loadServerFolders]);
 
   // Cargar archivos cuando cambia la carpeta seleccionada
   useEffect(() => {
     if (!selectedFolder) { setFiles([]); return; }
     setLoading(true);
-    fetch(`${SERVER_BASE}/api/media/files?folder=${encodeURIComponent(selectedFolder.path)}`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => setFiles(data))
-      .catch(() => setFiles([]))
-      .finally(() => setLoading(false));
-  }, [selectedFolder]);
+    if (mode === 'fsa') {
+      listMediaFiles(selectedFolder.handle)
+        .then(data => setFiles(data))
+        .catch(() => setFiles([]))
+        .finally(() => setLoading(false));
+    } else {
+      fetch(`${SERVER_BASE}/api/media/files?folder=${encodeURIComponent(selectedFolder.path)}`)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => setFiles(data))
+        .catch(() => setFiles([]))
+        .finally(() => setLoading(false));
+    }
+  }, [selectedFolder, mode]);
 
-  const handleAddFolder = async (folderPath) => {
+  // ── FSA: seleccionar carpeta (puede requerir permiso) ─────────────────────
+  const handleSelectFsaFolder = async (folder) => {
+    if (folder.permissionState !== 'granted') {
+      try {
+        const perm = await verifyPermission(folder.handle);
+        if (perm !== 'granted') return;
+        setFolders(prev =>
+          prev.map(f => f.key === folder.key ? { ...f, permissionState: 'granted' } : f)
+        );
+        folder = { ...folder, permissionState: 'granted' };
+      } catch { return; }
+    }
+    setSelectedFolder(folder);
+  };
+
+  // ── FSA: agregar carpeta con selector nativo ───────────────────────────────
+  const handleAddFolderFsa = async () => {
+    try {
+      const handle = await pickFolder();
+      const key    = await saveFolder(handle);
+      const perm   = await handle.queryPermission({ mode: 'read' });
+      const newFolder = { key, name: handle.name, handle, permissionState: perm };
+      setFolders(prev => [...prev, newFolder]);
+      setSelectedFolder(newFolder);
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error('Error al agregar carpeta FSA:', err);
+    }
+  };
+
+  // ── Server: agregar carpeta con ruta de texto ──────────────────────────────
+  const handleAddFolderServer = async (folderPath) => {
     const res = await fetch(`${SERVER_BASE}/api/media/folders`, {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folderPath }),
+      body:    JSON.stringify({ folderPath }),
     });
     if (!res.ok) {
       const d = await res.json().catch(() => ({}));
@@ -378,70 +539,127 @@ export default function MediaLibrary() {
     if (added) setSelectedFolder(added);
   };
 
+  // ── Eliminar carpeta ───────────────────────────────────────────────────────
   const handleRemoveFolder = async (folder) => {
     if (!window.confirm(`¿Quitar "${folder.name}" de la lista?`)) return;
-    const res = await fetch(`${SERVER_BASE}/api/media/folders`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ folderPath: folder.path }),
-    });
-    const data = res.ok ? await res.json() : folders.filter(f => f.path !== folder.path);
-    setFolders(data);
-    setSelectedFolder(prev => {
-      if (prev?.path === folder.path) return data[0] || null;
-      return prev;
-    });
-  };
-
-  const handleTogglePrimerPlano = async (folder) => {
-    const newVal = !(folder.primerPlano ?? true);
-    try {
-      const res = await api.patch('/media/folders', { folderPath: folder.path, primerPlano: newVal });
-      setFolders(res.data);
-      setSelectedFolder(prev =>
-        prev?.path === folder.path ? { ...prev, primerPlano: newVal } : prev
-      );
-    } catch (err) {
-      console.error('Error toggling primerPlano:', err);
+    if (mode === 'fsa') {
+      await fsaRemoveFolder(folder.key);
+      const updated = folders.filter(f => f.key !== folder.key);
+      setFolders(updated);
+      setSelectedFolder(prev => prev?.key === folder.key ? updated[0] ?? null : prev);
+    } else {
+      const res = await fetch(`${SERVER_BASE}/api/media/folders`, {
+        method:  'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ folderPath: folder.path }),
+      });
+      const data = res.ok ? await res.json() : folders.filter(f => f.path !== folder.path);
+      setFolders(data);
+      setSelectedFolder(prev => prev?.path === folder.path ? data[0] ?? null : prev);
     }
   };
 
-  const handleSendMedia = (file) => {
-    const primerPlano = selectedFolder?.primerPlano ?? true;
-    actions.showSlide({
-      type: 'media',
-      slideData: {
-        type:      'media',
-        mediaType: file.type,
-        filePath:  file.path,
-        fileName:  file.name,
-        url: `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`,
-        primerPlano,
-      },
-      nextSlideData: null,
-    });
+  // ── Toggle primerPlano ────────────────────────────────────────────────────
+  const handleTogglePrimerPlano = async (folder) => {
+    if (mode === 'fsa') {
+      const current = getFsaPrimerPlano(folder.key);
+      setFsaPrimerPlano(folder.key, !current);
+      setPrimerPlanoVersion(v => v + 1); // fuerza re-render
+    } else {
+      const newVal = !(folder.primerPlano ?? true);
+      try {
+        const res = await api.patch('/media/folders', { folderPath: folder.path, primerPlano: newVal });
+        setFolders(res.data);
+        setSelectedFolder(prev =>
+          prev?.path === folder.path ? { ...prev, primerPlano: newVal } : prev
+        );
+      } catch (err) {
+        console.error('Error toggling primerPlano:', err);
+      }
+    }
   };
 
-  const filteredFiles = filter === 'all'
-    ? files
-    : files.filter(f => f.type === filter);
+  // ── Enviar media al output ────────────────────────────────────────────────
+  const handleSendMedia = async (file) => {
+    setSendError(null);
+    if (mode === 'fsa') {
+      try {
+        const cacheKey   = await cacheMediaFile(file.handle);
+        const primerPlano = selectedFolder ? getFsaPrimerPlano(selectedFolder.key) : true;
+        actions.showSlide({
+          type: 'media',
+          slideData: {
+            type: 'media', mediaType: file.type,
+            fileName: file.name, url: cacheKey, primerPlano,
+          },
+          nextSlideData: null,
+        });
+      } catch (err) {
+        console.error('Error caching media file:', err);
+        setSendError(`No se pudo cargar "${file.name}"`);
+      }
+    } else {
+      const primerPlano = selectedFolder?.primerPlano ?? true;
+      actions.showSlide({
+        type: 'media',
+        slideData: {
+          type: 'media', mediaType: file.type,
+          filePath: file.path, fileName: file.name,
+          url: `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`,
+          primerPlano,
+        },
+        nextSlideData: null,
+      });
+    }
+  };
 
-  const imageCount = files.filter(f => f.type === 'image').length;
-  const videoCount = files.filter(f => f.type === 'video').length;
+  // ── Derived values ────────────────────────────────────────────────────────
+  const filteredFiles = filter === 'all' ? files : files.filter(f => f.type === filter);
+  const imageCount    = files.filter(f => f.type === 'image').length;
+  const videoCount    = files.filter(f => f.type === 'video').length;
 
-  if (localServerUp === false) {
-    return <LocalServerSetup onRetry={loadFolders} retrying={loadingFolders} />;
+  // primerPlano para la carpeta seleccionada
+  // eslint-disable-next-line no-unused-vars
+  const primerPlanoValue = selectedFolder
+    ? mode === 'fsa'
+      ? getFsaPrimerPlano(selectedFolder.key)  // re-read cuando primerPlanoVersion cambia
+      : (selectedFolder.primerPlano ?? true)
+    : true;
+  void primerPlanoVersion; // evita warning de unused
+
+  const folderKey = (f) => mode === 'fsa' ? f.key : f.path;
+  const isSelectedFolder = (f) => mode === 'fsa'
+    ? selectedFolder?.key === f.key
+    : selectedFolder?.path === f.path;
+
+  // ── Si modo servidor y no está levantado ─────────────────────────────────
+  if (mode === 'server' && localServerUp === false) {
+    return (
+      <div className="flex flex-col h-full">
+        <LocalServerSetup onRetry={loadServerFolders} retrying={loadingFolders} />
+        {FSA_SUPPORTED && (
+          <div className="p-3 border-t border-surface-700 text-center">
+            <button
+              onClick={() => setMode('fsa')}
+              className="text-xs text-accent hover:text-accent-hover transition-colors"
+            >
+              ⚡ Cambiar a modo sin servidor (File System Access)
+            </button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* ── Columna izquierda: Carpetas ────────────────────────────────── */}
+      {/* ── Columna izquierda: Carpetas ──────────────────────────────── */}
       <aside className="w-44 shrink-0 bg-surface-800 border-r border-surface-700 flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b border-surface-700">
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Carpetas</span>
           <div className="flex gap-1">
             <button
-              onClick={loadFolders}
+              onClick={mode === 'fsa' ? loadFsaFolders : loadServerFolders}
               disabled={loadingFolders}
               title="Actualizar"
               className="text-zinc-500 hover:text-zinc-200 transition-colors disabled:opacity-40"
@@ -449,7 +667,7 @@ export default function MediaLibrary() {
               <RefreshCw size={12} className={loadingFolders ? 'animate-spin' : ''} />
             </button>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={mode === 'fsa' ? handleAddFolderFsa : () => setShowAddModal(true)}
               title="Agregar carpeta"
               className="text-zinc-500 hover:text-accent transition-colors"
             >
@@ -463,46 +681,73 @@ export default function MediaLibrary() {
             <div className="flex flex-col items-center justify-center h-full gap-2 px-3 text-center">
               <FolderX size={24} className="text-zinc-600" />
               <p className="text-[10px] text-zinc-500 leading-relaxed">
-                Agrega carpetas con videos e imágenes
+                {mode === 'fsa'
+                  ? 'Haz clic en + para elegir una carpeta'
+                  : 'Agrega carpetas con videos e imágenes'}
               </p>
               <button
-                onClick={() => setShowAddModal(true)}
+                onClick={mode === 'fsa' ? handleAddFolderFsa : () => setShowAddModal(true)}
                 className="text-[10px] text-accent hover:text-accent-hover transition-colors"
               >
                 + Agregar carpeta
               </button>
             </div>
           ) : (
-            folders.map(folder => (
-              <div
-                key={folder.path}
-                className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors relative ${
-                  selectedFolder?.path === folder.path
-                    ? 'bg-surface-700 text-white'
-                    : 'text-zinc-400 hover:bg-surface-700 hover:text-zinc-200'
-                }`}
-                onClick={() => setSelectedFolder(folder)}
-              >
-                <FolderOpen size={13} className="shrink-0" />
-                <span className="text-xs truncate flex-1 leading-tight">{folder.name}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleRemoveFolder(folder); }}
-                  className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all shrink-0"
-                  title="Quitar carpeta"
+            folders.map(folder => {
+              const needsPermission = mode === 'fsa' && folder.permissionState !== 'granted';
+              return (
+                <div
+                  key={folderKey(folder)}
+                  className={`group flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors relative ${
+                    isSelectedFolder(folder)
+                      ? 'bg-surface-700 text-white'
+                      : 'text-zinc-400 hover:bg-surface-700 hover:text-zinc-200'
+                  }`}
+                  onClick={() => mode === 'fsa'
+                    ? handleSelectFsaFolder(folder)
+                    : setSelectedFolder(folder)
+                  }
+                  title={needsPermission ? 'Clic para conceder acceso a esta carpeta' : folder.name}
                 >
-                  <Trash2 size={11} />
-                </button>
-              </div>
-            ))
+                  <FolderOpen size={13} className="shrink-0" />
+                  <span className="text-xs truncate flex-1 leading-tight">{folder.name}</span>
+                  {needsPermission && (
+                    <ShieldCheck size={11} className="text-yellow-500 shrink-0" title="Permiso pendiente — haz clic para conceder acceso" />
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleRemoveFolder(folder); }}
+                    className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 transition-all shrink-0"
+                    title="Quitar carpeta"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
+              );
+            })
           )}
+        </div>
+
+        {/* Indicador de modo + botón para cambiar */}
+        <div className="px-3 py-2 border-t border-surface-700">
+          <button
+            onClick={() => setMode(m => m === 'fsa' ? 'server' : 'fsa')}
+            className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors w-full text-left"
+            title={mode === 'fsa' ? 'Cambiar a modo servidor local' : 'Cambiar a modo sin servidor'}
+          >
+            {mode === 'fsa' ? '⚡ Modo directo' : '🖥 Modo servidor'}
+          </button>
         </div>
       </aside>
 
-      {/* ── Área principal: Archivos ───────────────────────────────────── */}
+      {/* ── Área principal: Archivos ──────────────────────────────────── */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Barra de filtros */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-surface-700 bg-surface-800 shrink-0">
-          {[{key:'all',label:`Todo (${files.length})`},{key:'image',label:`Imágenes (${imageCount})`},{key:'video',label:`Videos (${videoCount})`}].map(({ key, label }) => (
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-surface-700 bg-surface-800 shrink-0 flex-wrap">
+          {[
+            { key: 'all',   label: `Todo (${files.length})` },
+            { key: 'image', label: `Imágenes (${imageCount})` },
+            { key: 'video', label: `Videos (${videoCount})` },
+          ].map(({ key, label }) => (
             <button
               key={key}
               onClick={() => setFilter(key)}
@@ -516,15 +761,14 @@ export default function MediaLibrary() {
             </button>
           ))}
 
-          {/* Toggle Primer Plano para la carpeta seleccionada */}
           {selectedFolder && (
             <button
               onClick={() => handleTogglePrimerPlano(selectedFolder)}
-              title={(selectedFolder.primerPlano ?? true)
+              title={primerPlanoValue
                 ? 'Primer Plano: ON — el media reemplaza al slide activo'
                 : 'Primer Plano: OFF — el media va de fondo; el slide activo se superpone'}
               className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border transition-colors shrink-0 ${
-                (selectedFolder.primerPlano ?? true)
+                primerPlanoValue
                   ? 'bg-accent/20 text-accent border-accent/40'
                   : 'bg-surface-700 text-zinc-400 border-surface-600 hover:text-zinc-200'
               }`}
@@ -534,12 +778,9 @@ export default function MediaLibrary() {
             </button>
           )}
 
-          {selectedFolder && (
-            <span
-              className="ml-auto text-[10px] text-zinc-600 font-mono truncate max-w-xs"
-              title={selectedFolder.path}
-            >
-              {selectedFolder.path}
+          {sendError && (
+            <span className="ml-auto flex items-center gap-1 text-[10px] text-red-400">
+              <AlertTriangle size={11} /> {sendError}
             </span>
           )}
         </div>
@@ -562,28 +803,36 @@ export default function MediaLibrary() {
               <p className="text-sm text-zinc-500">
                 {files.length === 0
                   ? 'No hay imágenes ni videos en esta carpeta'
-                  : 'No hay archivos del tipo seleccionado'
-                }
+                  : 'No hay archivos del tipo seleccionado'}
               </p>
             </div>
           ) : (
             <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}>
-              {filteredFiles.map(file => (
-                <MediaThumb
-                  key={file.path}
-                  file={file}
-                  isActive={file.path === activeFilePath}
-                  onSend={handleSendMedia}
-                />
-              ))}
+              {filteredFiles.map(file =>
+                mode === 'fsa' ? (
+                  <FsaMediaThumb
+                    key={file.name}
+                    file={file}
+                    isActive={file.name === activeFileName}
+                    onSend={handleSendMedia}
+                  />
+                ) : (
+                  <MediaThumb
+                    key={file.path}
+                    file={file}
+                    isActive={file.path === activeFilePath}
+                    onSend={handleSendMedia}
+                  />
+                )
+              )}
             </div>
           )}
         </div>
       </main>
 
-      {showAddModal && (
+      {mode === 'server' && showAddModal && (
         <AddFolderModal
-          onAdd={handleAddFolder}
+          onAdd={handleAddFolderServer}
           onClose={() => setShowAddModal(false)}
         />
       )}
