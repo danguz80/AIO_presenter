@@ -31,7 +31,18 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,woff2}'],
         // No hacer caché de /api (necesita red)
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api/],
+        navigateFallbackDenylist: [/^\/api/, /^\/local-media/],
+        // Handler para archivos de media local (FSA → Cache API → OutputPage)
+        runtimeCaching: [
+          {
+            urlPattern: /^\/local-media\//,
+            handler: 'CacheOnly',
+            options: {
+              cacheName: 'aio-local-media',
+              // Sin expiración — se limpia manualmente desde la app
+            },
+          },
+        ],
       },
     }),
   ],
