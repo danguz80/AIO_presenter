@@ -41,6 +41,7 @@ router.get('/google/url', (req, res) => {
 /** GET /auth/google/callback — maneja el redirect de Google tras auth */
 router.get('/google/callback', async (req, res) => {
   const { code, error, state } = req.query;
+  console.log('[Auth] Callback recibido — redirect_uri:', `${process.env.SERVER_URL || 'http://localhost:3001'}/auth/google/callback`);
   if (error) return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(error)}`);
   if (!code)  return res.redirect(`${CLIENT_URL}/?sync_error=no_code`);
 
@@ -187,8 +188,12 @@ router.get('/google/callback', async (req, res) => {
     );
     res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
   } catch (err) {
-    console.error('[Auth] Error en callback OAuth:', err?.message || err);
-    res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(err.message)}`);
+    console.error('[Auth] Error en callback OAuth - tipo:', typeof err);
+    console.error('[Auth] Error en callback OAuth - valor:', err);
+    console.error('[Auth] Error en callback OAuth - mensaje:', err?.message);
+    console.error('[Auth] Error en callback OAuth - stack:', err?.stack);
+    const errMsg = err?.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'error_desconocido';
+    res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(errMsg)}`);
   }
 });
 
