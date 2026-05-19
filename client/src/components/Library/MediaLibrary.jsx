@@ -12,6 +12,22 @@ const SERVER_BASE = (() => {
 
 const INSTALLER_URL = 'https://raw.githubusercontent.com/danguz80/AIO_presenter/main/server/scripts/install-mac-service.command';
 
+const RELEASES_BASE = 'https://github.com/danguz80/AIO_presenter/releases/latest/download';
+
+const DOWNLOAD_URLS = {
+  'mac-arm64': `${RELEASES_BASE}/aio-presenter-server-mac-arm64`,
+  'mac-x64':   `${RELEASES_BASE}/aio-presenter-server-mac-x64`,
+  'win-x64':   `${RELEASES_BASE}/aio-presenter-server-win-x64.exe`,
+};
+
+/** Detecta el OS del browser */
+const clientOs = (() => {
+  const ua = navigator.userAgent;
+  if (/Win/i.test(ua))  return 'windows';
+  if (/Mac/i.test(ua))  return 'mac';
+  return 'other';
+})();
+
 function thumbUrl(filePath) {
   return `${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(filePath)}`;
 }
@@ -20,8 +36,90 @@ function thumbUrl(filePath) {
 function LocalServerSetup({ onRetry, retrying }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
+  const isMac = clientOs === 'mac';
+  const isWin = clientOs === 'windows';
+
+  // ── Contenido por OS ──────────────────────────────────────────────────────
+  const osConfig = isMac ? {
+    icon:      '🍎',
+    title:     'macOS detectado',
+    steps: [
+      {
+        label: 'Descarga el instalador para tu Mac',
+        body: (
+          <div className="flex flex-col gap-1.5">
+            <a href={DOWNLOAD_URLS['mac-arm64']}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-colors w-fit">
+              <Download size={12} /> Descargar (Apple Silicon — M1/M2/M3/M4)
+            </a>
+            <a href={DOWNLOAD_URLS['mac-x64']}
+              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-surface-700 hover:bg-surface-600 text-zinc-300 transition-colors w-fit">
+              <Download size={12} /> Descargar (Mac Intel)
+            </a>
+            <p className="text-[10px] text-zinc-600">¿No sabes cuál? Elige Apple Silicon si tu Mac es de 2020 en adelante.</p>
+          </div>
+        ),
+      },
+      {
+        label: 'Abre Terminal y ejecuta el archivo descargado',
+        body: (
+          <div>
+            <p className="text-xs text-zinc-500">Arrastra el archivo descargado al Terminal y presiona <kbd className="bg-surface-700 text-zinc-300 px-1 rounded text-[10px]">Enter</kbd>.</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5">Si macOS pide permiso, haz clic en "Abrir".</p>
+          </div>
+        ),
+      },
+      {
+        label: 'Sigue las instrucciones en pantalla',
+        body: <p className="text-xs text-zinc-500">El instalador te pedirá la URL de tu base de datos y configurará el servidor automáticamente.</p>,
+      },
+    ],
+  } : isWin ? {
+    icon:  '🪟',
+    title: 'Windows detectado',
+    steps: [
+      {
+        label: 'Descarga el instalador para Windows',
+        body: (
+          <a href={DOWNLOAD_URLS['win-x64']}
+            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-colors w-fit">
+            <Download size={12} /> Descargar (.exe — Windows 64 bits)
+          </a>
+        ),
+      },
+      {
+        label: 'Haz doble clic en el archivo descargado',
+        body: (
+          <div>
+            <p className="text-xs text-zinc-500">Se abrirá una ventana de consola con instrucciones paso a paso.</p>
+            <p className="text-[11px] text-zinc-600 mt-0.5">Si Windows SmartScreen avisa, haz clic en "Más información" → "Ejecutar de todas formas".</p>
+          </div>
+        ),
+      },
+      {
+        label: 'Sigue las instrucciones en pantalla',
+        body: <p className="text-xs text-zinc-500">El instalador configurará el servidor y lo registrará para inicio automático con Windows.</p>,
+      },
+    ],
+  } : {
+    icon:  '💻',
+    title: 'Sistema detectado',
+    steps: [
+      {
+        label: 'Descarga el instalador para tu sistema',
+        body: (
+          <div className="flex flex-col gap-1">
+            <a href={DOWNLOAD_URLS['mac-arm64']} className="text-xs text-accent hover:underline"><Download size={10} className="inline mr-1" />macOS Apple Silicon</a>
+            <a href={DOWNLOAD_URLS['mac-x64']}   className="text-xs text-accent hover:underline"><Download size={10} className="inline mr-1" />macOS Intel</a>
+            <a href={DOWNLOAD_URLS['win-x64']}   className="text-xs text-accent hover:underline"><Download size={10} className="inline mr-1" />Windows 64 bits</a>
+          </div>
+        ),
+      },
+    ],
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center h-full gap-5 px-8 text-center">
+    <div className="flex flex-col items-center justify-center h-full gap-5 px-8 text-center overflow-y-auto py-4">
       <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
         <MonitorCheck size={24} className="text-amber-400" />
       </div>
@@ -31,39 +129,19 @@ function LocalServerSetup({ onRetry, retrying }) {
           Configura el acceso a medios locales
         </p>
         <p className="text-xs text-zinc-500 leading-relaxed max-w-sm">
-          Para reproducir videos e imágenes desde tu Mac, necesitas instalar
-          el servidor local de AIO Presenter. Solo se hace <strong className="text-zinc-400">una vez</strong>.
+          Para ver tus videos e imágenes, instala el servidor local de AIO Presenter.
+          Solo se hace <strong className="text-zinc-400">una vez</strong>.{' '}
+          <span className="text-zinc-600">{osConfig.icon} {osConfig.title}</span>
         </p>
       </div>
 
       {/* Pasos */}
-      <div className="w-full max-w-sm space-y-2 text-left">
-        <Step n={1} label="Descarga el instalador">
-          <a
-            href={INSTALLER_URL}
-            download="install-mac-service.command"
-            className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-colors"
-          >
-            <Download size={12} /> Descargar instalador
-          </a>
-        </Step>
-
-        <Step n={2} label='Haz doble clic en el archivo descargado'>
-          <p className="text-xs text-zinc-500">
-            Abre Finder → Descargas → doble clic en{' '}
-            <code className="text-zinc-300 bg-surface-700 px-1 rounded text-[10px]">
-              install-mac-service.command
-            </code>
-          </p>
-          <p className="text-[11px] text-zinc-600 mt-0.5">
-            Si macOS pide permiso, haz clic en "Abrir"
-          </p>
-        </Step>
-
-        <Step n={3} label='Recarga esta página'>
-          <p className="text-xs text-zinc-500">
-            El servidor arrancará solo, incluso cuando reinicies tu Mac.
-          </p>
+      <div className="w-full max-w-sm space-y-3 text-left">
+        {osConfig.steps.map((s, i) => (
+          <Step key={i} n={i + 1} label={s.label}>{s.body}</Step>
+        ))}
+        <Step n={osConfig.steps.length + 1} label="Haz clic en 'Ya lo instalé'">
+          <p className="text-xs text-zinc-500">La biblioteca de medios aparecerá automáticamente.</p>
         </Step>
       </div>
 
@@ -86,13 +164,11 @@ function LocalServerSetup({ onRetry, retrying }) {
       {showAdvanced && (
         <div className="w-full max-w-sm bg-surface-900 rounded-lg p-3 text-left space-y-2">
           <p className="text-[11px] text-zinc-500">Desde la carpeta del proyecto:</p>
-          <code className="block text-[11px] text-zinc-300 font-mono bg-black/30 rounded px-3 py-2">
+          <code className="block text-[11px] text-zinc-300 font-mono bg-black/30 rounded px-3 py-2 select-all">
             cd server && npm run install-service
           </code>
-          <p className="text-[11px] text-zinc-600 mt-1">
-            O para iniciar manualmente sin instalar:
-          </p>
-          <code className="block text-[11px] text-zinc-300 font-mono bg-black/30 rounded px-3 py-2">
+          <p className="text-[11px] text-zinc-600">O para iniciar sin instalar (temporal):</p>
+          <code className="block text-[11px] text-zinc-300 font-mono bg-black/30 rounded px-3 py-2 select-all">
             cd server && npm start
           </code>
         </div>

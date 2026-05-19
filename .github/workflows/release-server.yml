@@ -1,0 +1,115 @@
+name: Build & Release Server Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'          # se dispara con: git tag v1.0.0 && git push --tags
+  workflow_dispatch:  # permite ejecutar manualmente desde GitHub
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest   # pkg puede cross-compilar desde Linux
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js ───────────────────────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      # ── 3. Instalar dependencias del servidor ─────────────────────────────────
+      - name: Install server dependencies
+        run: cd server && npm ci --production
+
+      # ── 4. Instalar pkg ───────────────────────────────────────────────────────
+      - name: Install pkg
+        run: npm install -g @yao-pkg/pkg
+
+      # ── 5. Crear directorio de salida ─────────────────────────────────────────
+      - name: Create dist directory
+        run: mkdir -p server/dist
+
+      # ── 6. Compilar binarios ──────────────────────────────────────────────────
+      - name: Build macOS ARM64 (Apple Silicon)
+        run: |
+          cd server
+          pkg cli.js \
+            --target node20-macos-arm64 \
+            --output dist/aio-presenter-server-mac-arm64 \
+            --compress GZip
+
+      - name: Build macOS x64 (Intel)
+        run: |
+          cd server
+          pkg cli.js \
+            --target node20-macos-x64 \
+            --output dist/aio-presenter-server-mac-x64 \
+            --compress GZip
+
+      - name: Build Windows x64
+        run: |
+          cd server
+          pkg cli.js \
+            --target node20-win-x64 \
+            --output dist/aio-presenter-server-win-x64.exe \
+            --compress GZip
+
+      # ── 7. Hacer ejecutables los binarios de Mac ──────────────────────────────
+      - name: Set execute permissions
+        run: |
+          chmod +x server/dist/aio-presenter-server-mac-arm64
+          chmod +x server/dist/aio-presenter-server-mac-x64
+
+      # ── 8. Mostrar tamaños ────────────────────────────────────────────────────
+      - name: Show binary sizes
+        run: ls -lh server/dist/
+
+      # ── 9. Subir artifacts (para workflow_dispatch sin tag) ────────────────────
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-binaries
+          path: |
+            server/dist/aio-presenter-server-mac-arm64
+            server/dist/aio-presenter-server-mac-x64
+            server/dist/aio-presenter-server-win-x64.exe
+          retention-days: 30
+
+      # ── 10. Crear GitHub Release (solo cuando se hace push de tag) ────────────
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "AIO Presenter Server ${{ github.ref_name }}"
+          body: |
+            ## Servidor local AIO Presenter ${{ github.ref_name }}
+
+            Descarga el instalador para tu sistema operativo y haz doble clic:
+
+            | Sistema | Archivo | Arquitectura |
+            |---------|---------|--------------|
+            | 🍎 macOS (Apple Silicon) | `aio-presenter-server-mac-arm64` | arm64 |
+            | 🍎 macOS (Intel) | `aio-presenter-server-mac-x64` | x64 |
+            | 🪟 Windows | `aio-presenter-server-win-x64.exe` | x64 |
+
+            ### Primera vez
+            1. Descarga el archivo de tu sistema
+            2. En **macOS**: abre Terminal, arrastra el archivo y presiona Enter → sigue las instrucciones
+            3. En **Windows**: doble clic en el `.exe` → sigue las instrucciones
+            4. El servidor se instalará como servicio automático
+
+            ### Requisitos
+            - **Ninguno** — el binario incluye Node.js integrado
+          files: |
+            server/dist/aio-presenter-server-mac-arm64
+            server/dist/aio-presenter-server-mac-x64
+            server/dist/aio-presenter-server-win-x64.exe
+          draft: false
+          prerelease: false

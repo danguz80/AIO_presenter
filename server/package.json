@@ -3,11 +3,31 @@
   "version": "1.0.0",
   "description": "AIO Presenter - Backend API",
   "main": "src/index.js",
+  "bin": "cli.js",
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "install-service": "bash scripts/install-mac-service.command",
-    "uninstall-service": "bash scripts/uninstall-mac-service.command"
+    "uninstall-service": "bash scripts/uninstall-mac-service.command",
+    "build:mac-arm": "pkg cli.js --target node20-macos-arm64 --output dist/aio-presenter-server-mac-arm64 --compress GZip",
+    "build:mac-x64": "pkg cli.js --target node20-macos-x64  --output dist/aio-presenter-server-mac-x64  --compress GZip",
+    "build:win":     "pkg cli.js --target node20-win-x64    --output dist/aio-presenter-server-win-x64.exe --compress GZip",
+    "build:all":     "npm run build:mac-arm && npm run build:mac-x64 && npm run build:win"
+  },
+  "pkg": {
+    "scripts": [
+      "src/**/*.js"
+    ],
+    "assets": [
+      "src/**/*.json",
+      "src/**/*.sql"
+    ],
+    "targets": [
+      "node20-macos-arm64",
+      "node20-macos-x64",
+      "node20-win-x64"
+    ],
+    "outputPath": "dist"
   },
   "dependencies": {
     "cors": "^2.8.5",
