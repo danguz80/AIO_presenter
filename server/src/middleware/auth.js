@@ -16,6 +16,19 @@ function requireAuth(req, res, next) {
   }
 }
 
+/** Verifica JWT si está presente, pero NO bloquea si falta o es inválido */
+function optionalAuth(req, res, next) {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    } catch {
+      // Token inválido — continúa sin autenticar
+    }
+  }
+  next();
+}
+
 /** Solo admin de la organización */
 function requireAdmin(req, res, next) {
   if (!req.user?.isAdmin) {
@@ -24,4 +37,4 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requireAdmin, JWT_SECRET };
+module.exports = { requireAuth, optionalAuth, requireAdmin, JWT_SECRET };

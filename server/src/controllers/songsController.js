@@ -1,10 +1,17 @@
 const pool = require('../config/database');
 
+/** Fallback: si no hay JWT, usa la primera org disponible */
+async function resolveOrgId(user) {
+  if (user?.orgId) return user.orgId;
+  const { rows } = await pool.query('SELECT id FROM organizations ORDER BY id LIMIT 1');
+  return rows[0]?.id ?? null;
+}
+
 // GET /api/songs
 const getAllSongs = async (req, res) => {
   try {
     const { search, tag } = req.query;
-    const orgId = req.user.orgId;
+    const orgId = await resolveOrgId(req.user);
     const params = [orgId];
 
     let query = `
@@ -36,7 +43,7 @@ const getAllSongs = async (req, res) => {
 const getSongById = async (req, res) => {
   try {
     const { id } = req.params;
-    const orgId = req.user.orgId;
+    const orgId = await resolveOrgId(req.user);
     const songResult = await pool.query(
       'SELECT * FROM songs WHERE id = $1 AND organization_id = $2',
       [id, orgId]
@@ -170,7 +177,7 @@ const deleteSong = async (req, res) => {
 // GET /api/songs/tags
 const getAllTags = async (req, res) => {
   try {
-    const orgId = req.user.orgId;
+    const orgId = await resolveOrgId(req.user);
     const { rows } = await pool.query(
       `SELECT DISTINCT unnest(tags) AS tag FROM songs
        WHERE tags IS NOT NULL AND organization_id = $1 ORDER BY tag ASC`,

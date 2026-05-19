@@ -1,6 +1,16 @@
 const pool = require('../config/database');
 
 /**
+ * Devuelve el orgId del usuario autenticado, o el id de la primera org
+ * si la petición es anónima (sin JWT). Permite acceso de lectura sin login.
+ */
+async function resolveOrgId(user) {
+  if (user?.orgId) return user.orgId;
+  const { rows } = await pool.query('SELECT id FROM organizations ORDER BY id LIMIT 1');
+  return rows[0]?.id ?? null;
+}
+
+/**
  * Genera todas las fechas de un evento recurrente dentro del rango [start, end].
  */
 function expandRecurring(baseDate, recurrence, recurEnd, start, end) {
@@ -27,7 +37,7 @@ function expandRecurring(baseDate, recurrence, recurEnd, start, end) {
 async function getEvents(req, res) {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ error: 'Parámetros start y end requeridos' });
-  const orgId = req.user.orgId;
+  const orgId = await resolveOrgId(req.user);
 
   const songSelect = `
     COALESCE(
@@ -135,7 +145,7 @@ async function getEvents(req, res) {
 // GET /api/events/:id
 async function getEventById(req, res) {
   const { id } = req.params;
-  const orgId = req.user.orgId;
+  const orgId = await resolveOrgId(req.user);
   try {
     const { rows } = await pool.query(
       `SELECT e.*,

@@ -1,12 +1,10 @@
 const express = require('express');
 const router  = express.Router();
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, optionalAuth } = require('../middleware/auth');
 const { getTemplates, createTemplate, deleteTemplate } = require('../controllers/eventTemplatesController');
 
-router.use(requireAuth);
-
-router.get('/',       getTemplates);
-router.post('/',      createTemplate);
-router.delete('/:id', deleteTemplate);
+router.get('/',       optionalAuth, getTemplates);
+router.post('/',      requireAuth,  createTemplate);
+router.delete('/:id', requireAuth,  deleteTemplate);
 
 module.exports = router;
