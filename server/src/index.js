@@ -22,12 +22,16 @@ const app    = express();
 const server = http.createServer(app);
 
 // ─── CORS ───────────────────────────────────────────────────────────────────
-// Permitir cualquier origen de red local (móviles en la misma red WiFi)
-app.use(cors({ origin: true, credentials: true }));
+// En producción sólo acepta el dominio oficial; en desarrollo acepta cualquier origen.
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : true; // true = cualquier origen (dev)
+
+app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 // ─── SOCKET.IO ──────────────────────────────────────────────────────────────
 const io = new Server(server, {
-  cors: { origin: true, methods: ['GET', 'POST'] },
+  cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
 });
 
 /**

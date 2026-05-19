@@ -292,12 +292,16 @@ export function PresenterProvider({ children }) {
 
   // Conectar Socket.io
   useEffect(() => {
-    // Conectar directamente al backend (sin pasar por el proxy de Vite)
-    // Usa IP guardada en localStorage para que funcione como PWA instalada
-    const savedIp   = localStorage.getItem('aio_server_ip');
-    const savedPort = localStorage.getItem('aio_server_port') || '3001';
-    const host      = savedIp || window.location.hostname;
-    const backendUrl = `http://${host}:${savedPort}`;
+    // En producción usa VITE_API_URL; en desarrollo usa IP/puerto guardado en localStorage
+    let backendUrl;
+    if (import.meta.env.VITE_API_URL) {
+      backendUrl = import.meta.env.VITE_API_URL;
+    } else {
+      const savedIp   = localStorage.getItem('aio_server_ip');
+      const savedPort = localStorage.getItem('aio_server_port') || '3001';
+      const host      = savedIp || window.location.hostname;
+      backendUrl = `http://${host}:${savedPort}`;
+    }
     const socket = io(backendUrl, { autoConnect: true });
     socketRef.current = socket;
 
