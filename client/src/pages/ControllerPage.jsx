@@ -14,10 +14,12 @@ import { Link } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
 function authFetch(url, opts = {}) {
   const token = localStorage.getItem('aio_sync_token');
   const headers = { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
-  return fetch(url, { ...opts, headers });
+  return fetch(`${API_BASE}${url}`, { ...opts, headers });
 }
 const RECURRENCE_LABEL = { weekly: 'Semanal', biweekly: 'Cada 2 semanas', monthly: 'Mensual' };
 
