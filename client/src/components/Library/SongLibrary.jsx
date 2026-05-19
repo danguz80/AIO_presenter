@@ -215,8 +215,11 @@ export default function SongLibrary() {
     <>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-surface-700">
-        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
           Canciones
+          <span className="bg-surface-600 text-zinc-300 text-xs font-bold px-1.5 py-0.5 rounded-full">
+            {state.songs.length}
+          </span>
         </span>
         <div className="flex items-center gap-1">
           <button
@@ -250,7 +253,7 @@ export default function SongLibrary() {
       {/* Chips de filtro por etiqueta */}
       {allTags.length > 0 && (
         <div className="flex flex-wrap gap-1 px-3 py-2 border-b border-surface-700">
-          {allTags.map(tag => (
+          {allTags.filter(tag => !['adoración', 'adoracion', 'clásico', 'clasico', 'contemporáneo', 'contemporaneo'].includes(tag.toLowerCase())).map(tag => (
             <button
               key={tag}
               onClick={() => handleTagFilter(tag)}

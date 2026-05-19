@@ -27,6 +27,7 @@ function expandRecurring(baseDate, recurrence, recurEnd, start, end) {
 async function getEvents(req, res) {
   const { start, end } = req.query;
   if (!start || !end) return res.status(400).json({ error: 'Parámetros start y end requeridos' });
+  const orgId = req.user.orgId;
 
   const songSelect = `
     COALESCE(
@@ -50,25 +51,26 @@ async function getEvents(req, res) {
   `;
 
   try {
-    // Eventos no recurrentes (occurrence_date siempre NULL para estos)
+    // Eventos no recurrentes
     const { rows: single } = await pool.query(
       `SELECT e.*, ${songSelect}
        FROM events e
        LEFT JOIN event_songs es ON es.event_id = e.id AND es.occurrence_date IS NULL
        LEFT JOIN songs s ON s.id = es.song_id
-       WHERE e.is_recurring = false AND e.date BETWEEN $1 AND $2
+       WHERE e.is_recurring = false AND e.date BETWEEN $1 AND $2 AND e.organization_id = $3
        GROUP BY e.id
        ORDER BY e.date, e.time`,
-      [start, end]
+      [start, end, orgId]
     );
 
-    // Eventos recurrentes (solo metadatos, sin canciones)
+    // Eventos recurrentes
     const { rows: recurring } = await pool.query(
       `SELECT e.* FROM events e
        WHERE e.is_recurring = true
-         AND e.date <= $2
-         AND (e.recur_end IS NULL OR e.recur_end >= $1)`,
-      [start, end]
+         AND e.date <= $1
+         AND (e.recur_end IS NULL OR e.recur_end >= $2)
+         AND e.organization_id = $3`,
+      [end, start, orgId]
     );
 
     // Canciones de recurrentes agrupadas por (event_id, occurrence_date)
@@ -133,6 +135,7 @@ async function getEvents(req, res) {
 // GET /api/events/:id
 async function getEventById(req, res) {
   const { id } = req.params;
+  const orgId = req.user.orgId;
   try {
     const { rows } = await pool.query(
       `SELECT e.*,
@@ -150,9 +153,9 @@ async function getEventById(req, res) {
        FROM events e
        LEFT JOIN event_songs es ON es.event_id = e.id
        LEFT JOIN songs s ON s.id = es.song_id
-       WHERE e.id = $1
+       WHERE e.id = $1 AND e.organization_id = $2
        GROUP BY e.id`,
-      [id]
+      [id, orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Evento no encontrado' });
     res.json(rows[0]);
@@ -165,15 +168,16 @@ async function getEventById(req, res) {
 async function createEvent(req, res) {
   const { title, date, time, description, is_recurring, recurrence, recur_end, songs = [] } = req.body;
   if (!title || !date) return res.status(400).json({ error: 'title y date son requeridos' });
+  const orgId = req.user.orgId;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows } = await client.query(
-      `INSERT INTO events (title, date, time, description, is_recurring, recurrence, recur_end)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO events (title, date, time, description, is_recurring, recurrence, recur_end, organization_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [title, date, time || null, description || null, is_recurring || false, recurrence || null, recur_end || null]
+      [title, date, time || null, description || null, is_recurring || false, recurrence || null, recur_end || null, orgId]
     );
     const event = rows[0];
     for (let i = 0; i < songs.length; i++) {
@@ -204,6 +208,7 @@ async function createEvent(req, res) {
 // PUT /api/events/:id
 async function updateEvent(req, res) {
   const { id } = req.params;
+  const orgId = req.user.orgId;
   const { title, date, time, description, is_recurring, recurrence, recur_end, songs, occurrence_date } = req.body;
 
   const client = await pool.connect();
@@ -213,8 +218,8 @@ async function updateEvent(req, res) {
       `UPDATE events
        SET title=$1, date=$2, time=$3, description=$4, is_recurring=$5,
            recurrence=$6, recur_end=$7, updated_at=NOW()
-       WHERE id=$8 RETURNING *`,
-      [title, date, time || null, description || null, is_recurring, recurrence || null, recur_end || null, id]
+       WHERE id=$8 AND organization_id=$9 RETURNING *`,
+      [title, date, time || null, description || null, is_recurring, recurrence || null, recur_end || null, id, orgId]
     );
     if (!rows.length) {
       await client.query('ROLLBACK');
@@ -222,7 +227,6 @@ async function updateEvent(req, res) {
     }
     if (Array.isArray(songs)) {
       if (occurrence_date) {
-        // Solo actualizar canciones para esta ocurrencia específica
         await client.query(
           'DELETE FROM event_songs WHERE event_id=$1 AND occurrence_date=$2',
           [id, occurrence_date]
@@ -243,7 +247,6 @@ async function updateEvent(req, res) {
           }
         }
       } else {
-        // Evento no recurrente: canciones sin occurrence_date
         await client.query('DELETE FROM event_songs WHERE event_id=$1 AND occurrence_date IS NULL', [id]);
         for (let i = 0; i < songs.length; i++) {
           const item = songs[i];
@@ -275,8 +278,12 @@ async function updateEvent(req, res) {
 // DELETE /api/events/:id
 async function deleteEvent(req, res) {
   const { id } = req.params;
+  const orgId = req.user.orgId;
   try {
-    const { rowCount } = await pool.query('DELETE FROM events WHERE id=$1', [id]);
+    const { rowCount } = await pool.query(
+      'DELETE FROM events WHERE id=$1 AND organization_id=$2',
+      [id, orgId]
+    );
     if (!rowCount) return res.status(404).json({ error: 'Evento no encontrado' });
     res.json({ ok: true });
   } catch (err) {

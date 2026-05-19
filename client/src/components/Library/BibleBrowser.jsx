@@ -74,14 +74,12 @@ export default function BibleBrowser() {
     setVerses([]);
     api.get(`/bible/${versionId}/books/${book.id}/chapters`).then(res => {
       setChapters(res.data);
-      if (res.data.length > 0) {
-        // Si hay un capítulo pendiente por referencia, usarlo; si no, ir al 1
-        const target = pendingChapter && res.data.includes(pendingChapter)
-          ? pendingChapter
-          : res.data[0];
-        setChapter(target);
+      if (pendingChapter && res.data.includes(pendingChapter)) {
+        // Solo auto-seleccionar si viene de una referencia (ej: "Juan 3")
+        setChapter(pendingChapter);
         setPendingChapter(null);
       }
+      // Si no hay pendingChapter, dejar que el usuario elija el capítulo
     }).catch(console.error).finally(() => setLoadingChapters(false));
   }, [book]);
 

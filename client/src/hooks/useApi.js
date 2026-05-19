@@ -11,4 +11,13 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// Adjuntar JWT automáticamente en cada request
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('aio_sync_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export default api;

@@ -341,6 +341,11 @@ export default function SyncPanel() {
     const invite = params.get('invite');
     if (token) {
       localStorage.setItem('aio_sync_token', token);
+      // Extraer orgId del payload del JWT para usarlo en Socket.io
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.orgId) localStorage.setItem('aio_org_id', String(payload.orgId));
+      } catch { /* si el token está mal formado, ignorar */ }
       const clean = window.location.href
         .replace(/[?&]sync_token=[^&]+/, '')
         .replace(/[?&]sync_error=[^&]+/, '')
@@ -392,6 +397,7 @@ export default function SyncPanel() {
 
   const handleLogout = () => {
     localStorage.removeItem('aio_sync_token');
+    localStorage.removeItem('aio_org_id');
     setUser(null); setSyncInfo(null);
     setStatus({ type: 'ok', msg: 'Sesión cerrada' });
   };

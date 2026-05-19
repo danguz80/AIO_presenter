@@ -13,6 +13,12 @@ import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, Chev
 import { Link } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+function authFetch(url, opts = {}) {
+  const token = localStorage.getItem('aio_sync_token');
+  const headers = { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  return fetch(url, { ...opts, headers });
+}
 const RECURRENCE_LABEL = { weekly: 'Semanal', biweekly: 'Cada 2 semanas', monthly: 'Mensual' };
 
 // ─── Hook: panel redimensionable arrastrando el borde ───────────────────────
@@ -388,13 +394,13 @@ function EventsPanel() {
   // Cargar todas las canciones una vez al abrir
   useEffect(() => {
     if (open && allSongs.length === 0) {
-      fetch('/api/songs').then(r => r.json()).then(setAllSongs).catch(() => {});
+      authFetch('/api/songs').then(r => r.json()).then(setAllSongs).catch(() => {});
     }
   }, [open]); // eslint-disable-line
 
   // Cargar plantillas de eventos
   useEffect(() => {
-    fetch('/api/event-templates').then(r => r.json()).then(setTemplates).catch(() => {});
+    authFetch('/api/event-templates').then(r => r.json()).then(setTemplates).catch(() => {});
   }, []);
 
   const fetchEvents = useCallback((y, m) => {
@@ -403,7 +409,7 @@ function EventsPanel() {
     const end     = `${y}-${pad(m + 1)}-${pad(lastDay)}`;
     setLoading(true);
     setSelectedEv(null);
-    fetch(`/api/events?start=${start}&end=${end}`)
+    authFetch(`/api/events?start=${start}&end=${end}`)
       .then(r => r.json())
       .then(data => setEvents(Array.isArray(data) ? data : []))
       .catch(() => setEvents([]))
@@ -439,7 +445,7 @@ function EventsPanel() {
   const saveItemsToApi = useCallback(async (items) => {
     const occDate  = selectedEv.is_recurring ? String(selectedEv.date).split('T')[0] : null;
     const baseDate = selectedEv.base_date    || String(selectedEv.date).split('T')[0];
-    await fetch(`/api/events/${selectedEv.id}`, {
+    await authFetch(`/api/events/${selectedEv.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -518,7 +524,7 @@ function EventsPanel() {
             separator_color: item.separator_color || null,
           }))
         : [];
-      const res = await fetch('/api/events', {
+      const res = await authFetch('/api/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -586,7 +592,7 @@ function EventsPanel() {
         separator_label: s.separator_label || null,
         separator_color: s.separator_color || null,
       }));
-      const res  = await fetch('/api/event-templates', {
+      const res  = await authFetch('/api/event-templates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: templateName.trim(), items }),
       });
@@ -614,7 +620,7 @@ function EventsPanel() {
         separator_label: s.separator_label || null,
         separator_color: s.separator_color || null,
       }));
-      const res = await fetch('/api/event-templates', {
+      const res = await authFetch('/api/event-templates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: activeTemplate.name, items }),
       });
@@ -640,7 +646,7 @@ function EventsPanel() {
         separator_label: s.separator_label || null,
         separator_color: s.separator_color || null,
       }));
-      const res = await fetch('/api/event-templates', {
+      const res = await authFetch('/api/event-templates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: altTemplateName.trim(), items }),
       });
@@ -661,7 +667,7 @@ function EventsPanel() {
 
   const deleteTemplateById = async (id) => {
     try {
-      await fetch(`/api/event-templates/${id}`, { method: 'DELETE' });
+      await authFetch(`/api/event-templates/${id}`, { method: 'DELETE' });
       setTemplates(ts => ts.filter(t => t.id !== id));
       if (selectedTemplate?.id === id) setSelectedTemplate(null);
     } catch (e) { console.error(e); }
@@ -695,7 +701,7 @@ function EventsPanel() {
     if (!editEvData.date)          { setEditEvError('Elige una fecha'); return; }
     setEditEvBusy(true); setEditEvError('');
     try {
-      const res = await fetch(`/api/events/${selectedEv.id}`, {
+      const res = await authFetch(`/api/events/${selectedEv.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -732,7 +738,7 @@ function EventsPanel() {
   const deleteEvent = async () => {
     if (!window.confirm(`¿Eliminar el evento "${selectedEv.title}"?`)) return;
     try {
-      await fetch(`/api/events/${selectedEv.id}`, { method: 'DELETE' });
+      await authFetch(`/api/events/${selectedEv.id}`, { method: 'DELETE' });
       setSelectedEv(null);
       setEvents(evs => evs.filter(e => e.id !== selectedEv.id));
     } catch (e) { console.error(e); }
@@ -774,7 +780,7 @@ function EventsPanel() {
 
   const openEditSong = async (song_id) => {
     try {
-      const res = await fetch(`/api/songs/${song_id}`);
+      const res = await authFetch(`/api/songs/${song_id}`);
       const data = await res.json();
       setEditingSong(data);
     } catch (e) { console.error(e); }
@@ -1565,7 +1571,7 @@ function EventsPanel() {
         onClose={async () => {
           // refrescar datos de la canción editada en la playlist
           try {
-            const res = await fetch(`/api/songs/${editingSong.id}`);
+            const res = await authFetch(`/api/songs/${editingSong.id}`);
             const updated = await res.json();
             setSelectedEv(ev => ({
               ...ev,

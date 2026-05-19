@@ -302,7 +302,12 @@ export function PresenterProvider({ children }) {
       const host      = savedIp || window.location.hostname;
       backendUrl = `http://${host}:${savedPort}`;
     }
-    const socket = io(backendUrl, { autoConnect: true });
+    const token = localStorage.getItem('aio_sync_token');
+    const orgId = localStorage.getItem('aio_org_id');
+    const socket = io(backendUrl, {
+      autoConnect: true,
+      auth: { token: token || undefined, orgId: orgId || undefined },
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {

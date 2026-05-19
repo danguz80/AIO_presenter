@@ -56,17 +56,18 @@ router.get('/google/callback', async (req, res) => {
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const { data: userInfo } = await oauth2.userinfo.get();
 
-    // Verificar si es el primer usuario (→ admin)
+    // Verificar si es el primer usuario global (→ admin de nueva org)
     const { rows: countRows } = await pool.query('SELECT COUNT(*) FROM sync_users');
-    const isFirst = parseInt(countRows[0].count, 10) === 0;
-    const isAdmin = isFirst || (ADMIN_EMAIL && ADMIN_EMAIL === userInfo.email);
+    const isFirstGlobal = parseInt(countRows[0].count, 10) === 0;
+    const isAdmin = isFirstGlobal || (ADMIN_EMAIL && ADMIN_EMAIL === userInfo.email);
 
-    // Validar invitación (si viene con código)
-    let invitePerms = { can_push: false, can_push_all: false };
-    let inviteId    = null;
-    if (inviteCode && !isFirst) {
+    // ─── Determinar organización ───────────────────────────────────────────
+    let orgId = null;
+
+    if (inviteCode) {
+      // Validar invitación y obtener orgId
       const { rows: invRows } = await pool.query(
-        `SELECT id, email, can_push, can_push_all, expires_at, used_by
+        `SELECT id, email, can_push, can_push_all, expires_at, used_by, organization_id
          FROM sync_invitations WHERE code = $1`, [inviteCode]
       );
       if (!invRows.length) {
@@ -82,62 +83,108 @@ router.get('/google/callback', async (req, res) => {
       if (inv.email && inv.email.toLowerCase() !== userInfo.email.toLowerCase()) {
         return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(`Esta invitación es solo para ${inv.email}`)}`);
       }
-      invitePerms = { can_push: inv.can_push, can_push_all: inv.can_push_all };
-      inviteId    = inv.id;
-    } else if (!inviteCode && !isFirst) {
-      // No es admin ni tiene invitación → verificar si ya existe
-      const { rows: existingUser } = await pool.query(
-        'SELECT id FROM sync_users WHERE google_id = $1', [userInfo.id]
+      orgId = inv.organization_id;
+
+      // Upsert usuario con permisos de la invitación
+      const { rows } = await pool.query(`
+        INSERT INTO sync_users (google_id, email, display_name, avatar_url, is_admin, can_push, can_push_all, organization_id, access_token, refresh_token, token_expiry)
+        VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT (google_id) DO UPDATE SET
+          email         = EXCLUDED.email,
+          display_name  = EXCLUDED.display_name,
+          avatar_url    = EXCLUDED.avatar_url,
+          can_push      = sync_users.can_push OR EXCLUDED.can_push,
+          can_push_all  = sync_users.can_push_all OR EXCLUDED.can_push_all,
+          organization_id = COALESCE(sync_users.organization_id, EXCLUDED.organization_id),
+          access_token  = EXCLUDED.access_token,
+          refresh_token = COALESCE(EXCLUDED.refresh_token, sync_users.refresh_token),
+          token_expiry  = EXCLUDED.token_expiry,
+          updated_at    = NOW()
+        RETURNING *
+      `, [
+        userInfo.id, userInfo.email, userInfo.name, userInfo.picture,
+        inv.can_push, inv.can_push_all, orgId,
+        tokens.access_token, tokens.refresh_token || null, tokens.expiry_date || null,
+      ]);
+
+      await pool.query(
+        'UPDATE sync_invitations SET used_by=$1, used_at=NOW() WHERE id=$2',
+        [rows[0].id, inv.id]
       );
-      if (!existingUser.length) {
-        return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent('Necesitas un código de invitación para unirte')}`);
-      }
+
+      const user = rows[0];
+      const jwtToken = jwt.sign(
+        { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, canPush: user.can_push },
+        JWT_SECRET, { expiresIn: '30d' }
+      );
+      return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
     }
 
-    // Upsert usuario
-    const { rows } = await pool.query(`
-      INSERT INTO sync_users (google_id, email, display_name, avatar_url, is_admin, can_push, can_push_all, access_token, refresh_token, token_expiry)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    // Sin invitación: admin que crea o entra a su org
+    // Buscar si el usuario ya existe
+    const { rows: existingRows } = await pool.query(
+      'SELECT * FROM sync_users WHERE google_id = $1', [userInfo.id]
+    );
+
+    if (existingRows.length > 0 && existingRows[0].organization_id) {
+      // Usuario ya registrado con org — actualizar tokens y devolver JWT
+      orgId = existingRows[0].organization_id;
+      await pool.query(
+        `UPDATE sync_users SET access_token=$1, refresh_token=COALESCE($2, refresh_token),
+         token_expiry=$3, updated_at=NOW() WHERE id=$4`,
+        [tokens.access_token, tokens.refresh_token || null, tokens.expiry_date || null, existingRows[0].id]
+      );
+      const user = existingRows[0];
+      const jwtToken = jwt.sign(
+        { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, canPush: user.can_push },
+        JWT_SECRET, { expiresIn: '30d' }
+      );
+      return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
+    }
+
+    if (!isFirstGlobal && !isAdmin && existingRows.length === 0) {
+      return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent('Necesitas un código de invitación para unirte')}`);
+    }
+
+    // Primer usuario o admin: crear nueva organización
+    const orgName = userInfo.name ? `Iglesia de ${userInfo.name}` : `Org ${userInfo.email}`;
+    const { rows: orgRows } = await pool.query(
+      `INSERT INTO organizations (name) VALUES ($1) RETURNING id`,
+      [orgName]
+    );
+    orgId = orgRows[0].id;
+
+    // Migrar todos los datos sin org a esta nueva org (primera vez o usuario existente sin org)
+    await pool.query('UPDATE songs  SET organization_id=$1 WHERE organization_id IS NULL', [orgId]);
+    await pool.query('UPDATE events SET organization_id=$1 WHERE organization_id IS NULL', [orgId]);
+
+    // Insertar usuario admin de la nueva org
+    const { rows: newUserRows } = await pool.query(`
+      INSERT INTO sync_users (google_id, email, display_name, avatar_url, is_admin, can_push, can_push_all, organization_id, access_token, refresh_token, token_expiry)
+      VALUES ($1, $2, $3, $4, true, true, true, $5, $6, $7, $8)
       ON CONFLICT (google_id) DO UPDATE SET
         email         = EXCLUDED.email,
         display_name  = EXCLUDED.display_name,
         avatar_url    = EXCLUDED.avatar_url,
-        is_admin      = sync_users.is_admin OR EXCLUDED.is_admin,
-        can_push      = sync_users.can_push OR EXCLUDED.can_push,
-        can_push_all  = sync_users.can_push_all OR EXCLUDED.can_push_all,
+        is_admin      = TRUE,
+        can_push      = TRUE,
+        can_push_all  = TRUE,
+        organization_id = EXCLUDED.organization_id,
         access_token  = EXCLUDED.access_token,
         refresh_token = COALESCE(EXCLUDED.refresh_token, sync_users.refresh_token),
         token_expiry  = EXCLUDED.token_expiry,
         updated_at    = NOW()
       RETURNING *
     `, [
-      userInfo.id,
-      userInfo.email,
-      userInfo.name,
-      userInfo.picture,
-      isAdmin,
-      isAdmin || invitePerms.can_push,
-      isAdmin || invitePerms.can_push_all,
-      tokens.access_token,
-      tokens.refresh_token || null,
-      tokens.expiry_date || null,
+      userInfo.id, userInfo.email, userInfo.name, userInfo.picture,
+      orgId, tokens.access_token, tokens.refresh_token || null, tokens.expiry_date || null,
     ]);
 
-    // Marcar invitación como usada
-    if (inviteId) {
-      await pool.query(
-        'UPDATE sync_invitations SET used_by=$1, used_at=NOW() WHERE id=$2',
-        [rows[0].id, inviteId]
-      );
-    }
-
-    const user = rows[0];
+    const user = newUserRows[0];
     const jwtToken = jwt.sign(
-      { userId: user.id, email: user.email, isAdmin: user.is_admin, canPush: user.can_push },
-      JWT_SECRET,
-      { expiresIn: '30d' }
+      { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true },
+      JWT_SECRET, { expiresIn: '30d' }
     );
-
     res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
   } catch (err) {
     console.error('[Auth] Error en callback OAuth:', err.message);
@@ -149,10 +196,24 @@ router.get('/google/callback', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, sync_direction, drive_folder_id FROM sync_users WHERE id = $1',
+      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, sync_direction, drive_folder_id, organization_id FROM sync_users WHERE id = $1',
       [req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** GET /auth/org — info de la organización actual */
+router.get('/org', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT id, name, plan, trial_ends, created_at FROM organizations WHERE id = $1',
+      [req.user.orgId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Organización no encontrada' });
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });

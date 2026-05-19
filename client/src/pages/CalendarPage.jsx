@@ -6,6 +6,12 @@ import {
 import { Link } from 'react-router-dom';
 
 const DAYS_ES   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+
+function authFetch(url, opts = {}) {
+  const token = localStorage.getItem('aio_sync_token');
+  const headers = { ...(opts.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  return fetch(url, { ...opts, headers });
+}
 const MONTHS_ES = [
   'Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
@@ -76,7 +82,7 @@ function EventModal({ event, defaultDate, allSongs, onClose, onSaved }) {
     try {
       const url    = event?.id ? `/api/events/${event.id}` : '/api/events';
       const method = event?.id ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -319,7 +325,7 @@ export default function CalendarPage() {
     const start = `${year}-${pad(month + 1)}-01`;
     const lastDay = new Date(year, month + 1, 0).getDate();
     const end = `${year}-${pad(month + 1)}-${pad(lastDay)}`;
-    fetch(`/api/events?start=${start}&end=${end}`)
+    authFetch(`/api/events?start=${start}&end=${end}`)
       .then(r => r.json())
       .then(data => setEvents(Array.isArray(data) ? data : []))
       .catch(console.error);
@@ -368,7 +374,7 @@ export default function CalendarPage() {
   const openEdit = async (ev) => {
     // Re-fetch para obtener songs completas si no están cargadas
     if (!ev.songs) {
-      const full = await fetch(`/api/events/${ev.id}`).then(r => r.json());
+      const full = await authFetch(`/api/events/${ev.id}`).then(r => r.json());
       setEditingEvent(full);
     } else {
       setEditingEvent(ev);
@@ -377,7 +383,7 @@ export default function CalendarPage() {
   };
   const handleDelete = async (id) => {
     if (!window.confirm('¿Eliminar este evento?')) return;
-    await fetch(`/api/events/${id}`, { method: 'DELETE' });
+    await authFetch(`/api/events/${id}`, { method: 'DELETE' });
     loadEvents();
   };
 

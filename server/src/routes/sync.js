@@ -221,9 +221,10 @@ router.get('/status', async (req, res) => {
 
     const { rows: [pending] } = await pool.query(`
       SELECT COUNT(*) FROM songs
-      WHERE drive_file_id IS NULL
-         OR updated_at > COALESCE(drive_synced_at, '1970-01-01')
-    `);
+      WHERE organization_id = $1
+        AND (drive_file_id IS NULL
+         OR updated_at > COALESCE(drive_synced_at, '1970-01-01'))
+    `, [req.user.orgId]);
 
     const { rows: [adminRow] } = await pool.query(
       'SELECT drive_folder_id FROM sync_users WHERE is_admin=true LIMIT 1'
@@ -268,8 +269,9 @@ router.post('/smart', async (req, res) => {
              s.updated_at, s.drive_file_id, s.drive_synced_at,
              COALESCE(json_agg(ss ORDER BY ss.position) FILTER (WHERE ss.id IS NOT NULL), '[]'::json) AS slides
       FROM songs s LEFT JOIN song_slides ss ON ss.song_id=s.id
+      WHERE s.organization_id = $1
       GROUP BY s.id
-    `);
+    `, [req.user.orgId]);;
 
     // Obtener archivos de Drive
     const driveFiles = await getDriveFiles(drive, folderId);
@@ -369,7 +371,8 @@ router.post('/pull', async (req, res) => {
     for (const file of driveFiles) {
       // Verificar si existe localmente por drive_file_id
       const { rows: existing } = await pool.query(
-        'SELECT id, updated_at, drive_synced_at FROM songs WHERE drive_file_id=$1', [file.id]
+        'SELECT id, updated_at, drive_synced_at FROM songs WHERE drive_file_id=$1 AND organization_id=$2',
+        [file.id, req.user.orgId]
       );
 
       const driveModified = new Date(file.modifiedTime);
@@ -411,11 +414,11 @@ router.post('/pull', async (req, res) => {
       } else {
         // Crear nueva canción
         const { rows: [newSong] } = await pool.query(
-          `INSERT INTO songs (title, author, copyright, ccli, song_key, tags, drive_file_id, drive_synced_at)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW()) RETURNING id`,
+          `INSERT INTO songs (title, author, copyright, ccli, song_key, tags, drive_file_id, drive_synced_at, organization_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,NOW(),$8) RETURNING id`,
           [songData.title, songData.author || null, songData.copyright || null,
            songData.ccli || null, songData.song_key || null,
-           songData.tags || [], file.id]
+           songData.tags || [], file.id, req.user.orgId]
         );
         for (const [idx, slide] of (songData.slides || []).entries()) {
           await pool.query(

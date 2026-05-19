@@ -176,9 +176,9 @@ const batchImport = (req, res) => {
         try {
           await client.query('BEGIN');
           const songRes = await client.query(
-            `INSERT INTO songs (title, author, copyright, ccli, language, tags)
-             VALUES ($1,$2,$3,$4,'es','{}') RETURNING id`,
-            [title, author || null, copyright || null, ccli || null]
+            `INSERT INTO songs (title, author, copyright, ccli, language, tags, organization_id)
+             VALUES ($1,$2,$3,$4,'es','{}', $5) RETURNING id`,
+            [title, author || null, copyright || null, ccli || null, req.user.orgId]
           );
           const songId = songRes.rows[0].id;
           for (let i = 0; i < parsed.slides.length; i++) {
