@@ -216,8 +216,9 @@ html {
   }
 }
 
-/* Phones medianos (xs ≥ 390px): calendarios y grillas más holgados */
-@media (min-width: 390px) {
+/* Phones medianos (xs ≥ 340px): calendarios y grillas más holgados.
+   340px cubre el cover screen del Samsung Galaxy Z Fold (≈344px CSS width). */
+@media (min-width: 340px) {
   .calendar-cell-min {
     min-height: 60px;
   }
