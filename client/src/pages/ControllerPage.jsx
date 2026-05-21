@@ -8,6 +8,8 @@ import LiveControls    from '../components/Controls/LiveControls';
 import LivePreview     from '../components/Controls/LivePreview';
 import SettingsPanel   from '../components/Settings/SettingsPanel';
 import SongFormModal   from '../components/Library/SongFormModal';
+import { ScheduleAddProvider } from '../context/ScheduleAddContext';
+import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -108,6 +110,7 @@ export default function ControllerPage() {
   }, []);
 
   return (
+    <ScheduleAddProvider>
     <div className="flex flex-col h-screen bg-surface-900 overflow-hidden">
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-4 py-3 bg-surface-800 border-b border-surface-700 shrink-0">
@@ -247,6 +250,7 @@ export default function ControllerPage() {
         />
       )}
     </div>
+    </ScheduleAddProvider>
   );
 }
 
@@ -460,6 +464,8 @@ function EventsPanel() {
           item_type:       p.item_type       || 'song',
           separator_label: p.separator_label || null,
           separator_color: p.separator_color || null,
+          media_name:      p.media_name      || null,
+          media_type:      p.media_type      || null,
           position: i,
         })),
       }),
@@ -474,6 +480,25 @@ function EventsPanel() {
         ? { ...e, songs: newItems } : e
     ));
   }, [selectedEv]);
+
+  // ── Agregar archivo multimedia al programa ──────────────────────────────────
+  const { setFn: setScheduleAddFn } = useScheduleAdd() ?? {};
+  const addMediaItem = useCallback(async (file) => {
+    if (!selectedEv) return;
+    const newItem = { song_id: null, item_type: 'media', media_name: file.name, media_type: file.mediaType || file.type };
+    const newItems = [...(selectedEv.songs || []), newItem];
+    setSaving(true);
+    try {
+      await saveItemsToApi(newItems);
+      applyNewItems(newItems);
+      if (activeTemplate) setTemplateDirty(true);
+    } catch (e) { console.error(e); }
+    finally { setSaving(false); }
+  }, [selectedEv, saveItemsToApi, applyNewItems, activeTemplate]); // eslint-disable-line
+
+  useEffect(() => {
+    setScheduleAddFn?.(selectedEv ? addMediaItem : null);
+  }, [selectedEv, addMediaItem]); // eslint-disable-line
 
   const addSong = async (song) => {
     const newItems = [...(selectedEv.songs || []), { song_id: song.id, title: song.title, author: song.author, item_type: 'song' }];
@@ -1492,6 +1517,37 @@ function EventsPanel() {
                       </div>
                     );
                   }
+                  // Ítem multimedia (video / imagen)
+                  if (s.item_type === 'media') {
+                    return (
+                      <div
+                        key={`media_${i}`}
+                        {...dragProps}
+                        className={`flex items-center border-b border-surface-700/60 last:border-0 group transition-colors ${isDragOver ? 'bg-accent/10 border-t-2 border-t-accent' : ''}`}
+                      >
+                        <div className="pl-1 cursor-grab active:cursor-grabbing text-zinc-600 group-hover:text-zinc-400 shrink-0">
+                          <GripVertical size={12} />
+                        </div>
+                        <button
+                          onClick={() => window.dispatchEvent(new CustomEvent('aio:play-media', { detail: { name: s.media_name, mediaType: s.media_type } }))}
+                          className="flex items-center gap-2 px-1.5 py-2 flex-1 min-w-0 hover:bg-accent/15 transition-colors text-left"
+                        >
+                          <span className="text-[11px] text-zinc-600 w-4 text-right shrink-0">{i + 1}</span>
+                          <Film size={12} className="text-purple-400 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] truncate leading-tight group-hover:text-white transition-colors">{s.media_name}</p>
+                            <p className="text-[10px] text-zinc-500 capitalize">{s.media_type}</p>
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => removeItem(i)}
+                          className="px-1.5 py-2 text-zinc-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                          title="Quitar"
+                        ><X size={11} /></button>
+                      </div>
+                    );
+                  }
+
                   // Canción normal
                   const isPlayed   = playedIds.has(s.song_id);
                   const canMark    = isAfterEventTime(selectedEv);

@@ -4,8 +4,9 @@ import {
   FolderX, X, Layers, MonitorCheck, Terminal, Download,
   ShieldCheck, AlertTriangle,
 } from 'lucide-react';
-import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
+import { usePresenter } from '../../context/usePresenter';
+import { useScheduleAdd } from '../../context/ScheduleAddContext';
 import {
   FSA_SUPPORTED,
   pickFolder,
@@ -287,7 +288,7 @@ function AddFolderModal({ onAdd, onClose }) {
 }
 
 // ── Miniatura FSA (modo directo — thumbnail async con IntersectionObserver) ──
-function FsaMediaThumb({ file, isActive, onSend }) {
+function FsaMediaThumb({ file, isActive, onSend, onAddToEvent }) {
   const [thumb, setThumb] = useState(null);
   const [visible, setVisible] = useState(false);
   const ref = useRef(null);
@@ -314,80 +315,101 @@ function FsaMediaThumb({ file, isActive, onSend }) {
   }, [visible, file.handle, file.type]);
 
   return (
-    <button
-      ref={ref}
-      onClick={() => onSend(file)}
-      className={`group relative rounded-lg overflow-hidden border-2 transition-all aspect-video flex items-center justify-center bg-surface-700 ${
-        isActive
-          ? 'border-accent shadow-lg shadow-accent/30'
-          : 'border-surface-600 hover:border-zinc-500'
-      }`}
-      title={file.name}
-    >
-      {thumb ? (
-        <img src={thumb} alt={file.name} className="w-full h-full object-cover" />
-      ) : (
-        <div className="flex flex-col items-center justify-center gap-1">
-          {isVideo
-            ? <Film size={20} className="text-zinc-500" />
-            : <Image size={20} className="text-zinc-500" />}
+    <div ref={ref} className="relative group">
+      <button
+        onClick={() => onSend(file)}
+        className={`w-full rounded-lg overflow-hidden border-2 transition-all aspect-video flex items-center justify-center bg-surface-700 ${
+          isActive
+            ? 'border-accent shadow-lg shadow-accent/30'
+            : 'border-surface-600 hover:border-zinc-500'
+        }`}
+        title={file.name}
+      >
+        {thumb ? (
+          <img src={thumb} alt={file.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-1">
+            {isVideo
+              ? <Film size={20} className="text-zinc-500" />
+              : <Image size={20} className="text-zinc-500" />}
+          </div>
+        )}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
+          <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
         </div>
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <p className="text-[9px] text-white truncate">{file.name}</p>
+        </div>
+        {isActive && <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow" />}
+      </button>
+      {onAddToEvent && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddToEvent(file); }}
+          className="absolute top-1 left-1 w-5 h-5 rounded-full bg-purple-600/90 hover:bg-purple-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow z-10"
+          title="Agregar al programa del evento"
+        >
+          <Plus size={10} />
+        </button>
       )}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
-        <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <p className="text-[9px] text-white truncate">{file.name}</p>
-      </div>
-      {isActive && <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow" />}
-    </button>
+    </div>
   );
 }
 
 // ── Miniatura servidor (modo fallback — URL desde servidor local) ─────────────
-function MediaThumb({ file, isActive, onSend }) {
+function MediaThumb({ file, isActive, onSend, onAddToEvent }) {
   const isVideo = file.type === 'video';
   const url = thumbUrl(file.path);
 
   return (
-    <button
-      onClick={() => onSend(file)}
-      draggable
-      onDragStart={e => {
-        const mediaUrl = `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`;
-        e.dataTransfer.setData('application/aio-media', JSON.stringify({
-          type: file.type, path: file.path, name: file.name, url: mediaUrl,
-        }));
-        e.dataTransfer.effectAllowed = 'copy';
-      }}
-      className={`group relative rounded-lg overflow-hidden border-2 transition-all aspect-video flex items-center justify-center bg-surface-700 ${
-        isActive
-          ? 'border-accent shadow-lg shadow-accent/30'
-          : 'border-surface-600 hover:border-zinc-500'
-      }`}
-      title={file.name}
-    >
-      <img
-        src={url}
-        alt={file.name}
-        className="w-full h-full object-cover"
-        onError={e => {
-          e.currentTarget.style.display = 'none';
-          e.currentTarget.nextSibling.style.display = 'flex';
+    <div className="relative group">
+      <button
+        onClick={() => onSend(file)}
+        draggable
+        onDragStart={e => {
+          const mediaUrl = `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`;
+          e.dataTransfer.setData('application/aio-media', JSON.stringify({
+            type: file.type, path: file.path, name: file.name, url: mediaUrl,
+          }));
+          e.dataTransfer.effectAllowed = 'copy';
         }}
-      />
-      <div className="absolute inset-0 items-center justify-center flex-col gap-1 hidden" aria-hidden>
-        {isVideo ? <Film size={20} className="text-zinc-400" /> : <Image size={20} className="text-zinc-400" />}
-        <span className="text-[9px] text-zinc-500 text-center break-all px-1 line-clamp-2">{file.name}</span>
-      </div>
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
-        <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        <p className="text-[9px] text-white truncate">{file.name}</p>
-      </div>
-      {isActive && <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow" />}
-    </button>
+        className={`w-full rounded-lg overflow-hidden border-2 transition-all aspect-video flex items-center justify-center bg-surface-700 ${
+          isActive
+            ? 'border-accent shadow-lg shadow-accent/30'
+            : 'border-surface-600 hover:border-zinc-500'
+        }`}
+        title={file.name}
+      >
+        <img
+          src={url}
+          alt={file.name}
+          className="w-full h-full object-cover"
+          onError={e => {
+            e.currentTarget.style.display = 'none';
+            e.currentTarget.nextSibling.style.display = 'flex';
+          }}
+        />
+        <div className="absolute inset-0 items-center justify-center flex-col gap-1 hidden" aria-hidden>
+          {isVideo ? <Film size={20} className="text-zinc-400" /> : <Image size={20} className="text-zinc-400" />}
+          <span className="text-[9px] text-zinc-500 text-center break-all px-1 line-clamp-2">{file.name}</span>
+        </div>
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
+          <Play size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow" />
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-1.5 py-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <p className="text-[9px] text-white truncate">{file.name}</p>
+        </div>
+        {isActive && <div className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full shadow" />}
+      </button>
+      {onAddToEvent && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onAddToEvent(file); }}
+          className="absolute top-1 left-1 w-5 h-5 rounded-full bg-purple-600/90 hover:bg-purple-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow z-10"
+          title="Agregar al programa del evento"
+        >
+          <Plus size={10} />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -644,11 +666,11 @@ export default function MediaLibrary() {
   };
 
   // ── Enviar media al output ────────────────────────────────────────────────
-  const handleSendMedia = async (file) => {
+  const handleSendMedia = useCallback(async (file) => {
     setSendError(null);
     if (mode === 'fsa') {
       try {
-        const cacheKey   = await cacheMediaFile(file.handle);
+        const cacheKey    = await cacheMediaFile(file.handle);
         const primerPlano = selectedFolder ? getFsaPrimerPlano(selectedFolder.key) : true;
         actions.showSlide({
           type: 'media',
@@ -675,7 +697,29 @@ export default function MediaLibrary() {
         nextSlideData: null,
       });
     }
-  };
+  }, [mode, selectedFolder, actions]); // eslint-disable-line
+
+  // ── Agregar al programa del evento (ScheduleAddContext) ──────────────────
+  const { fn: addToEventFn } = useScheduleAdd() ?? {};
+  const handleAddToEvent = useCallback((file) => {
+    if (addToEventFn) addToEventFn(file);
+  }, [addToEventFn]);
+
+  // ── Reproducir media desde click en EventsPanel ──────────────────────────
+  useEffect(() => {
+    const handler = (e) => {
+      const { name } = e.detail || {};
+      if (!name) return;
+      const file = files.find(f => f.name === name);
+      if (file) {
+        handleSendMedia(file);
+      } else {
+        setSendError(`Abre la carpeta con "${name}" en la Biblioteca Multimedia para reproducirlo`);
+      }
+    };
+    window.addEventListener('aio:play-media', handler);
+    return () => window.removeEventListener('aio:play-media', handler);
+  }, [files, handleSendMedia]);
 
   // ── Derived values ────────────────────────────────────────────────────────
   const filteredFiles = filter === 'all' ? files : files.filter(f => f.type === filter);
@@ -879,6 +923,7 @@ export default function MediaLibrary() {
                     file={file}
                     isActive={file.name === activeFileName}
                     onSend={handleSendMedia}
+                    onAddToEvent={addToEventFn ? handleAddToEvent : undefined}
                   />
                 ) : (
                   <MediaThumb
@@ -886,6 +931,7 @@ export default function MediaLibrary() {
                     file={file}
                     isActive={file.path === activeFilePath}
                     onSend={handleSendMedia}
+                    onAddToEvent={addToEventFn ? handleAddToEvent : undefined}
                   />
                 )
               )}

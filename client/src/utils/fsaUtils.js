@@ -227,11 +227,15 @@ export async function generateThumbnail(fileHandle, type) {
  * @returns {string} URL de la cache (/local-media/<nombre-codificado>)
  */
 export async function cacheMediaFile(fileHandle) {
-  const file      = await fileHandle.getFile();
-  const cacheKey  = MEDIA_CACHE_PREFIX + encodeURIComponent(fileHandle.name);
-  const cache     = await caches.open(MEDIA_CACHE_NAME);
-  await cache.put(cacheKey, new Response(file.stream(), {
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+  const file     = await fileHandle.getFile();
+  const buffer   = await file.arrayBuffer();
+  const cacheKey = MEDIA_CACHE_PREFIX + encodeURIComponent(fileHandle.name);
+  const cache    = await caches.open(MEDIA_CACHE_NAME);
+  await cache.put(cacheKey, new Response(buffer, {
+    headers: {
+      'Content-Type': file.type || 'application/octet-stream',
+      'Content-Length': String(buffer.byteLength),
+    },
   }));
   return cacheKey;
 }

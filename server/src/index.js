@@ -207,6 +207,9 @@ async function saveOrgSetting(orgId, key, value) {
         created_at      TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Campos multimedia en ítems de eventos
+    await pool.query(`ALTER TABLE event_songs ADD COLUMN IF NOT EXISTS media_name TEXT`);
+    await pool.query(`ALTER TABLE event_songs ADD COLUMN IF NOT EXISTS media_type TEXT`);
     // Migraciones sync con Google Drive
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_file_id  TEXT`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);
