@@ -148,11 +148,13 @@ function SlideContent({ slideData, cfg }) {
     if (cfg.fontSize && cfg.fontSize !== 'auto') {
       fontSize = `${cfg.fontSize}px`;
     } else {
-      fontSize = lineCount <= 3  ? 'clamp(2rem, min(5vw, 14vh), 4.5rem)'
-               : lineCount <= 5  ? 'clamp(1.6rem, min(4vw, 10vh), 3.5rem)'
-               : lineCount <= 7  ? 'clamp(1.3rem, min(3.2vw, 8vh), 2.8rem)'
-               : lineCount <= 10 ? 'clamp(1.1rem, min(2.6vw, 6vh), 2.2rem)'
-               : 'clamp(0.9rem, min(2vw, 4.5vh), 1.8rem)';
+      // vh/N garantiza que el texto nunca supere la altura disponible en landscape
+      // Formula: 70vh / (N × lineHeight 1.5) → para N=3 ≈ 15.6vh, N=5 ≈ 9.3vh, N=7 ≈ 6.7vh…
+      fontSize = lineCount <= 3  ? 'clamp(2rem, min(5vw, 15vh), 4.5rem)'
+               : lineCount <= 5  ? 'clamp(1.6rem, min(4vw, 9vh), 3.5rem)'
+               : lineCount <= 7  ? 'clamp(1.3rem, min(3.2vw, 6.5vh), 2.8rem)'
+               : lineCount <= 10 ? 'clamp(1.1rem, min(2.6vw, 4.5vh), 2.2rem)'
+               : 'clamp(0.9rem, min(2vw, 3.5vh), 1.8rem)';
     }
 
     const lyricStyle = {
@@ -234,10 +236,10 @@ function SlideContent({ slideData, cfg }) {
     if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
       fontSize = `${cfg.bibleFontSize}px`;
     } else {
-      fontSize = lineCount <= 3 ? 'clamp(1.8rem, 4.5vw, 4rem)'
-               : lineCount <= 5 ? 'clamp(1.4rem, 3.5vw, 3rem)'
-               : lineCount <= 8 ? 'clamp(1rem, 2.5vw, 2.2rem)'
-               : 'clamp(0.75rem, 1.8vw, 1.6rem)';
+      fontSize = lineCount <= 3 ? 'clamp(1.8rem, min(4.5vw, 13vh), 4rem)'
+               : lineCount <= 5 ? 'clamp(1.4rem, min(3.5vw, 8vh), 3rem)'
+               : lineCount <= 8 ? 'clamp(1rem, min(2.5vw, 5.5vh), 2.2rem)'
+               : 'clamp(0.75rem, min(1.8vw, 4vh), 1.6rem)';
     }
 
     const alignItems  = bibleAlign === 'left' ? 'flex-start' : bibleAlign === 'right' ? 'flex-end' : 'center';
