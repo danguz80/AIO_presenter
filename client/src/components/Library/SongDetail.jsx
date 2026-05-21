@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { usePresenter } from '../../context/usePresenter';
-import { Music, ZoomIn, ZoomOut } from 'lucide-react';
+import { Music, ZoomIn, ZoomOut, LayoutList, LayoutGrid } from 'lucide-react';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
 import { stripChords, stripComments, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
@@ -107,6 +107,10 @@ export default function SongDetail() {
   const [mediaDropIdx,   setMediaDropIdx]   = useState(null); // index del slide con drag-over de media
   // ── Zoom de thumbnails (número de columnas: 3-8) ──────────────────────
   const [thumbCols, setThumbCols] = useState(5);
+  // ── Modo de vista: 'grid' | 'list' ── 'list' por defecto en < 1024px ──
+  const [viewMode, setViewMode] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < 1024 ? 'list' : 'grid'
+  );
   const handleGroupDrop = async (label, insertIdx) => {
     if (!label) return;
     setDropping(true);
@@ -354,21 +358,36 @@ export default function SongDetail() {
               ↩ Deshacer ({undoCount})
             </button>
           )}
-          {/* Zoom de thumbnails */}
-          <div className="flex items-center gap-0.5">
+          {/* Toggle vista: lista / cuadrícula */}
+          <div className="flex items-center rounded overflow-hidden border border-surface-600">
             <button
-              onClick={() => setThumbCols(c => Math.min(8, c + 1))}
-              disabled={thumbCols >= 8}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-surface-600 disabled:opacity-30 transition-colors"
-              title="Más columnas (más pequeño)"
-            ><ZoomOut size={13} /></button>
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-surface-600 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              title="Vista de lista"
+            ><LayoutList size={13} /></button>
             <button
-              onClick={() => setThumbCols(c => Math.max(2, c - 1))}
-              disabled={thumbCols <= 2}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-surface-600 disabled:opacity-30 transition-colors"
-              title="Menos columnas (más grande)"
-            ><ZoomIn size={13} /></button>
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-surface-600 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+              title="Vista de cuadrícula"
+            ><LayoutGrid size={13} /></button>
           </div>
+          {/* Zoom de thumbnails (solo en modo grid) */}
+          {viewMode === 'grid' && (
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => setThumbCols(c => Math.min(8, c + 1))}
+                disabled={thumbCols >= 8}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-surface-600 disabled:opacity-30 transition-colors"
+                title="Más columnas (más pequeño)"
+              ><ZoomOut size={13} /></button>
+              <button
+                onClick={() => setThumbCols(c => Math.max(2, c - 1))}
+                disabled={thumbCols <= 2}
+                className="p-1 rounded text-zinc-400 hover:text-zinc-200 hover:bg-surface-600 disabled:opacity-30 transition-colors"
+                title="Menos columnas (más grande)"
+              ><ZoomIn size={13} /></button>
+            </div>
+          )}
           <span className="text-xs text-zinc-600">
             {selectedSong.slides?.length || 0} diapositivas
           </span>
@@ -420,11 +439,11 @@ export default function SongDetail() {
         );
       })()}
 
-      {/* Grid de slides */}
-      <div className="flex-1 overflow-y-auto p-3">
+      {/* Grid / Lista de slides */}
+      <div className={`flex-1 overflow-y-auto ${viewMode === 'grid' ? 'p-3' : ''}`}>
         {!selectedSong.slides || selectedSong.slides.length === 0 ? (
           <p className="text-zinc-600 text-sm p-4">Esta canción no tiene secciones.</p>
-        ) : (
+        ) : viewMode === 'grid' ? (
           <div
             className="grid gap-2"
             style={{ gridTemplateColumns: `repeat(${thumbCols}, minmax(0, 1fr))` }}
@@ -666,6 +685,77 @@ export default function SongDetail() {
                     <div className="absolute inset-y-0 left-0 w-1 bg-accent z-20 rounded-l" />
                   )}
                 </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Vista de lista ── */
+          <div className="divide-y divide-surface-700/40">
+            {outputCfg.titleSlideEnabled && (() => {
+              const titleActive = liveState.slideData?.type === 'title' && liveState.slideData?.songId === selectedSong.id && !liveState.isBlank;
+              return (
+                <div
+                  key="__title__"
+                  onClick={handleTitleClick}
+                  className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors hover:bg-surface-700/40 ${titleActive ? 'bg-green-950/30' : ''}`}
+                >
+                  <span className="text-[10px] text-zinc-600 w-5 text-right shrink-0 pt-0.5 select-none font-mono">T</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[9px] text-zinc-500 uppercase tracking-wider font-semibold mb-0.5">Título</p>
+                    <p className="text-zinc-200 text-sm leading-snug">{selectedSong.title}</p>
+                    {selectedSong.author && <p className="text-zinc-500 text-xs mt-0.5">{selectedSong.author}</p>}
+                  </div>
+                  {titleActive && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse shrink-0 mt-1" />}
+                </div>
+              );
+            })()}
+            {selectedSong.slides.map((slide, index) => {
+              const active     = isLive(slide);
+              const selected   = localSelectedId === slide.id;
+              const labelColor = getLabelColor(slide.label);
+              const visibleLines = (slide.content || '').split('\n')
+                .map(line => {
+                  if (isCommentLine(line)) return null;
+                  const { visible } = extractInlineComment(line);
+                  return stripChords(visible);
+                })
+                .filter(l => l !== null);
+              return (
+                <div
+                  key={slide.id}
+                  onClick={() => handleSlideClick(slide, index)}
+                  onContextMenu={(e) => openCtx(e, slide, index)}
+                  className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors hover:bg-surface-700/40 select-none ${
+                    active   ? 'bg-green-950/30 border-l-2 border-l-green-500'
+                    : selected ? 'bg-accent/10 border-l-2 border-l-accent'
+                    : 'border-l-2 border-l-transparent'
+                  }`}
+                >
+                  <span className="text-[10px] text-zinc-600 w-5 text-right shrink-0 pt-0.5 font-mono select-none">{index + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    {slide.label && (
+                      <span
+                        className="inline-block text-[9px] font-bold px-1.5 py-px rounded mb-1 uppercase tracking-wider text-white leading-none"
+                        style={{ backgroundColor: labelColor + 'dd' }}
+                      >
+                        {slide.label}
+                      </span>
+                    )}
+                    <p
+                      className="text-zinc-200 leading-snug whitespace-pre-line"
+                      style={{ fontSize: 'clamp(0.7rem, 1.2vw, 0.875rem)' }}
+                    >
+                      {visibleLines.join('\n') || '(vacío)'}
+                    </p>
+                    {slide.slide_background && (
+                      <p className="text-[9px] text-blue-400 mt-0.5">▶ fondo asignado</p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+                    {active   && <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />}
+                    {selected && !active && <span className="w-2 h-2 rounded-full bg-accent/60" />}
+                  </div>
                 </div>
               );
             })}

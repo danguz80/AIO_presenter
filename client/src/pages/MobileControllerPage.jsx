@@ -111,6 +111,14 @@ export default function MobileControllerPage() {
   }, [navigate]);
 
   const [tab,              setTab]              = useState('live');
+
+  // ── Paneles del acordeón ─────────────────────────────────────────────────
+  const [openPanels, setOpenPanels] = useState(new Set(['salidas', 'canciones']));
+  const togglePanel = (name) => setOpenPanels(prev => {
+    const next = new Set(prev);
+    if (next.has(name)) next.delete(name); else next.add(name);
+    return next;
+  });
   const [songDetail,       setSongDetail]       = useState(null);
   const [songOriginTab,    setSongOriginTab]    = useState('songs');
   const [songEditMode,     setSongEditMode]     = useState(false);
@@ -459,6 +467,13 @@ export default function MobileControllerPage() {
     setTimeout(() => window.location.reload(), 600);
   };
 
+  // Auto-abrir panel Grid cuando se selecciona una canción
+  useEffect(() => {
+    if (songDetail) {
+      setOpenPanels(prev => new Set([...prev, 'grid']));
+    }
+  }, [songDetail?.id]);
+
   // ── Datos del slide actual ────────────────────────────────────────────────
   const slideText      = slideData && (slideData.type === 'song' ? stripChords(stripComments(slideData.content)) : slideData.text);
   const slideLabel     = slideData && (slideData.type === 'song' ? slideData.label : slideData.reference);
@@ -585,77 +600,173 @@ export default function MobileControllerPage() {
         </div>
       </header>
 
-      {/* ── Contenido ── */}
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+      {/* ── Paneles colapsables ── */}
+      <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-surface-700/60">
 
-        {/* ──── EN VIVO ──── */}
-        {tab === 'live' && (
-          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-
-            {/* Toggle Mando / Escenario */}
-            <div className="shrink-0 flex gap-1 px-3 pt-2 pb-1">
-              <button
-                onClick={() => setLiveView('control')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${liveView === 'control' ? 'bg-accent text-white' : 'bg-surface-700 text-zinc-400'}`}
-              >
-                Mando
-              </button>
-              <button
-                onClick={() => setLiveView('stage')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-semibold ${liveView === 'stage' ? 'bg-accent text-white' : 'bg-surface-700 text-zinc-400'}`}
-              >
-                Escenario
-              </button>
+        {/* ──── PANEL: SALIDAS ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onPointerDown={() => togglePanel('salidas')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Radio size={15} className={openPanels.has('salidas') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('salidas') ? 'text-zinc-100' : 'text-zinc-400'}`}>Salidas</span>
+              {slideData && !isBlank && <span className="w-2 h-2 rounded-full bg-green-400 shrink-0" />}
             </div>
-
-            {/* ── Vista Mando ── */}
-            {liveView === 'control' && (
-              <>
-                <div className="flex-1 flex flex-col items-center justify-center px-3 xs:px-5 sm:px-6 py-3 xs:py-4 min-h-0 overflow-hidden">
-                  {isBlank ? (
-                    <p className="text-zinc-500 text-base xs:text-lg italic">Pantalla en negro</p>
-                  ) : !slideData ? (
-                    <p className="text-zinc-500 text-base xs:text-lg italic">Sin contenido</p>
-                  ) : (
-                    <div className="w-full text-center">
-                      {slideLabel && <p className="text-[10px] xs:text-[11px] text-zinc-500 uppercase tracking-widest mb-2 xs:mb-3">{slideLabel}</p>}
-                      <p className="text-white text-lg xs:text-xl sm:text-2xl leading-relaxed whitespace-pre-line overflow-y-auto max-h-40 xs:max-h-48 sm:max-h-52">{slideText}</p>
-                      {slideSongTitle && <p className="text-zinc-500 text-xs xs:text-sm mt-3 xs:mt-4">{slideSongTitle}</p>}
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('salidas') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('salidas') && (
+            <div className="overflow-y-auto max-h-[60vh]">
+              {/* Stage view (fullscreen overlay, sigue siendo fixed) */}
+              {liveView === 'stage' && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  {/* Barra superior: volver + franja color + título + tonalidad + etiqueta */}
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', borderBottom: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.6)' }}>
+                    <button
+                      onClick={() => setLiveView('control')}
+                      style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', color: 'rgba(255,255,255,0.5)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <ChevronLeft size={16} />
+                      <span>Volver</span>
+                    </button>
+                    {stageEffectiveLabel && (
+                      <div style={{ width: 3, flexShrink: 0, background: stageSectionColor }} />
+                    )}
+                    <div style={{ flex: 1, padding: '8px 10px', minWidth: 0 }}>
+                      {slideSongTitle ? (
+                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {slideSongTitle}{slideData?.songKey ? ` — ${slideData.songKey}` : ''}
+                        </p>
+                      ) : (
+                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, margin: 0 }}>Sin contenido</p>
+                      )}
+                      {stageEffectiveLabel && (
+                        <p style={{ color: stageSectionColor, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '2px 0 0', fontWeight: 600 }}>
+                          {stageEffectiveLabel}
+                        </p>
+                      )}
                     </div>
-                  )}
+                  </div>
+                  {/* Área 50/50: slide actual (arriba) + siguiente (abajo) */}
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                      {isBlank ? (
+                        <p style={{ color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', fontSize: 15 }}>Pantalla en negro</p>
+                      ) : !slideData ? (
+                        <p style={{ color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', fontSize: 15 }}>Sin contenido activo</p>
+                      ) : slideData.type !== 'song' ? (
+                        <p style={{ color: '#fff', fontSize: 22, fontWeight: 700, lineHeight: 1.4, whiteSpace: 'pre-line', textAlign: 'center', margin: 0 }}>
+                          {slideText}
+                        </p>
+                      ) : (
+                        <StageMobileSlide
+                          content={slideData.content}
+                          chordsColor={sc.chordsColor || '#fde047'}
+                          lyricsColor={sc.lyricsColor || '#ffffff'}
+                          showComments={sc.showComments ?? false}
+                          commentColor={sc.commentColor || '#facc15'}
+                        />
+                      )}
+                    </div>
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'rgba(255,255,255,0.03)', opacity: isBlank ? 0.3 : 1 }}>
+                      {nextSlideData && !isBlank ? (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            {nextSlideData.label && (
+                              <div style={{ width: 3, flexShrink: 0, background: `${getLabelColor(nextSlideData.label)}70` }} />
+                            )}
+                            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, padding: '4px 10px', fontWeight: 600 }}>
+                              {nextSlideData.label ? `↓ ${nextSlideData.label}` : '↓ Siguiente'}
+                            </p>
+                          </div>
+                          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px 16px', overflow: 'hidden' }}>
+                            {nextSlideData.type !== 'song' ? (
+                              <p style={{ color: '#fde047', fontSize: 19, margin: 0, whiteSpace: 'pre-line', textAlign: 'center', fontWeight: 600 }}>{nextText}</p>
+                            ) : (
+                              <StageMobileSlide
+                                content={nextSlideData.content}
+                                chordsColor={sc.chordsColor || '#fde047'}
+                                lyricsColor='#fde047'
+                                showComments={false}
+                                commentColor='#facc15'
+                              />
+                            )}
+                          </div>
+                        </div>
+                      ) : stageNextSong ? (
+                        <div style={{ textAlign: 'center', padding: '16px' }}>
+                          <p style={{ color: 'rgba(34,197,94,0.55)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 6px', fontWeight: 600 }}>Próxima canción</p>
+                          <p style={{ color: '#22c55e', fontSize: 18, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
+                            {stageNextSong.title}{stageNextSong.song_key ? ` — ${stageNextSong.song_key}` : ''}
+                          </p>
+                          {stageNextSong.author && (
+                            <p style={{ color: 'rgba(34,197,94,0.45)', fontSize: 12, margin: '5px 0 0' }}>{stageNextSong.author}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <p style={{ color: 'rgba(255,255,255,0.15)', fontStyle: 'italic', fontSize: 14 }}>— fin —</p>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 14px', borderTop: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.5)', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {stageNextSong ? (
+                        <p style={{ color: '#22c55e', fontSize: 15, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          ↑ {stageNextSong.title}{stageNextSong.song_key ? ` — ${stageNextSong.song_key}` : ''}
+                        </p>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)' }}>—</span>
+                      )}
+                    </div>
+                    <p style={{ flexShrink: 0, color: sc.clockColor || '#ef4444', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, margin: 0, letterSpacing: '0.05em' }}>
+                      {stageTime.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+                    </p>
+                  </div>
                 </div>
+              )}
 
+              {/* Vista compacta del estado actual */}
+              <div className="px-4 py-3">
+                {isBlank ? (
+                  <p className="text-zinc-500 italic text-sm">Pantalla en negro</p>
+                ) : !slideData ? (
+                  <p className="text-zinc-500 italic text-sm">Sin contenido activo</p>
+                ) : (
+                  <div>
+                    {slideLabel && <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{slideLabel}</p>}
+                    <p className="text-white text-base leading-relaxed whitespace-pre-line">{slideText}</p>
+                    {slideSongTitle && <p className="text-zinc-500 text-xs mt-2">{slideSongTitle}</p>}
+                  </div>
+                )}
                 {nextSlideData && !isBlank && (
-                  <div className="shrink-0 mx-4 mb-3 px-4 py-3 bg-surface-800 rounded-xl border border-surface-700">
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Siguiente</p>
+                  <div className="mt-3 px-3 py-2 bg-surface-800 rounded-xl border border-surface-700">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Siguiente</p>
                     {nextLabel && <p className="text-[11px] text-zinc-400 mb-0.5">{nextLabel}</p>}
                     <p className="text-zinc-300 text-sm whitespace-pre-line line-clamp-2">{nextText}</p>
                   </div>
                 )}
+              </div>
 
-                <div className="shrink-0 px-3 xs:px-4 pb-2.5 xs:pb-3 pt-1 grid grid-cols-3 gap-2 xs:gap-3">
-                  <NavBtn flash={flash === 'prev'} onPointerDown={handlePrev}>
-                    <ChevronLeft size={28} className="xs:hidden" /><ChevronLeft size={32} className="hidden xs:block" /><span className="text-xs font-medium">Anterior</span>
-                  </NavBtn>
-                  <button
-                    onPointerDown={handleBlank}
-                    className={`flex flex-col items-center justify-center gap-1 py-4 xs:py-5 sm:py-6 rounded-2xl border-2 transition-all active:scale-95 ${
-                      isBlank ? 'bg-red-950/60 border-red-500 text-red-400'
-                      : flash === 'blank' ? 'bg-zinc-700 border-zinc-400 text-white'
-                      : 'bg-surface-800 border-surface-600 text-zinc-300'
-                    }`}
-                  >
-                    {isBlank ? <Eye size={28} /> : <EyeOff size={28} />}
-                    <span className="text-xs font-medium">{isBlank ? 'Mostrar' : 'Negro'}</span>
-                  </button>
-                  <NavBtn flash={flash === 'next'} onPointerDown={handleNext}>
-                    <ChevronRight size={28} className="xs:hidden" /><ChevronRight size={32} className="hidden xs:block" /><span className="text-xs font-medium">Siguiente</span>
-                  </NavBtn>
-                </div>
+              {/* Botones de acción */}
+              <div className="px-4 pb-3 flex flex-col gap-2">
+                {/* Ver pantalla de salida */}
+                <Link
+                  to="/output"
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-600 bg-surface-800 text-zinc-300 text-sm font-medium active:bg-surface-700 transition-colors"
+                >
+                  <MonitorPlay size={16} /> Ver pantalla de salida
+                </Link>
 
-                <p className="shrink-0 text-center text-[10px] text-zinc-700 pb-2">Desliza para navegar</p>
+                {/* Vista escenario */}
+                <button
+                  onPointerDown={() => setLiveView('stage')}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl border border-surface-600 bg-surface-800 text-zinc-300 text-sm font-medium active:bg-surface-700 transition-colors"
+                >
+                  <Radio size={16} /> Vista escenario
+                </button>
 
-                {/* Marcar canción actual como tocada */}
+                {/* Marcar como tocada */}
                 {slideData?.type === 'song' && slideData?.songId && eventPlaysContext && (
                   <button
                     onClick={async () => {
@@ -666,7 +777,7 @@ export default function MobileControllerPage() {
                         await actions.markPlayed(eventPlaysContext.eventId, eventPlaysContext.occurrenceDate, id, 0, 0, true);
                       }
                     }}
-                    className={`shrink-0 mx-4 mb-2 flex items-center justify-center gap-2 py-2.5 rounded-2xl border-2 text-sm font-semibold transition-all active:scale-95 ${
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all active:scale-95 ${
                       eventPlays?.has(slideData.songId)
                         ? 'bg-green-950/60 border-green-500 text-green-400'
                         : 'bg-surface-800 border-surface-600 text-zinc-400'
@@ -679,6 +790,7 @@ export default function MobileControllerPage() {
                   </button>
                 )}
 
+                {/* Reservas */}
                 {(() => {
                   const normLabel = s => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                   const hasReservas = (schedule || []).some(s => s.item_type === 'separator' && normLabel(s.separator_label).includes('reserva'));
@@ -686,151 +798,111 @@ export default function MobileControllerPage() {
                   return (
                     <button
                       onPointerDown={() => actions.setReservasMode(!reservasMode)}
-                      className={`shrink-0 mx-4 mb-3 flex items-center justify-center gap-2 py-3 rounded-2xl border-2 text-sm font-semibold transition-all active:scale-95 ${
+                      className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all active:scale-95 ${
                         reservasMode
                           ? 'bg-amber-950/60 border-amber-500 text-amber-400'
                           : 'bg-surface-800 border-surface-600 text-zinc-400'
                       }`}
                     >
-                      <SkipForward size={18} />
+                      <SkipForward size={16} />
                       {reservasMode ? 'Desactivar reservas' : 'Ir a reservas'}
                     </button>
                   );
                 })()}
-              </>
-            )}
-
-            {/* ── Vista Escenario: overlay fullscreen ── */}
-            {liveView === 'stage' && (
-              <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-                {/* Barra superior: volver + franja color + título + tonalidad + etiqueta */}
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', borderBottom: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.6)' }}>
-                  <button
-                    onClick={() => setLiveView('control')}
-                    style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', color: 'rgba(255,255,255,0.5)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}
-                  >
-                    <ChevronLeft size={16} />
-                    <span>Volver</span>
-                  </button>
-                  {stageEffectiveLabel && (
-                    <div style={{ width: 3, flexShrink: 0, background: stageSectionColor }} />
-                  )}
-                  <div style={{ flex: 1, padding: '8px 10px', minWidth: 0 }}>
-                    {slideSongTitle ? (
-                      <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {slideSongTitle}{slideData?.songKey ? ` — ${slideData.songKey}` : ''}
-                      </p>
-                    ) : (
-                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, margin: 0 }}>Sin contenido</p>
-                    )}
-                    {stageEffectiveLabel && (
-                      <p style={{ color: stageSectionColor, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '2px 0 0', fontWeight: 600 }}>
-                        {stageEffectiveLabel}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Área 50/50: slide actual (arriba) + siguiente (abajo) */}
-                <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-
-                  {/* Mitad superior: slide actual */}
-                  <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                    {isBlank ? (
-                      <p style={{ color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', fontSize: 15 }}>Pantalla en negro</p>
-                    ) : !slideData ? (
-                      <p style={{ color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', fontSize: 15 }}>Sin contenido activo</p>
-                    ) : slideData.type !== 'song' ? (
-                      <p style={{ color: '#fff', fontSize: 22, fontWeight: 700, lineHeight: 1.4, whiteSpace: 'pre-line', textAlign: 'center', margin: 0 }}>
-                        {slideText}
-                      </p>
-                    ) : (
-                      <StageMobileSlide
-                        content={slideData.content}
-                        chordsColor={sc.chordsColor || '#fde047'}
-                        lyricsColor={sc.lyricsColor || '#ffffff'}
-                        showComments={sc.showComments ?? false}
-                        commentColor={sc.commentColor || '#facc15'}
-                      />
-                    )}
-                  </div>
-
-                  {/* Mitad inferior: siguiente slide o próxima canción */}
-                  <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'rgba(255,255,255,0.03)', opacity: isBlank ? 0.3 : 1 }}>
-                    {nextSlideData && !isBlank ? (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                          {nextSlideData.label && (
-                            <div style={{ width: 3, flexShrink: 0, background: `${getLabelColor(nextSlideData.label)}70` }} />
-                          )}
-                          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, padding: '4px 10px', fontWeight: 600 }}>
-                            {nextSlideData.label ? `↓ ${nextSlideData.label}` : '↓ Siguiente'}
-                          </p>
-                        </div>
-                        <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px 16px', overflow: 'hidden' }}>
-                          {nextSlideData.type !== 'song' ? (
-                            <p style={{ color: '#fde047', fontSize: 19, margin: 0, whiteSpace: 'pre-line', textAlign: 'center', fontWeight: 600 }}>{nextText}</p>
-                          ) : (
-                            <StageMobileSlide
-                              content={nextSlideData.content}
-                              chordsColor={sc.chordsColor || '#fde047'}
-                              lyricsColor='#fde047'
-                              showComments={false}
-                              commentColor='#facc15'
-                            />
-                          )}
-                        </div>
-                      </div>
-                    ) : stageNextSong ? (
-                      <div style={{ textAlign: 'center', padding: '16px' }}>
-                        <p style={{ color: 'rgba(34,197,94,0.55)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 6px', fontWeight: 600 }}>Próxima canción</p>
-                        <p style={{ color: '#22c55e', fontSize: 18, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
-                          {stageNextSong.title}{stageNextSong.song_key ? ` — ${stageNextSong.song_key}` : ''}
-                        </p>
-                        {stageNextSong.author && (
-                          <p style={{ color: 'rgba(34,197,94,0.45)', fontSize: 12, margin: '5px 0 0' }}>{stageNextSong.author}</p>
-                        )}
-                      </div>
-                    ) : (
-                      <p style={{ color: 'rgba(255,255,255,0.15)', fontStyle: 'italic', fontSize: 14 }}>— fin —</p>
-                    )}
-                  </div>
-
-                </div>
-
-                {/* Barra inferior: próxima canción (siempre) + reloj */}
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 14px', borderTop: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.5)', gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {stageNextSong ? (
-                      <p style={{ color: '#22c55e', fontSize: 15, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        ↑ {stageNextSong.title}{stageNextSong.song_key ? ` — ${stageNextSong.song_key}` : ''}
-                      </p>
-                    ) : (
-                      <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)' }}>—</span>
-                    )}
-                  </div>
-                  <p style={{ flexShrink: 0, color: sc.clockColor || '#ef4444', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, margin: 0, letterSpacing: '0.05em' }}>
-                    {stageTime.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                  </p>
-                </div>
-
               </div>
-            )}
+            </div>
+          )}
+        </div>
 
+        {/* ──── PANEL: GRID (diapositivas de la canción) ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onPointerDown={() => togglePanel('grid')}
+          >
+            <div className="flex items-center gap-2.5">
+              <LayoutTemplate size={15} className={openPanels.has('grid') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('grid') ? 'text-zinc-100' : 'text-zinc-400'}`}>Grid</span>
+              {songDetail && <span className="text-xs text-zinc-500 font-normal truncate ml-1">{songDetail.title}</span>}
+            </div>
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('grid') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('grid') && (
+            <div className="overflow-y-auto" style={{ maxHeight: '60vh' }}>
+              {!songDetail ? (
+                <p className="text-zinc-500 text-sm p-4 text-center italic">Selecciona una canción para ver sus diapositivas</p>
+              ) : (
+                <div className="px-4 py-3 space-y-2">
+                  {(songDetail.titleEnabled ?? true) && (
+                    <div
+                      onClick={() => sendSlide(songDetail, { type: 'title' }, songDetail.slides, -1)}
+                      className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
+                        activeSlideKey === `${songDetail.id}:title`
+                          ? 'bg-accent/15 border-accent text-accent'
+                          : 'bg-surface-800 border-surface-700 text-zinc-300'
+                      }`}
+                    >
+                      <span className="text-xs font-bold text-zinc-500 w-5 text-center">T</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{songDetail.title}</p>
+                        {songDetail.author && <p className="text-xs text-zinc-500 truncate">{songDetail.author}</p>}
+                      </div>
+                    </div>
+                  )}
+                  {(songDetail.slides || []).map((slide, idx) => {
+                    const labelColor = getLabelColor(slide.label);
+                    const isActive   = activeSlideKey === `${songDetail.id}:${idx}`;
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => sendSlide(songDetail, slide, songDetail.slides, idx)}
+                        className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
+                          isActive ? 'bg-accent/15 border-accent' : 'bg-surface-800 border-surface-700'
+                        }`}
+                      >
+                        <span className="text-xs text-zinc-600 w-5 text-center pt-0.5 shrink-0">{idx + 1}</span>
+                        {slide.label && (
+                          <span className="shrink-0 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold leading-none" style={{ background: `${labelColor}22`, color: labelColor, border: `1px solid ${labelColor}40` }}>
+                            {slide.label}
+                          </span>
+                        )}
+                        <p className="flex-1 text-xs text-zinc-300 leading-relaxed whitespace-pre-line line-clamp-3"
+                          style={{ fontSize: 'clamp(0.7rem, 1.2vw, 0.875rem)' }}>
+                          {stripChords(stripComments(slide.content || ''))}
+                        </p>
+                        {isActive && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 mt-1.5" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-          </div>
-        )}
-
-        {/* ──── CANCIONES: lista ──── */}
-        {tab === 'songs' && !songDetail && (
-          <div className="flex flex-col flex-1 min-h-0">
-            <div className="px-4 pt-3 pb-2 shrink-0">
-              <div className="relative">
-                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-                <input
-                  value={songSearch}
-                  onChange={e => setSongSearch(e.target.value)}
+        {/* ──── PANEL: CANCIONES ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onPointerDown={() => togglePanel('canciones')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Music size={15} className={openPanels.has('canciones') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('canciones') ? 'text-zinc-100' : 'text-zinc-400'}`}>Canciones</span>
+            </div>
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('canciones') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('canciones') && (
+            <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
+              {/* ── Lista de canciones ── */}
+              {!songDetail && (
+                <div className="flex flex-col">
+                  <div className="px-4 pt-3 pb-2">
+                    <div className="relative">
+                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                      <input
+                        value={songSearch}
+                        onChange={e => setSongSearch(e.target.value)}
                   placeholder="Buscar canción o artista…"
                   className="w-full bg-surface-800 border border-surface-600 rounded-xl pl-9 pr-8 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-accent"
                 />
@@ -863,13 +935,12 @@ export default function MobileControllerPage() {
                   {song.artist && <p className="text-zinc-500 text-xs mt-0.5">{song.artist}</p>}
                 </button>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* ──── CANCIONES: slides de la canción ──── */}
-        {tab === 'songs' && songDetail && (
-          <div className="flex flex-col flex-1 min-h-0">
+                </div>
+              </div>
+              )}
+              {/* ── Detalle de la canción seleccionada ── */}
+              {songDetail && (
+                <div className="flex flex-col">
             {!songEditMode ? (
               /* ── Vista de slides (modo lectura) ── */
               <>
@@ -1061,10 +1132,28 @@ export default function MobileControllerPage() {
               </div>
             )}
           </div>
-        )}
+              )}
+              </div>
+            </div>
+          )}
+        </div>
 
+        {/* ──── PANEL: EVENTOS ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onPointerDown={() => togglePanel('eventos')}
+          >
+            <div className="flex items-center gap-2.5">
+              <CalendarDays size={15} className={openPanels.has('eventos') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('eventos') ? 'text-zinc-100' : 'text-zinc-400'}`}>Eventos</span>
+            </div>
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('eventos') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('eventos') && (
+            <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
         {/* ──── EVENTOS: formulario crear/editar ──── */}
-        {tab === 'events' && eventFormMode && (
+        {eventFormMode && (
           <div className="flex flex-col flex-1 min-h-0">
             <div className="px-4 pt-3 pb-2 shrink-0 border-b border-surface-700 flex items-center justify-between">
               <p className="text-sm font-semibold text-zinc-300">
@@ -1121,7 +1210,7 @@ export default function MobileControllerPage() {
         )}
 
         {/* ──── EVENTOS: lista ──── */}
-        {tab === 'events' && !eventFormMode && !eventDetail && (
+        {!eventFormMode && !eventDetail && (
           <div className="flex flex-col flex-1 min-h-0">
             <div className="px-4 pt-3 pb-2 shrink-0 border-b border-surface-700 flex items-center justify-between">
               <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Próximos eventos</p>
@@ -1206,7 +1295,7 @@ export default function MobileControllerPage() {
         )}
 
         {/* ──── EVENTOS: playlist del evento ──── */}
-        {tab === 'events' && !eventFormMode && eventDetail && (
+        {!eventFormMode && eventDetail && (
           <div className="flex flex-col flex-1 min-h-0">
             <div className="px-4 pt-3 pb-2 shrink-0 border-b border-surface-700">
               <div className="flex items-center justify-between mb-2">
@@ -1463,9 +1552,45 @@ export default function MobileControllerPage() {
             </div>
           </div>
         )}
+            </div>
+          )}
+        </div>
 
+        {/* ──── PANEL: MULTIMEDIA (próximamente) ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onPointerDown={() => togglePanel('multimedia')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Radio size={15} className={openPanels.has('multimedia') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('multimedia') ? 'text-zinc-100' : 'text-zinc-400'}`}>Multimedia</span>
+            </div>
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('multimedia') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('multimedia') && (
+            <div className="px-4 py-6 text-center">
+              <p className="text-zinc-600 text-sm italic">Multimedia — próximamente</p>
+            </div>
+          )}
+        </div>
+
+        {/* ──── PANEL: BIBLIA ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onPointerDown={() => togglePanel('biblia')}
+          >
+            <div className="flex items-center gap-2.5">
+              <BookOpen size={15} className={openPanels.has('biblia') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('biblia') ? 'text-zinc-100' : 'text-zinc-400'}`}>Biblia</span>
+            </div>
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('biblia') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('biblia') && (
+            <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
         {/* ──── BIBLIA ──── */}
-        {tab === 'bible' && (
+        {true && (
           <div className="flex flex-col flex-1 min-h-0">
             {/* Selector de versión + toggle modo */}
             <div className="px-4 pt-3 pb-2 shrink-0 border-b border-surface-700 flex gap-1.5 items-center">
@@ -1820,9 +1945,26 @@ export default function MobileControllerPage() {
             )}
           </div>
         )}
+            </div>
+          )}
+        </div>
 
+        {/* ──── PANEL: AJUSTES ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onPointerDown={() => togglePanel('ajustes')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Settings size={15} className={openPanels.has('ajustes') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('ajustes') ? 'text-zinc-100' : 'text-zinc-400'}`}>Ajustes</span>
+            </div>
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('ajustes') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('ajustes') && (
+            <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
         {/* ──── AJUSTES ──── */}
-        {tab === 'settings' && (
+        {true && (
           <div className="flex-1 overflow-y-auto px-4 pt-6 pb-8">
             <p className="text-zinc-400 text-xs uppercase tracking-widest mb-4">Conexión al servidor</p>
 
@@ -1870,17 +2012,32 @@ export default function MobileControllerPage() {
             </div>
           </div>
         )}
+            </div>
+          )}
+        </div>
 
       </div>
 
-      {/* ── Nav inferior ── */}
-      <nav className="shrink-0 grid grid-cols-5 bg-surface-800 border-t border-surface-700 mobile-nav-safe">
-        <TabNavBtn active={tab === 'live'}     onPointerDown={() => setTab('live')}     icon={<Radio size={18} />}        label="En vivo" />
-        <TabNavBtn active={tab === 'songs'}    onPointerDown={() => setTab('songs')}    icon={<Music size={18} />}        label="Canciones" />
-        <TabNavBtn active={tab === 'events'}   onPointerDown={() => setTab('events')}   icon={<CalendarDays size={18} />} label="Eventos" />
-        <TabNavBtn active={tab === 'bible'}    onPointerDown={() => setTab('bible')}    icon={<BookOpen size={18} />}     label="Biblia" />
-        <TabNavBtn active={tab === 'settings'} onPointerDown={() => setTab('settings')} icon={<Settings size={18} />}    label="Ajustes" />
-      </nav>
+      {/* ── Nav inferior fija: Anterior / Negro / Siguiente ── */}
+      <div className="shrink-0 grid grid-cols-3 gap-2 px-3 py-2 bg-surface-900 border-t border-surface-700 mobile-nav-safe">
+        <NavBtn flash={flash === 'prev'} onPointerDown={handlePrev}>
+          <ChevronLeft size={26} /><span className="text-xs font-medium">Anterior</span>
+        </NavBtn>
+        <button
+          onPointerDown={handleBlank}
+          className={`flex flex-col items-center justify-center gap-1 py-3 rounded-2xl border-2 transition-all active:scale-95 ${
+            isBlank ? 'bg-red-950/60 border-red-500 text-red-400'
+            : flash === 'blank' ? 'bg-zinc-700 border-zinc-400 text-white'
+            : 'bg-surface-800 border-surface-600 text-zinc-300'
+          }`}
+        >
+          {isBlank ? <Eye size={24} /> : <EyeOff size={24} />}
+          <span className="text-xs font-medium">{isBlank ? 'Mostrar' : 'Negro'}</span>
+        </button>
+        <NavBtn flash={flash === 'next'} onPointerDown={handleNext}>
+          <ChevronRight size={26} /><span className="text-xs font-medium">Siguiente</span>
+        </NavBtn>
+      </div>
     </div>
   );
 }
