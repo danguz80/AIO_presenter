@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      devOptions: {
+        enabled: false, // Evita blob workers de workbox en desarrollo
+      },
       includeAssets: ['icon.svg'],
       manifest: {
         name: 'AIO Presenter Remote',
