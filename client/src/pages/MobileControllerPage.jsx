@@ -23,7 +23,15 @@ function getSavedIp()   { return localStorage.getItem('aio_server_ip')   || wind
 function getSavedPort() { return localStorage.getItem('aio_server_port') || '3001'; }
 // En HTTPS (produccion) usa URL relativa para evitar Mixed Content.
 // En HTTP (dev LAN) usa la IP y puerto del servidor guardados.
-function getApiBase()   { return window.location.protocol === 'https:' ? '' : `http://${getSavedIp()}:${getSavedPort()}`; }
+function getApiBase() {
+  // 1. Si hay URL de backend configurada en build (prod): usarla solo si es HTTPS
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl?.startsWith('https:')) return envUrl;
+  // 2. Si la pagina es HTTPS pero no hay URL configurada: same-origin (requiere proxy nginx)
+  if (window.location.protocol === 'https:') return '';
+  // 3. HTTP (dev LAN): IP y puerto guardados
+  return `http://${getSavedIp()}:${getSavedPort()}`;
+}
 
 // Normaliza un string para búsqueda: minúsculas + sin tildes/diacríticos
 // "Canción" → "cancion", "niño" → "nino"
@@ -196,7 +204,8 @@ export default function MobileControllerPage() {
       const end   = new Date(today.getFullYear(), today.getMonth() + 3, 0).toISOString().split('T')[0];
       const res   = await fetch(`${getApiBase()}/api/events?start=${start}&end=${end}`);
       if (res.ok) setEvents(await res.json());
-    } catch { /* red no disponible */ }
+      else console.error('[Events] HTTP', res.status, await res.text().catch(() => ''));
+    } catch (err) { console.error('[Events] fetch error:', err?.message || err); }
     finally { setEventsLoading(false); }
   }, []);
 
@@ -322,7 +331,7 @@ export default function MobileControllerPage() {
     if (!q.trim() || !versionId) { setBibleResults([]); return; }
     setBibleSearching(true);
     try {
-      const res = await fetch(`${getApiBase()}/api/bible/search?q=${encodeURIComponent(q)}&versionId=${versionId}`);}
+      const res = await fetch(`${getApiBase()}/api/bible/search?q=${encodeURIComponent(q)}&versionId=${versionId}`);
       if (res.ok) setBibleResults(await res.json());
     } catch { /* sin conexión */ }
     finally { setBibleSearching(false); }
