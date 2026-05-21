@@ -144,17 +144,23 @@ function SlideContent({ slideData, cfg }) {
     const visibleContent = stripChords(lineData.map(ld => ld.visible).join('\n'));
     const lineCount = visibleContent.split('\n').filter(l => l.trim()).length;
 
+    // maxVh: tope de altura por línea según N de líneas
+    // Fórmula: ~70vh / (N × lineHeight 1.5) ⇒ el bloque de texto nunca supera ~70% del viewport height
+    const maxVh = lineCount <= 3  ? 15
+                : lineCount <= 5  ? 9
+                : lineCount <= 7  ? 6.5
+                : lineCount <= 10 ? 4.5
+                : 3.5;
     let fontSize;
     if (cfg.fontSize && cfg.fontSize !== 'auto') {
-      fontSize = `${cfg.fontSize}px`;
+      // Respetar tamaño fijo del usuario pero caparlo en pantallas bajas (landscape móvil)
+      fontSize = `min(${cfg.fontSize}px, ${maxVh}vh)`;
     } else {
-      // vh/N garantiza que el texto nunca supere la altura disponible en landscape
-      // Formula: 70vh / (N × lineHeight 1.5) → para N=3 ≈ 15.6vh, N=5 ≈ 9.3vh, N=7 ≈ 6.7vh…
-      fontSize = lineCount <= 3  ? 'clamp(2rem, min(5vw, 15vh), 4.5rem)'
-               : lineCount <= 5  ? 'clamp(1.6rem, min(4vw, 9vh), 3.5rem)'
-               : lineCount <= 7  ? 'clamp(1.3rem, min(3.2vw, 6.5vh), 2.8rem)'
-               : lineCount <= 10 ? 'clamp(1.1rem, min(2.6vw, 4.5vh), 2.2rem)'
-               : 'clamp(0.9rem, min(2vw, 3.5vh), 1.8rem)';
+      fontSize = lineCount <= 3  ? `clamp(2rem, min(5vw, ${maxVh}vh), 4.5rem)`
+               : lineCount <= 5  ? `clamp(1.6rem, min(4vw, ${maxVh}vh), 3.5rem)`
+               : lineCount <= 7  ? `clamp(1.3rem, min(3.2vw, ${maxVh}vh), 2.8rem)`
+               : lineCount <= 10 ? `clamp(1.1rem, min(2.6vw, ${maxVh}vh), 2.2rem)`
+               : `clamp(0.9rem, min(2vw, ${maxVh}vh), 1.8rem)`;
     }
 
     const lyricStyle = {
@@ -232,14 +238,18 @@ function SlideContent({ slideData, cfg }) {
     const rawText   = slideData.text || '';
     const charLines  = Math.ceil(rawText.length / 46);
     const lineCount  = Math.max(rawText.split('\n').filter(l => l.trim()).length, charLines);
+    const bibleMaxVh = lineCount <= 3 ? 13
+                     : lineCount <= 5 ? 8
+                     : lineCount <= 8 ? 5.5
+                     : 4;
     let fontSize;
     if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
-      fontSize = `${cfg.bibleFontSize}px`;
+      fontSize = `min(${cfg.bibleFontSize}px, ${bibleMaxVh}vh)`;
     } else {
-      fontSize = lineCount <= 3 ? 'clamp(1.8rem, min(4.5vw, 13vh), 4rem)'
-               : lineCount <= 5 ? 'clamp(1.4rem, min(3.5vw, 8vh), 3rem)'
-               : lineCount <= 8 ? 'clamp(1rem, min(2.5vw, 5.5vh), 2.2rem)'
-               : 'clamp(0.75rem, min(1.8vw, 4vh), 1.6rem)';
+      fontSize = lineCount <= 3 ? `clamp(1.8rem, min(4.5vw, ${bibleMaxVh}vh), 4rem)`
+               : lineCount <= 5 ? `clamp(1.4rem, min(3.5vw, ${bibleMaxVh}vh), 3rem)`
+               : lineCount <= 8 ? `clamp(1rem, min(2.5vw, ${bibleMaxVh}vh), 2.2rem)`
+               : `clamp(0.75rem, min(1.8vw, ${bibleMaxVh}vh), 1.6rem)`;
     }
 
     const alignItems  = bibleAlign === 'left' ? 'flex-start' : bibleAlign === 'right' ? 'flex-end' : 'center';
