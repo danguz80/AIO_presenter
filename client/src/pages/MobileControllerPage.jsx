@@ -113,7 +113,7 @@ export default function MobileControllerPage() {
   const [tab,              setTab]              = useState('live');
 
   // ── Paneles del acordeón ─────────────────────────────────────────────────
-  const [openPanels, setOpenPanels] = useState(new Set(['salidas', 'canciones']));
+  const [openPanels, setOpenPanels] = useState(new Set([]));  // todos cerrados al inicio
   const togglePanel = (name) => setOpenPanels(prev => {
     const next = new Set(prev);
     if (next.has(name)) next.delete(name); else next.add(name);
@@ -607,7 +607,7 @@ export default function MobileControllerPage() {
         <div>
           <button
             className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
-            onPointerDown={() => togglePanel('salidas')}
+            onClick={() => togglePanel('salidas')}
           >
             <div className="flex items-center gap-2.5">
               <Radio size={15} className={openPanels.has('salidas') ? 'text-accent' : 'text-zinc-500'} />
@@ -818,7 +818,7 @@ export default function MobileControllerPage() {
         <div>
           <button
             className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
-            onPointerDown={() => togglePanel('grid')}
+            onClick={() => togglePanel('grid')}
           >
             <div className="flex items-center gap-2.5">
               <LayoutTemplate size={15} className={openPanels.has('grid') ? 'text-accent' : 'text-zinc-500'} />
@@ -884,7 +884,7 @@ export default function MobileControllerPage() {
         <div>
           <button
             className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
-            onPointerDown={() => togglePanel('canciones')}
+            onClick={() => togglePanel('canciones')}
           >
             <div className="flex items-center gap-2.5">
               <Music size={15} className={openPanels.has('canciones') ? 'text-accent' : 'text-zinc-500'} />
@@ -1141,7 +1141,7 @@ export default function MobileControllerPage() {
         <div>
           <button
             className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
-            onPointerDown={() => togglePanel('eventos')}
+            onClick={() => togglePanel('eventos')}
           >
             <div className="flex items-center gap-2.5">
               <CalendarDays size={15} className={openPanels.has('eventos') ? 'text-accent' : 'text-zinc-500'} />
@@ -1559,7 +1559,7 @@ export default function MobileControllerPage() {
         <div>
           <button
             className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
-            onPointerDown={() => togglePanel('multimedia')}
+            onClick={() => togglePanel('multimedia')}
           >
             <div className="flex items-center gap-2.5">
               <Radio size={15} className={openPanels.has('multimedia') ? 'text-accent' : 'text-zinc-500'} />
@@ -1578,7 +1578,7 @@ export default function MobileControllerPage() {
         <div>
           <button
             className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
-            onPointerDown={() => togglePanel('biblia')}
+            onClick={() => togglePanel('biblia')}
           >
             <div className="flex items-center gap-2.5">
               <BookOpen size={15} className={openPanels.has('biblia') ? 'text-accent' : 'text-zinc-500'} />
@@ -1952,7 +1952,7 @@ export default function MobileControllerPage() {
         <div>
           <button
             className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
-            onPointerDown={() => togglePanel('ajustes')}
+            onClick={() => togglePanel('ajustes')}
           >
             <div className="flex items-center gap-2.5">
               <Settings size={15} className={openPanels.has('ajustes') ? 'text-accent' : 'text-zinc-500'} />
