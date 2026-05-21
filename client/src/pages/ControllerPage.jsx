@@ -70,12 +70,18 @@ export default function ControllerPage() {
   const navigate = useNavigate();
 
   // ── Redirigir a /mobile en móvil ──────────────────────────────────────────
-  // Detección combinada: User Agent (más fiable en dispositivos reales) +
-  // media query (por si acaso el UA no lo identifica)
+  // 3 capas para cubrir Samsung Fold, iPhone, y UA inusuales:
+  //  1. Client Hints API (Chromium/Samsung Internet moderno): mobile:true
+  //  2. UA string clásico
+  //  3. Dispositivo táctil sin ratón (pointer:coarse) con pantalla ≤1279px
   useEffect(() => {
-    const isMobileUA = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const isPhone = (
+      navigator.userAgentData?.mobile === true
+      || /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || window.matchMedia('(pointer: coarse) and (max-width: 1279px)').matches
+    );
     const mq = window.matchMedia('(max-width: 767px), (max-width: 1023px) and (max-height: 499px)');
-    if (isMobileUA || mq.matches) { navigate('/mobile', { replace: true }); return; }
+    if (isPhone || mq.matches) { navigate('/mobile', { replace: true }); return; }
     const handler = (e) => { if (e.matches) navigate('/mobile', { replace: true }); };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);

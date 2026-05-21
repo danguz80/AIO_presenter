@@ -119,11 +119,17 @@ export default function MobileControllerPage() {
   const { slideData, nextSlideData, isBlank } = liveState;
   const navigate = useNavigate();
 
-  // En escritorio real (≥768px de ancho Y ≥500px de alto Y no es un dispositivo móvil): volver al controlador
+  // Solo redirigir a /app si es escritorio real (no táctil, pantalla grande)
   useEffect(() => {
-    const isMobileUA = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (isMobileUA) return; // siempre permanecer en /mobile si es teléfono real
-    const mq = window.matchMedia('(min-width: 768px) and (min-height: 500px)');
+    // Misma detección triple que ControllerPage
+    const isPhone = (
+      navigator.userAgentData?.mobile === true
+      || /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      || window.matchMedia('(pointer: coarse) and (max-width: 1279px)').matches
+    );
+    if (isPhone) return; // teléfono o tablet pequeña → permanecer en /mobile
+    // Solo escritorio real (≥1280px de ancho Y ≥600px de alto): volver al controlador
+    const mq = window.matchMedia('(min-width: 1280px) and (min-height: 600px)');
     if (mq.matches) { navigate('/app', { replace: true }); return; }
     const handler = (e) => { if (e.matches) navigate('/app', { replace: true }); };
     mq.addEventListener('change', handler);
