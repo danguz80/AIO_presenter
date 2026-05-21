@@ -169,16 +169,37 @@ export async function getObjectURL(fileHandle) {
 /**
  * Genera una miniatura de un video o imagen.
  * Para videos: captura el frame en el segundo 2.
- * Para imágenes: devuelve directamente la object URL.
- * @returns {Promise<string>} URL de la miniatura (no requiere revoke, es data URL)
+ * Para imágenes y videos: convierte a data URL vía canvas y revoca el blob URL.
+ * @returns {Promise<string|null>} data URL de la miniatura
  */
 export async function generateThumbnail(fileHandle, type) {
   const file = await fileHandle.getFile();
   const objUrl = URL.createObjectURL(file);
+  const cleanup = () => URL.revokeObjectURL(objUrl);
 
   if (type === 'image') {
-    // Para imágenes retornamos la object URL directamente
-    return objUrl; // el llamador debe revocarla
+    // Cargamos en <img>, dibujamos en canvas y retornamos data URL
+    // (nunca exponemos el blob URL al DOM para evitar ERR_FILE_NOT_FOUND)
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const maxW = 320;
+          const scale = Math.min(1, maxW / (img.naturalWidth || maxW));
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.round((img.naturalWidth  || maxW) * scale);
+          canvas.height = Math.round((img.naturalHeight || maxW) * scale);
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          cleanup();
+          resolve(canvas.toDataURL('image/jpeg', 0.8));
+        } catch {
+          cleanup();
+          resolve(null);
+        }
+      };
+      img.onerror = () => { cleanup(); resolve(null); };
+      img.src = objUrl;
+    });
   }
 
   // Para videos: capturar frame con canvas
@@ -187,8 +208,6 @@ export async function generateThumbnail(fileHandle, type) {
     video.muted  = true;
     video.preload = 'metadata';
     video.src    = objUrl;
-
-    const cleanup = () => URL.revokeObjectURL(objUrl);
 
     video.addEventListener('loadedmetadata', () => {
       video.currentTime = Math.min(2, video.duration * 0.1);
