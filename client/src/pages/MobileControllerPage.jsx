@@ -903,52 +903,52 @@ export default function MobileControllerPage() {
           </button>
           {openPanels.has('canciones') && (
             <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
+              {/* ── Búsqueda — siempre visible salvo en modo edición ── */}
+              {!songEditMode && (
+                <div className="px-4 pt-3 pb-2 border-b border-surface-700/40">
+                  <div className="relative">
+                    <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                    <input
+                      value={songSearch}
+                      onChange={e => setSongSearch(e.target.value)}
+                      placeholder="Buscar canción o artista…"
+                      className="w-full bg-surface-800 border border-surface-600 rounded-xl pl-9 pr-8 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-accent"
+                    />
+                    {songSearch && (
+                      <button onPointerDown={() => setSongSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500">
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* ── Lista de canciones ── */}
-              {!songDetail && (
-                <div className="flex flex-col">
-                  <div className="px-4 pt-3 pb-2">
-                    <div className="relative">
-                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-                      <input
-                        value={songSearch}
-                        onChange={e => setSongSearch(e.target.value)}
-                  placeholder="Buscar canción o artista…"
-                  className="w-full bg-surface-800 border border-surface-600 rounded-xl pl-9 pr-8 py-2.5 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-accent"
-                />
-                {songSearch && (
-                  <button onPointerDown={() => setSongSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500">
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1.5">
-              {loadingSong && (
-                <div className="flex justify-center pt-8">
-                  <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+              {(!songDetail || songSearch) && !songEditMode && (
+                <div className="px-4 pb-4 pt-3 space-y-1.5">
+                  {loadingSong && (
+                    <div className="flex justify-center pt-8">
+                      <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                  {!loadingSong && filteredSongs.length === 0 && (
+                    <p className="text-center text-zinc-600 text-sm pt-10">
+                      {(songs || []).length === 0 ? 'Sin canciones en la biblioteca' : 'Sin resultados'}
+                    </p>
+                  )}
+                  {filteredSongs.map(song => (
+                    <button
+                      key={song.id}
+                      onClick={() => openSong(song.id)}
+                      className="w-full text-left px-4 py-3.5 bg-surface-800 active:bg-surface-700 rounded-xl border border-surface-700 transition-colors"
+                    >
+                      <p className="text-zinc-200 text-sm font-medium leading-snug">{song.title}</p>
+                      {song.artist && <p className="text-zinc-500 text-xs mt-0.5">{song.artist}</p>}
+                    </button>
+                  ))}
                 </div>
-              )}
-              {!loadingSong && filteredSongs.length === 0 && (
-                <p className="text-center text-zinc-600 text-sm pt-10">
-                  {(songs || []).length === 0 ? 'Sin canciones en la biblioteca' : 'Sin resultados'}
-                </p>
-              )}
-              {filteredSongs.map(song => (
-                <button
-                  key={song.id}
-                  onClick={() => openSong(song.id)}
-                  className="w-full text-left px-4 py-3.5 bg-surface-800 active:bg-surface-700 rounded-xl border border-surface-700 transition-colors"
-                >
-                  <p className="text-zinc-200 text-sm font-medium leading-snug">{song.title}</p>
-                  {song.artist && <p className="text-zinc-500 text-xs mt-0.5">{song.artist}</p>}
-                </button>
-              ))}
-                </div>
-              </div>
               )}
               {/* ── Detalle de la canción seleccionada ── */}
-              {songDetail && (
+              {songDetail && !songSearch && (
                 <div className="flex flex-col">
             {!songEditMode ? (
               /* ── Vista de slides (modo lectura) ── */
@@ -1577,8 +1577,10 @@ export default function MobileControllerPage() {
             <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('multimedia') ? 'rotate-180' : ''}`} />
           </button>
           {openPanels.has('multimedia') && (
-            <div className="px-4 py-6 text-center">
-              <p className="text-zinc-600 text-sm italic">Multimedia — próximamente</p>
+            <div className="px-4 py-8 flex flex-col items-center gap-2 text-center">
+              <Radio size={28} className="text-zinc-700" />
+              <p className="text-zinc-500 text-sm font-medium">Multimedia</p>
+              <p className="text-zinc-600 text-xs">Soporte para imágenes y videos — próximamente</p>
             </div>
           )}
         </div>
