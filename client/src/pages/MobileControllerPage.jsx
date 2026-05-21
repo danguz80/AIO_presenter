@@ -21,6 +21,9 @@ import {
 // ─── Utilidad: leer/guardar conexión ─────────────────────────────────────────
 function getSavedIp()   { return localStorage.getItem('aio_server_ip')   || window.location.hostname; }
 function getSavedPort() { return localStorage.getItem('aio_server_port') || '3001'; }
+// En HTTPS (produccion) usa URL relativa para evitar Mixed Content.
+// En HTTP (dev LAN) usa la IP y puerto del servidor guardados.
+function getApiBase()   { return window.location.protocol === 'https:' ? '' : `http://${getSavedIp()}:${getSavedPort()}`; }
 
 // Normaliza un string para búsqueda: minúsculas + sin tildes/diacríticos
 // "Canción" → "cancion", "niño" → "nino"
@@ -188,10 +191,10 @@ export default function MobileControllerPage() {
     setEventsLoading(true);
     try {
       const today = new Date();
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const start = weekAgo.toISOString().split('T')[0];
+      // Desde el 1 del mes actual (no desde "hace 7 días") para no perder eventos del inicio del mes
+      const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
       const end   = new Date(today.getFullYear(), today.getMonth() + 3, 0).toISOString().split('T')[0];
-      const res   = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/events?start=${start}&end=${end}`);
+      const res   = await fetch(`${getApiBase()}/api/events?start=${start}&end=${end}`);
       if (res.ok) setEvents(await res.json());
     } catch { /* red no disponible */ }
     finally { setEventsLoading(false); }
@@ -199,12 +202,12 @@ export default function MobileControllerPage() {
 
   const loadEventTemplates = useCallback(async () => {
     try {
-      const res = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/event-templates`);
+      const res = await fetch(`${getApiBase()}/api/event-templates`);
       if (res.ok) setEventTemplates(await res.json());
     } catch { /* noop */ }
   }, []);
 
-  const apiBase = () => `http://${getSavedIp()}:${getSavedPort()}`;
+  const apiBase = getApiBase;
 
   const saveEventForm = async () => {
     if (!eventFormData.title || !eventFormData.date) return;
@@ -282,7 +285,7 @@ export default function MobileControllerPage() {
 
   const loadBibleVersions = useCallback(async () => {
     try {
-      const res = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/bible/versions`);
+      const res = await fetch(`${getApiBase()}/api/bible/versions`);
       if (res.ok) {
         const v = await res.json();
         setBibleVersions(v);
@@ -296,21 +299,21 @@ export default function MobileControllerPage() {
 
   const loadBibleBooks = useCallback(async (versionId) => {
     try {
-      const res = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/bible/${versionId}/books`);
+      const res = await fetch(`${getApiBase()}/api/bible/${versionId}/books`);
       if (res.ok) setBibleBooks(await res.json());
     } catch { /* sin conexión */ }
   }, []);
 
   const loadBibleChapters = useCallback(async (versionId, bookId) => {
     try {
-      const res = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/bible/${versionId}/books/${bookId}/chapters`);
+      const res = await fetch(`${getApiBase()}/api/bible/${versionId}/books/${bookId}/chapters`);
       if (res.ok) setBibleChapters(await res.json());
     } catch { /* sin conexión */ }
   }, []);
 
   const loadBibleVerses = useCallback(async (versionId, bookId, chapter) => {
     try {
-      const res = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/bible/${versionId}/books/${bookId}/chapters/${chapter}`);
+      const res = await fetch(`${getApiBase()}/api/bible/${versionId}/books/${bookId}/chapters/${chapter}`);
       if (res.ok) setBibleVerses(await res.json());
     } catch { /* sin conexión */ }
   }, []);
@@ -319,7 +322,7 @@ export default function MobileControllerPage() {
     if (!q.trim() || !versionId) { setBibleResults([]); return; }
     setBibleSearching(true);
     try {
-      const res = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/bible/search?q=${encodeURIComponent(q)}&versionId=${versionId}`);
+      const res = await fetch(`${getApiBase()}/api/bible/search?q=${encodeURIComponent(q)}&versionId=${versionId}`);}
       if (res.ok) setBibleResults(await res.json());
     } catch { /* sin conexión */ }
     finally { setBibleSearching(false); }
