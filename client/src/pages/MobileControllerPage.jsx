@@ -1134,7 +1134,6 @@ export default function MobileControllerPage() {
           </div>
               )}
               </div>
-            </div>
           )}
         </div>
 
