@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePresenter } from '../context/usePresenter';
+import OutputControls  from '../components/Controls/OutputControls';
+import StageControls   from '../components/Controls/StageControls';
+import VirtualControls from '../components/Controls/VirtualControls';
+import ThemePanel      from '../components/Settings/ThemePanel';
+import DisplaysPanel   from '../components/Settings/DisplaysPanel';
+import SyncPanel       from '../components/Settings/SyncPanel';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
 import {
@@ -1963,55 +1969,66 @@ export default function MobileControllerPage() {
           </button>
           {openPanels.has('ajustes') && (
             <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
-        {/* ──── AJUSTES ──── */}
-        {true && (
-          <div className="flex-1 overflow-y-auto px-4 pt-6 pb-8">
-            <p className="text-zinc-400 text-xs uppercase tracking-widest mb-4">Conexión al servidor</p>
+              {/* Ajustes de salida, escenario y virtual */}
+              <OutputControls />
+              <StageControls />
+              <VirtualControls />
 
-            <div className="space-y-3 mb-5">
-              <div>
-                <label className="text-zinc-400 text-xs mb-1.5 block">Dirección IP</label>
-                <input
-                  value={cfgIp}
-                  onChange={e => setCfgIp(e.target.value)}
-                  placeholder="192.168.1.100"
-                  inputMode="url"
-                  className="w-full bg-surface-800 border border-surface-600 rounded-xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-accent font-mono"
-                />
-              </div>
-              <div>
-                <label className="text-zinc-400 text-xs mb-1.5 block">Puerto</label>
-                <input
-                  value={cfgPort}
-                  onChange={e => setCfgPort(e.target.value)}
-                  placeholder="3001"
-                  inputMode="numeric"
-                  className="w-full bg-surface-800 border border-surface-600 rounded-xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-accent font-mono"
-                />
-              </div>
-            </div>
+              {/* Tema de color */}
+              <MobileSettingsSection title="Tema de color">
+                <ThemePanel />
+              </MobileSettingsSection>
 
-            <button
-              onPointerDown={saveSettings}
-              disabled={cfgSaved}
-              className={`w-full py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
-                cfgSaved
-                  ? 'bg-green-900 text-green-300 border border-green-700'
-                  : 'bg-accent text-white'
-              }`}
-            >
-              {cfgSaved ? 'Guardado — reconectando…' : 'Guardar y reconectar'}
-            </button>
+              {/* Salidas */}
+              <MobileSettingsSection title="Salidas">
+                <DisplaysPanel />
+              </MobileSettingsSection>
 
-            <div className="mt-6 p-4 bg-surface-800 rounded-xl border border-surface-700">
-              <p className="text-zinc-500 text-xs">Conexión actual</p>
-              <p className="font-mono text-accent text-sm mt-1">{getSavedIp()}:{getSavedPort()}</p>
-              <p className="text-zinc-600 text-xs mt-3 leading-relaxed">
-                Cambia la IP si el servidor cambió de dirección en la red WiFi. La app se recarga automáticamente.
-              </p>
-            </div>
-          </div>
-        )}
+              {/* Sincronización */}
+              <MobileSettingsSection title="Sincronización">
+                <SyncPanel />
+              </MobileSettingsSection>
+
+              {/* Conexión al servidor */}
+              <MobileSettingsSection title="Conexión al servidor">
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label className="text-zinc-400 text-xs mb-1.5 block">Dirección IP</label>
+                    <input
+                      value={cfgIp}
+                      onChange={e => setCfgIp(e.target.value)}
+                      placeholder="192.168.1.100"
+                      inputMode="url"
+                      className="w-full bg-surface-800 border border-surface-600 rounded-xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-accent font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-zinc-400 text-xs mb-1.5 block">Puerto</label>
+                    <input
+                      value={cfgPort}
+                      onChange={e => setCfgPort(e.target.value)}
+                      placeholder="3001"
+                      inputMode="numeric"
+                      className="w-full bg-surface-800 border border-surface-600 rounded-xl px-4 py-3 text-sm text-zinc-200 outline-none focus:border-accent font-mono"
+                    />
+                  </div>
+                </div>
+                <button
+                  onPointerDown={saveSettings}
+                  disabled={cfgSaved}
+                  className={`w-full py-3.5 rounded-xl font-semibold text-sm transition-all active:scale-95 ${
+                    cfgSaved
+                      ? 'bg-green-900 text-green-300 border border-green-700'
+                      : 'bg-accent text-white'
+                  }`}
+                >
+                  {cfgSaved ? 'Guardado — reconectando…' : 'Guardar y reconectar'}
+                </button>
+                <div className="mt-4 p-3 bg-surface-800 rounded-xl border border-surface-700">
+                  <p className="text-zinc-500 text-xs">Conexión actual</p>
+                  <p className="font-mono text-accent text-sm mt-1">{getSavedIp()}:{getSavedPort()}</p>
+                </div>
+              </MobileSettingsSection>
             </div>
           )}
         </div>
@@ -2186,5 +2203,22 @@ function TabNavBtn({ active, onPointerDown, icon, label }) {
       {/* Etiqueta: oculta en fold phones (<320 px), visible en ≥ 360 px */}
       <span className="text-[9px] xs:text-[10px] font-medium hidden fold:block">{label}</span>
     </button>
+  );
+}
+
+// ─── Sub-sección colapsable para el panel Ajustes móvil ──────────────────────
+function MobileSettingsSection({ title, children }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-surface-700">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-surface-700/30 transition-colors"
+      >
+        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">{title}</span>
+        <ChevronDown size={14} className={`text-zinc-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="px-4 pb-4">{children}</div>}
+    </div>
   );
 }
