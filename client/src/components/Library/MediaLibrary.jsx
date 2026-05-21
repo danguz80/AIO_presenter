@@ -315,7 +315,22 @@ function FsaMediaThumb({ file, isActive, onSend, onAddToEvent }) {
   }, [visible, file.handle, file.type]);
 
   return (
-    <div ref={ref} className="relative group">
+    <div
+      ref={ref}
+      className="relative group"
+      draggable
+      onDragStart={e => {
+        const url = `/local-media/${encodeURIComponent(file.name)}`;
+        e.dataTransfer.setData('application/aio-media', JSON.stringify({
+          type: file.type,
+          name: file.name,
+          url,
+        }));
+        e.dataTransfer.effectAllowed = 'copy';
+        // Caché el archivo en background para que el SW lo pueda servir al proyectar
+        cacheMediaFile(file.handle).catch(() => {});
+      }}
+    >
       <button
         onClick={() => onSend(file)}
         className={`w-full rounded-lg overflow-hidden border-2 transition-all aspect-video flex items-center justify-center bg-surface-700 ${
