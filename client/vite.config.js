@@ -35,7 +35,8 @@ export default defineConfig({
         // Handler para archivos de media local (FSA → Cache API → OutputPage)
         runtimeCaching: [
           {
-            urlPattern: /^\/local-media\//,
+            // Función en lugar de regex para que funcione con URL completa (https://...)
+            urlPattern: ({ url }) => url.pathname.startsWith('/local-media/'),
             handler: 'CacheOnly',
             options: {
               cacheName: 'aio-local-media',
