@@ -2,17 +2,16 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <script>
-      // Samsung Internet (Galaxy Z Fold cover screen) ignora width=device-width
-      // y usa viewport 980px, escalando todo el contenido al ~42%.
-      // Corrección: si innerWidth >> screen.width, forzar viewport al ancho real.
+      // Chrome en Galaxy Z Fold cover screen ignora width=device-width y usa 980px.
+      // Usamos document.write para generar el meta viewport ANTES de que Chrome
+      // lo procese, con el ancho real de la pantalla (screen.width).
       ;(function(){
         var sw = window.screen.width;
-        if(sw > 0 && sw < 700 && window.innerWidth > sw * 1.3){
-          document.querySelector('meta[name=viewport]').setAttribute('content',
-            'width='+sw+',initial-scale=1.0,minimum-scale=1.0,maximum-scale=5.0,viewport-fit=cover');
-        }
+        var content = (sw > 100 && sw < 700)
+          ? 'width=' + sw + ',initial-scale=1.0,minimum-scale=1.0,maximum-scale=5.0,viewport-fit=cover'
+          : 'width=device-width,initial-scale=1.0,viewport-fit=cover';
+        document.write('<meta name="viewport" content="' + content + '">');
       })();
     </script>
     <title>AIO Presenter — Proyección de letras y Biblias para iglesias</title>
