@@ -72,8 +72,8 @@ export default function ControllerPage() {
   // ── Redirigir a /mobile en pantallas pequeñas (< 768 px) ──────────────────
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
-    if (mq.matches) { navigate('/output', { replace: true }); return; }
-    const handler = (e) => { if (e.matches) navigate('/output', { replace: true }); };
+    if (mq.matches) { navigate('/mobile', { replace: true }); return; }
+    const handler = (e) => { if (e.matches) navigate('/mobile', { replace: true }); };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, [navigate]);
