@@ -312,6 +312,32 @@ export default function SongDetail() {
     trackSlide(slide.id);
   };
 
+  const handleTitleClick = () => {
+    const titleActive = liveState.slideData?.type === 'title'
+      && liveState.slideData?.songId === selectedSong?.id
+      && !liveState.isBlank;
+    if (titleActive) {
+      actions.toggleBlank(true);
+      return;
+    }
+    actions.showSlide({
+      type: 'title-direct',
+      slides: selectedSong?.slides,
+      slideIndex: -1,
+      slideData: {
+        type:            'title',
+        songId:          selectedSong?.id,
+        songTitle:       selectedSong?.title,
+        songAuthor:      selectedSong?.author || '',
+        songKey:         selectedSong?.song_key || null,
+        slideBackground: outputCfg?.titleBackground || null,
+      },
+      nextSlideData: selectedSong?.slides?.[0]
+        ? { type: 'song', label: selectedSong.slides[0].label, content: selectedSong.slides[0].content }
+        : null,
+    });
+  };
+
   // Trackea el slide visto y auto-marca cuando ≥80% de slides han sido vistos
   const trackSlide = (slideId) => {
     if (!selectedSong || !eventPlaysContext) return;
@@ -471,32 +497,6 @@ export default function SongDetail() {
               const artistCfgSize = outputCfg.artistFontSize;
               const artistScale   = artistCfgSize ? Number(artistCfgSize) / 36 : 1;
               const artistSize    = `${Math.max(0.16, Math.min(1.4, 0.44 * colScale * artistScale)).toFixed(3)}rem`;
-
-              const handleTitleClick = () => {
-                // Si ya está activo, blanquear; si no, proyectar diapositiva de título
-                if (titleActive) {
-                  actions.toggleBlank(true);
-                  return;
-                }
-                // Enviar slide de tipo 'title' directamente al servidor
-                // El servidor lo maneja sin re-disparar la lógica de isNewSong
-                actions.showSlide({
-                  type: 'title-direct',   // señal especial para no re-triggear isNewSong
-                  slides: selectedSong.slides,
-                  slideIndex: -1,
-                  slideData: {
-                    type:            'title',
-                    songId:          selectedSong.id,
-                    songTitle:       selectedSong.title,
-                    songAuthor:      selectedSong.author || '',
-                    songKey:         selectedSong.song_key || null,
-                    slideBackground: outputCfg.titleBackground || null,
-                  },
-                  nextSlideData: selectedSong.slides[0]
-                    ? { type: 'song', label: selectedSong.slides[0].label, content: selectedSong.slides[0].content }
-                    : null,
-                });
-              };
 
               return (
                 <div
