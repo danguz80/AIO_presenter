@@ -148,11 +148,11 @@ function SlideContent({ slideData, cfg }) {
     if (cfg.fontSize && cfg.fontSize !== 'auto') {
       fontSize = `${cfg.fontSize}px`;
     } else {
-      fontSize = lineCount <= 3  ? 'clamp(2rem, 5vw, 4.5rem)'
-               : lineCount <= 5  ? 'clamp(1.6rem, 4vw, 3.5rem)'
-               : lineCount <= 7  ? 'clamp(1.3rem, 3.2vw, 2.8rem)'
-               : lineCount <= 10 ? 'clamp(1.1rem, 2.6vw, 2.2rem)'
-               : 'clamp(0.9rem, 2vw, 1.8rem)';
+      fontSize = lineCount <= 3  ? 'clamp(2rem, min(5vw, 14vh), 4.5rem)'
+               : lineCount <= 5  ? 'clamp(1.6rem, min(4vw, 10vh), 3.5rem)'
+               : lineCount <= 7  ? 'clamp(1.3rem, min(3.2vw, 8vh), 2.8rem)'
+               : lineCount <= 10 ? 'clamp(1.1rem, min(2.6vw, 6vh), 2.2rem)'
+               : 'clamp(0.9rem, min(2vw, 4.5vh), 1.8rem)';
     }
 
     const lyricStyle = {

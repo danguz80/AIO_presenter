@@ -33,7 +33,8 @@ export default function OutputPage() {
       sessionStorage.setItem('output_direct_open', '1');
       if (mq.matches) return; // apertura directa en desktop → no redirigir
     }
-    const handler = (e) => { if (e.matches) { sessionStorage.removeItem('output_direct_open'); navigate('/app', { replace: true }); } };
+    // Solo redirigir si es desktop real (ancho ≥768 Y alto ≥500) — no redirigir en landscape móvil
+    const handler = (e) => { if (e.matches && window.innerHeight >= 500) { sessionStorage.removeItem('output_direct_open'); navigate('/app', { replace: true }); } };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, [navigate]);

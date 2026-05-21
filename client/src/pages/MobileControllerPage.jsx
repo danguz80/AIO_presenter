@@ -101,9 +101,10 @@ export default function MobileControllerPage() {
   const { slideData, nextSlideData, isBlank } = liveState;
   const navigate = useNavigate();
 
-  // En escritorio (≥ 768px): volver al controlador principal
+  // En escritorio real (≥768px de ancho Y ≥500px de alto): volver al controlador principal
+  // No redirigir si es landscape móvil (ej: 862x425)
   useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)');
+    const mq = window.matchMedia('(min-width: 768px) and (min-height: 500px)');
     if (mq.matches) { navigate('/app', { replace: true }); return; }
     const handler = (e) => { if (e.matches) navigate('/app', { replace: true }); };
     mq.addEventListener('change', handler);

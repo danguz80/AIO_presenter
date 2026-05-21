@@ -69,9 +69,9 @@ export default function ControllerPage() {
   const { state } = usePresenter();
   const navigate = useNavigate();
 
-  // ── Redirigir a /mobile en móvil (portrait < 768px o landscape con altura < 500px) ──
+  // ── Redirigir a /mobile en móvil: portrait<768px O landscape móvil (ancho<1024 y alto<500px) ──
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 767px), (orientation: landscape) and (max-height: 500px)');
+    const mq = window.matchMedia('(max-width: 767px), (max-width: 1023px) and (max-height: 499px)');
     if (mq.matches) { navigate('/mobile', { replace: true }); return; }
     const handler = (e) => { if (e.matches) navigate('/mobile', { replace: true }); };
     mq.addEventListener('change', handler);
