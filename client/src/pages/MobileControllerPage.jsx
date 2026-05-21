@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { usePresenter } from '../context/usePresenter';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
@@ -7,7 +8,7 @@ import {
   Wifi, WifiOff, Music, Radio, Settings, ArrowLeft, Search, X,
   CalendarDays, BookOpen, Clock,
   Pencil, Trash2, Plus, Check, ChevronUp, ChevronDown, LayoutTemplate, SkipForward, Minus,
-  CheckCircle2, Circle,
+  CheckCircle2, Circle, MonitorPlay,
 } from 'lucide-react';
 
 // ─── Utilidad: leer/guardar conexión ─────────────────────────────────────────
@@ -98,6 +99,16 @@ export default function MobileControllerPage() {
   const { state, actions } = usePresenter();
   const { liveState, connected, songs, schedule, reservasMode, stageConfig, eventPlays, eventPlaysContext } = state;
   const { slideData, nextSlideData, isBlank } = liveState;
+  const navigate = useNavigate();
+
+  // En escritorio (≥ 768px): volver al controlador principal
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 768px)');
+    if (mq.matches) { navigate('/app', { replace: true }); return; }
+    const handler = (e) => { if (e.matches) navigate('/app', { replace: true }); };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [navigate]);
 
   const [tab,              setTab]              = useState('live');
   const [songDetail,       setSongDetail]       = useState(null);
@@ -557,6 +568,14 @@ export default function MobileControllerPage() {
             </button>
           ) : (
             <>
+              <Link
+                to="/output"
+                className="flex items-center gap-1 text-zinc-400 text-xs mr-1"
+                title="Ver pantalla de salida"
+              >
+                <MonitorPlay size={14} />
+                <span className="hidden xs:inline">Pantalla</span>
+              </Link>
               {connected
                 ? <><Wifi size={13} className="text-green-400" /><span className="text-green-400">Conectado</span></>
                 : <><WifiOff size={13} className="text-red-400" /><span className="text-red-400">Sin conexión</span></>
