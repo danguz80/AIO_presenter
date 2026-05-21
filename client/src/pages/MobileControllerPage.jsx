@@ -7,6 +7,7 @@ import VirtualControls from '../components/Controls/VirtualControls';
 import ThemePanel      from '../components/Settings/ThemePanel';
 import DisplaysPanel   from '../components/Settings/DisplaysPanel';
 import SyncPanel       from '../components/Settings/SyncPanel';
+import MediaLibrary    from '../components/Library/MediaLibrary';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
 import {
@@ -1577,10 +1578,8 @@ export default function MobileControllerPage() {
             <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('multimedia') ? 'rotate-180' : ''}`} />
           </button>
           {openPanels.has('multimedia') && (
-            <div className="px-4 py-8 flex flex-col items-center gap-2 text-center">
-              <Radio size={28} className="text-zinc-700" />
-              <p className="text-zinc-500 text-sm font-medium">Multimedia</p>
-              <p className="text-zinc-600 text-xs">Soporte para imágenes y videos — próximamente</p>
+            <div style={{ height: '65vh' }}>
+              <MediaLibrary />
             </div>
           )}
         </div>
