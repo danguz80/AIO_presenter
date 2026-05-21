@@ -69,10 +69,13 @@ export default function ControllerPage() {
   const { state } = usePresenter();
   const navigate = useNavigate();
 
-  // ── Redirigir a /mobile en móvil: portrait<768px O landscape móvil (ancho<1024 y alto<500px) ──
+  // ── Redirigir a /mobile en móvil ──────────────────────────────────────────
+  // Detección combinada: User Agent (más fiable en dispositivos reales) +
+  // media query (por si acaso el UA no lo identifica)
   useEffect(() => {
+    const isMobileUA = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const mq = window.matchMedia('(max-width: 767px), (max-width: 1023px) and (max-height: 499px)');
-    if (mq.matches) { navigate('/mobile', { replace: true }); return; }
+    if (isMobileUA || mq.matches) { navigate('/mobile', { replace: true }); return; }
     const handler = (e) => { if (e.matches) navigate('/mobile', { replace: true }); };
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);

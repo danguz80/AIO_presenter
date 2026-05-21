@@ -108,9 +108,10 @@ export default function MobileControllerPage() {
   const { slideData, nextSlideData, isBlank } = liveState;
   const navigate = useNavigate();
 
-  // En escritorio real (≥768px de ancho Y ≥500px de alto): volver al controlador principal
-  // No redirigir si es landscape móvil (ej: 862x425)
+  // En escritorio real (≥768px de ancho Y ≥500px de alto Y no es un dispositivo móvil): volver al controlador
   useEffect(() => {
+    const isMobileUA = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobileUA) return; // siempre permanecer en /mobile si es teléfono real
     const mq = window.matchMedia('(min-width: 768px) and (min-height: 500px)');
     if (mq.matches) { navigate('/app', { replace: true }); return; }
     const handler = (e) => { if (e.matches) navigate('/app', { replace: true }); };
