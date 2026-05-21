@@ -186,7 +186,8 @@ export default function MobileControllerPage() {
     setEventsLoading(true);
     try {
       const today = new Date();
-      const start = today.toISOString().split('T')[0];
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const start = weekAgo.toISOString().split('T')[0];
       const end   = new Date(today.getFullYear(), today.getMonth() + 3, 0).toISOString().split('T')[0];
       const res   = await fetch(`http://${getSavedIp()}:${getSavedPort()}/api/events?start=${start}&end=${end}`);
       if (res.ok) setEvents(await res.json());
@@ -845,7 +846,7 @@ export default function MobileControllerPage() {
                     <div
                       onClick={() => sendSlide(songDetail, { type: 'title' }, songDetail.slides, -1)}
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
-                        activeSlideKey === `${songDetail.id}:title`
+                        false
                           ? 'bg-accent/15 border-accent text-accent'
                           : 'bg-surface-800 border-surface-700 text-zinc-300'
                       }`}
@@ -859,7 +860,7 @@ export default function MobileControllerPage() {
                   )}
                   {(songDetail.slides || []).map((slide, idx) => {
                     const labelColor = getLabelColor(slide.label);
-                    const isActive   = activeSlideKey === `${songDetail.id}:${idx}`;
+                    const isActive   = activeSongSlideId === slide.id;
                     return (
                       <div
                         key={idx}
