@@ -380,7 +380,8 @@ export default function MobileControllerPage() {
   }, [liveView]);
 
   // Cargar eventos al abrir esa tab
-  useEffect(() => { if (tab === 'events') loadEvents(); }, [tab, loadEvents]);
+  // Cargar eventos al abrir el panel acordeón
+  useEffect(() => { if (openPanels.has('eventos')) loadEvents(); }, [openPanels, loadEvents]);
 
   // Cargar plays al abrir detalle de evento
   useEffect(() => {
@@ -406,8 +407,8 @@ export default function MobileControllerPage() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [activeSongSlideId]);
 
-  // Cargar versiones de Biblia al abrir esa tab
-  useEffect(() => { if (tab === 'bible' && !bibleVersions.length) loadBibleVersions(); }, [tab, bibleVersions.length, loadBibleVersions]);
+  // Cargar versiones de Biblia al abrir el panel acordeón
+  useEffect(() => { if (openPanels.has('biblia') && !bibleVersions.length) loadBibleVersions(); }, [openPanels, bibleVersions.length, loadBibleVersions]);
 
   // Cargar libros al seleccionar versión
   useEffect(() => { if (bibleVersion) loadBibleBooks(bibleVersion.id); }, [bibleVersion, loadBibleBooks]);
@@ -535,19 +536,19 @@ export default function MobileControllerPage() {
     >
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-3 xs:px-4 py-2 xs:py-3 bg-surface-800 border-b border-surface-700 shrink-0">
-        {tab === 'songs' && songDetail ? (
+        {songDetail ? (
           songEditMode ? (
             <button onClick={() => { setSongEditMode(false); setSongEditError(''); }} className="flex items-center gap-1.5 text-zinc-300">
               <ArrowLeft size={16} />
               <span className="text-sm font-medium">Canción</span>
             </button>
           ) : (
-            <button onClick={() => { setSongDetail(null); setActiveSongSlideId(null); setSongEditMode(false); setTab(songOriginTab); setSongOriginTab('songs'); }} className="flex items-center gap-1.5 text-zinc-300">
+            <button onClick={() => { setSongDetail(null); setActiveSongSlideId(null); setSongEditMode(false); setSongOriginTab('songs'); }} className="flex items-center gap-1.5 text-zinc-300">
               <ArrowLeft size={16} />
               <span className="text-sm font-medium">{songOriginTab === 'events' ? 'Setlist' : 'Canciones'}</span>
             </button>
           )
-        ) : tab === 'events' && eventFormMode ? (
+        ) : eventFormMode ? (
           <button onClick={() => setEventFormMode(null)} className="flex items-center gap-1.5 text-zinc-400">
             <ArrowLeft size={16} />
             <span className="text-sm font-medium">Eventos</span>
@@ -556,7 +557,7 @@ export default function MobileControllerPage() {
           <span className="text-accent font-bold text-base tracking-tight">AIO Presenter</span>
         )}
         <div className="flex items-center gap-1.5 text-xs">
-          {tab === 'songs' && songDetail && songEditMode ? (
+          {songDetail && songEditMode ? (
             <button
               onClick={async () => {
                 if (!songEditData.title?.trim()) { setSongEditError('El título es requerido'); return; }
