@@ -390,52 +390,52 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="flex h-screen bg-surface-900 text-white overflow-hidden">
+    <div className="flex flex-col md:flex-row h-[100dvh] bg-surface-900 text-white overflow-hidden">
       {/* ── Columna izquierda: Calendario ── */}
-      <div className="flex flex-col flex-1 min-w-0 p-5 overflow-hidden">
+      <div className="flex flex-col flex-1 min-w-0 p-2 xs:p-3 sm:p-4 md:p-5 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4 shrink-0">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-2 sm:mb-4 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Link
               to="/"
               className="flex items-center gap-1.5 text-zinc-400 hover:text-white transition-colors text-sm"
             >
               <ArrowLeft size={16} />
-              <span className="hidden sm:inline">Volver</span>
+              <span className="hidden xs:inline">Volver</span>
             </Link>
             <div className="w-px h-5 bg-surface-600" />
-            <Calendar size={18} className="text-accent" />
-            <h1 className="font-bold text-base">Calendario</h1>
+            <Calendar size={16} className="text-accent" />
+            <h1 className="font-bold text-sm sm:text-base">Calendario</h1>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <button
               onClick={goToday}
-              className="text-xs text-zinc-400 hover:text-white px-2.5 py-1 rounded-lg hover:bg-surface-700 transition-colors"
+              className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-surface-700 transition-colors hidden xs:block"
             >
               Hoy
             </button>
-            <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-surface-700 transition-colors">
-              <ChevronLeft size={17} />
+            <button onClick={prevMonth} className="p-1 sm:p-1.5 rounded-lg hover:bg-surface-700 transition-colors">
+              <ChevronLeft size={15} />
             </button>
-            <span className="font-semibold text-sm w-40 text-center select-none">
+            <span className="font-semibold text-xs sm:text-sm w-28 sm:w-40 text-center select-none">
               {MONTHS_ES[month]} {year}
             </span>
-            <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-surface-700 transition-colors">
-              <ChevronRight size={17} />
+            <button onClick={nextMonth} className="p-1 sm:p-1.5 rounded-lg hover:bg-surface-700 transition-colors">
+              <ChevronRight size={15} />
             </button>
           </div>
         </div>
 
         {/* Cabeceras días */}
-        <div className="grid grid-cols-7 mb-1 shrink-0">
+        <div className="grid grid-cols-7 mb-0.5 sm:mb-1 shrink-0">
           {DAYS_ES.map(d => (
-            <div key={d} className="text-center text-xs text-zinc-500 font-medium py-1">{d}</div>
+            <div key={d} className="text-center text-[10px] sm:text-xs text-zinc-500 font-medium py-0.5 sm:py-1">{d}</div>
           ))}
         </div>
 
         {/* Grilla */}
-        <div className="grid grid-cols-7 gap-1 flex-1 overflow-hidden content-start">
+        <div className="grid grid-cols-7 gap-0.5 sm:gap-1 flex-1 overflow-hidden content-start">
           {cells.map((day, i) => {
             if (!day) return <div key={`e${i}`} />;
             const k         = dateKey(year, month, day);
@@ -448,8 +448,8 @@ export default function CalendarPage() {
                 key={k}
                 onClick={() => setSelectedDay(day)}
                 className={[
-                  'relative flex flex-col items-start p-1.5 rounded-xl border transition-all text-left',
-                  'min-h-[68px] overflow-hidden',
+                  'relative flex flex-col items-start p-1 xs:p-1.5 rounded-lg xs:rounded-xl border transition-all text-left',
+                  'min-h-[44px] xs:min-h-[56px] sm:min-h-[68px] overflow-hidden',
                   isSelected
                     ? 'bg-accent/15 border-accent'
                     : 'border-transparent hover:bg-surface-800 hover:border-surface-600',
@@ -481,8 +481,16 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* ── Columna derecha: Panel del día ── */}
-      <div className="w-72 xl:w-80 bg-surface-800 border-l border-surface-700 flex flex-col shrink-0">
+      {/* ── Columna derecha / panel inferior: Panel del día ── */}
+      {/* Móvil: panel horizontal bajo el calendario; Desktop: sidebar derecho */}
+      <div className={[
+        'bg-surface-800 border-surface-700 flex flex-col shrink-0',
+        'md:w-72 xl:w-80 md:border-l',
+        // En móvil, solo se muestra si hay día seleccionado (como cajón inferior)
+        selectedDay
+          ? 'h-[40vh] xs:h-[44vh] sm:h-[48vh] md:h-auto border-t md:border-t-0'
+          : 'hidden md:flex',
+      ].join(' ')}>
         {selectedDay ? (
           <>
             <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700 shrink-0">

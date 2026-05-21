@@ -161,3 +161,75 @@ html.theme-ambar {
            placeholder-zinc-500 w-full;
   }
 }
+
+/* ── Responsive / Mobile-first utilities ────────────────────────────────────── */
+
+/* Safe-area para el nav inferior en iPhone (notch / home bar) */
+.mobile-nav-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Viewport height dinámica para evitar el "salto" de la barra del navegador */
+html {
+  -webkit-text-size-adjust: 100%; /* evita que Safari ajuste el texto en landscape */
+}
+
+/* Mejorar el scroll táctil en contenedores internos */
+.overflow-y-auto,
+.overflow-y-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevenir el zoom al enfocar inputs en iOS (fuente mínima 16px) */
+@media (max-width: 767px) {
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Tablet (md ≥ 768px): MobileControllerPage centrado con ancho máximo */
+@media (min-width: 768px) {
+  /* En tablet, limitar el ancho del contenido móvil y centrarlo */
+  .mobile-controller-root {
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+    border-left: 1px solid rgb(var(--surface-700));
+    border-right: 1px solid rgb(var(--surface-700));
+  }
+
+  /* Nav inferior tablet: botones más altos y tipografía mayor */
+  .mobile-nav-safe button {
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+  }
+  .mobile-nav-safe button span {
+    font-size: 11px;
+  }
+}
+
+/* Phones medianos (xs ≥ 390px): calendarios y grillas más holgados */
+@media (min-width: 390px) {
+  .calendar-cell-min {
+    min-height: 60px;
+  }
+}
+
+/* Foldables y pantallas muy angostas (< 320px) */
+@media (max-width: 319px) {
+  /* Reducir padding global en pantallas extremadamente pequeñas */
+  .px-3 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+  .px-4 { padding-left: 0.625rem !important; padding-right: 0.625rem !important; }
+
+  /* Ajustar tamaño de texto */
+  .text-xl  { font-size: 1.1rem !important; }
+  .text-2xl { font-size: 1.25rem !important; }
+}

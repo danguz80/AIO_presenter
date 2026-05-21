@@ -12,7 +12,7 @@ import { ScheduleAddProvider } from '../context/ScheduleAddContext';
 import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -67,6 +67,17 @@ function fmtDate(d) {
 
 export default function ControllerPage() {
   const { state } = usePresenter();
+  const navigate = useNavigate();
+
+  // ── Redirigir a /mobile en pantallas pequeñas (< 768 px) ──────────────────
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    if (mq.matches) { navigate('/mobile', { replace: true }); return; }
+    const handler = (e) => { if (e.matches) navigate('/mobile', { replace: true }); };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [navigate]);
+
   const [activeTab, setActiveTab] = useState('songs'); // 'songs' | 'bible'
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaHeight, setMediaHeight] = useState(220);

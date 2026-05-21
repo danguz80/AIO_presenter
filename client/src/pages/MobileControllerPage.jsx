@@ -496,12 +496,12 @@ export default function MobileControllerPage() {
 
   return (
     <div
-      className="h-[100dvh] bg-surface-900 flex flex-col select-none overflow-hidden"
+      className="h-[100dvh] bg-surface-900 flex flex-col select-none overflow-hidden mobile-controller-root"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
       {/* ── Header ── */}
-      <header className="flex items-center justify-between px-4 py-3 bg-surface-800 border-b border-surface-700 shrink-0">
+      <header className="flex items-center justify-between px-3 xs:px-4 py-2 xs:py-3 bg-surface-800 border-b border-surface-700 shrink-0">
         {tab === 'songs' && songDetail ? (
           songEditMode ? (
             <button onClick={() => { setSongEditMode(false); setSongEditError(''); }} className="flex items-center gap-1.5 text-zinc-300">
@@ -592,16 +592,16 @@ export default function MobileControllerPage() {
             {/* ── Vista Mando ── */}
             {liveView === 'control' && (
               <>
-                <div className="flex-1 flex flex-col items-center justify-center px-6 py-4 min-h-0 overflow-hidden">
+                <div className="flex-1 flex flex-col items-center justify-center px-3 xs:px-5 sm:px-6 py-3 xs:py-4 min-h-0 overflow-hidden">
                   {isBlank ? (
-                    <p className="text-zinc-500 text-lg italic">Pantalla en negro</p>
+                    <p className="text-zinc-500 text-base xs:text-lg italic">Pantalla en negro</p>
                   ) : !slideData ? (
-                    <p className="text-zinc-500 text-lg italic">Sin contenido</p>
+                    <p className="text-zinc-500 text-base xs:text-lg italic">Sin contenido</p>
                   ) : (
                     <div className="w-full text-center">
-                      {slideLabel && <p className="text-[11px] text-zinc-500 uppercase tracking-widest mb-3">{slideLabel}</p>}
-                      <p className="text-white text-xl leading-relaxed whitespace-pre-line overflow-y-auto max-h-52">{slideText}</p>
-                      {slideSongTitle && <p className="text-zinc-500 text-sm mt-4">{slideSongTitle}</p>}
+                      {slideLabel && <p className="text-[10px] xs:text-[11px] text-zinc-500 uppercase tracking-widest mb-2 xs:mb-3">{slideLabel}</p>}
+                      <p className="text-white text-lg xs:text-xl sm:text-2xl leading-relaxed whitespace-pre-line overflow-y-auto max-h-40 xs:max-h-48 sm:max-h-52">{slideText}</p>
+                      {slideSongTitle && <p className="text-zinc-500 text-xs xs:text-sm mt-3 xs:mt-4">{slideSongTitle}</p>}
                     </div>
                   )}
                 </div>
@@ -614,13 +614,13 @@ export default function MobileControllerPage() {
                   </div>
                 )}
 
-                <div className="shrink-0 px-4 pb-3 pt-1 grid grid-cols-3 gap-3">
+                <div className="shrink-0 px-3 xs:px-4 pb-2.5 xs:pb-3 pt-1 grid grid-cols-3 gap-2 xs:gap-3">
                   <NavBtn flash={flash === 'prev'} onPointerDown={handlePrev}>
-                    <ChevronLeft size={32} /><span className="text-xs font-medium">Anterior</span>
+                    <ChevronLeft size={28} className="xs:hidden" /><ChevronLeft size={32} className="hidden xs:block" /><span className="text-xs font-medium">Anterior</span>
                   </NavBtn>
                   <button
                     onPointerDown={handleBlank}
-                    className={`flex flex-col items-center justify-center gap-1 py-6 rounded-2xl border-2 transition-all active:scale-95 ${
+                    className={`flex flex-col items-center justify-center gap-1 py-4 xs:py-5 sm:py-6 rounded-2xl border-2 transition-all active:scale-95 ${
                       isBlank ? 'bg-red-950/60 border-red-500 text-red-400'
                       : flash === 'blank' ? 'bg-zinc-700 border-zinc-400 text-white'
                       : 'bg-surface-800 border-surface-600 text-zinc-300'
@@ -630,7 +630,7 @@ export default function MobileControllerPage() {
                     <span className="text-xs font-medium">{isBlank ? 'Mostrar' : 'Negro'}</span>
                   </button>
                   <NavBtn flash={flash === 'next'} onPointerDown={handleNext}>
-                    <ChevronRight size={32} /><span className="text-xs font-medium">Siguiente</span>
+                    <ChevronRight size={28} className="xs:hidden" /><ChevronRight size={32} className="hidden xs:block" /><span className="text-xs font-medium">Siguiente</span>
                   </NavBtn>
                 </div>
 
@@ -1855,7 +1855,7 @@ export default function MobileControllerPage() {
       </div>
 
       {/* ── Nav inferior ── */}
-      <nav className="shrink-0 grid grid-cols-5 bg-surface-800 border-t border-surface-700">
+      <nav className="shrink-0 grid grid-cols-5 bg-surface-800 border-t border-surface-700 mobile-nav-safe">
         <TabNavBtn active={tab === 'live'}     onPointerDown={() => setTab('live')}     icon={<Radio size={18} />}        label="En vivo" />
         <TabNavBtn active={tab === 'songs'}    onPointerDown={() => setTab('songs')}    icon={<Music size={18} />}        label="Canciones" />
         <TabNavBtn active={tab === 'events'}   onPointerDown={() => setTab('events')}   icon={<CalendarDays size={18} />} label="Eventos" />
@@ -1950,7 +1950,7 @@ function NavBtn({ flash, onPointerDown, children }) {
   return (
     <button
       onPointerDown={onPointerDown}
-      className={`flex flex-col items-center justify-center gap-1 py-6 rounded-2xl border-2 transition-all active:scale-95 ${
+      className={`flex flex-col items-center justify-center gap-1 py-4 xs:py-5 sm:py-6 rounded-2xl border-2 transition-all active:scale-95 ${
         flash ? 'bg-accent/30 border-accent text-accent' : 'bg-surface-800 border-surface-600 text-zinc-300'
       }`}
     >
@@ -2001,12 +2001,14 @@ function TabNavBtn({ active, onPointerDown, icon, label }) {
   return (
     <button
       onPointerDown={onPointerDown}
-      className={`flex flex-col items-center justify-center gap-1 py-3 transition-colors ${
+      className={`flex flex-col items-center justify-center gap-0.5 xs:gap-1 py-2 xs:py-3 transition-colors ${
         active ? 'text-accent' : 'text-zinc-500'
       }`}
     >
-      {icon}
-      <span className="text-[10px] font-medium">{label}</span>
+      {/* Ícono: ligeramente más pequeño en fold phones */}
+      <span className="[&>svg]:w-4 [&>svg]:h-4 xs:[&>svg]:w-[18px] xs:[&>svg]:h-[18px]">{icon}</span>
+      {/* Etiqueta: oculta en fold phones (<320 px), visible en ≥ 360 px */}
+      <span className="text-[9px] xs:text-[10px] font-medium hidden fold:block">{label}</span>
     </button>
   );
 }

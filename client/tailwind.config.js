@@ -2,6 +2,19 @@
 module.exports = {
   content: ['./index.html', './src/**/*.{js,jsx,ts,tsx}'],
   theme: {
+    screens: {
+      // Mobile-first breakpoints
+      // fold  : teléfonos plegables en estado cerrado (~280-320 px)
+      // xs    : teléfonos estándar (375-414 px)
+      // sm+   : valores por defecto de Tailwind (640, 768, 1024, 1280, 1536)
+      'fold': '320px',
+      'xs':   '390px',
+      'sm':   '640px',
+      'md':   '768px',
+      'lg':   '1024px',
+      'xl':   '1280px',
+      '2xl':  '1536px',
+    },
     extend: {
       colors: {
         surface: {
