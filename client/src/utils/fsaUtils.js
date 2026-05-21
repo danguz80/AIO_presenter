@@ -104,8 +104,8 @@ export async function pickFolder() {
 }
 
 /** Guarda un handle de carpeta en IndexedDB */
-export async function saveFolder(handle) {
-  const key = `folder:${handle.name}:${Date.now()}`;
+export async function saveFolder(handle, customKey) {
+  const key = customKey ?? `folder:${handle.name}:${Date.now()}`;
   await idbSet(key, { key, name: handle.name, handle });
   return key;
 }
@@ -242,4 +242,46 @@ export async function cacheMediaFile(fileHandle) {
  */
 export async function clearMediaCache() {
   await caches.delete(MEDIA_CACHE_NAME);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sync con backend DB — carpetas compartidas entre dispositivos
+// ─────────────────────────────────────────────────────────────────────────────
+
+function authHeaders(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** Obtiene las carpetas guardadas en la BD para la organización */
+export async function fetchFoldersFromDb(apiBase, token) {
+  try {
+    const res = await fetch(`${apiBase}/api/media/db-folders`, { headers: authHeaders(token) });
+    if (!res.ok) return [];
+    return res.json();
+  } catch {
+    return [];
+  }
+}
+
+/** Guarda una carpeta en la BD. Devuelve { id, name } */
+export async function saveFolderToDb(name, apiBase, token) {
+  const res = await fetch(`${apiBase}/api/media/db-folders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error('Error guardando carpeta en BD');
+  return res.json();
+}
+
+/** Elimina una carpeta de la BD por id */
+export async function removeFolderFromDb(id, apiBase, token) {
+  try {
+    await fetch(`${apiBase}/api/media/db-folders/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(token),
+    });
+  } catch (e) {
+    console.warn('removeFolderFromDb error:', e);
+  }
 }

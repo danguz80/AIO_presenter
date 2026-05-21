@@ -16,7 +16,12 @@ import {
   generateThumbnail,
   cacheMediaFile,
   verifyPermission,
+  fetchFoldersFromDb,
+  saveFolderToDb,
+  removeFolderFromDb,
 } from '../../utils/fsaUtils';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const SERVER_BASE = (() => {
   const savedIp   = localStorage.getItem('aio_server_ip');
@@ -421,26 +426,56 @@ export default function MediaLibrary() {
     ? state.liveState.slideData.filePath ?? null
     : state.liveState?.backgroundMedia?.filePath ?? null;
 
-  // ── FSA: cargar carpetas desde IndexedDB ───────────────────────────────────
+  // ── FSA: cargar carpetas — BD (autoritative) + handles locales (IndexedDB) ──
   const loadFsaFolders = useCallback(async () => {
     setLoadingFolders(true);
     try {
+      const token   = localStorage.getItem('aio_sync_token');
       const handles = await fsaListFolders();
-      const withPerms = await Promise.all(
-        handles.map(async (h) => {
-          try {
-            const perm = await h.handle.queryPermission({ mode: 'read' });
-            return { ...h, permissionState: perm };
-          } catch {
-            return { ...h, permissionState: 'error' };
-          }
-        })
-      );
-      setFolders(withPerms);
-      setSelectedFolder(prev => {
-        if (!prev) return withPerms[0] ?? null;
-        return withPerms.find(f => f.key === prev.key) ?? withPerms[0] ?? null;
-      });
+
+      // Si hay token, BD es la fuente de verdad compartida entre dispositivos
+      if (token) {
+        const dbFolders = await fetchFoldersFromDb(API_BASE, token);
+        const merged = await Promise.all(
+          dbFolders.map(async ({ id, name }) => {
+            const idbKey  = `db-folder:${id}`;
+            const byKey   = handles.find(h => h.key === idbKey);
+            const byName  = handles.find(h => h.name === name);
+            const entry   = byKey ?? byName;
+            if (entry) {
+              try {
+                const perm = await entry.handle.queryPermission({ mode: 'read' });
+                return { key: idbKey, dbId: id, name, handle: entry.handle, permissionState: perm };
+              } catch {
+                return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
+              }
+            }
+            return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
+          })
+        );
+        setFolders(merged);
+        setSelectedFolder(prev => {
+          if (!prev) return merged[0] ?? null;
+          return merged.find(f => f.key === prev.key) ?? merged[0] ?? null;
+        });
+      } else {
+        // Sin sesión: usar solo IndexedDB (comportamiento anterior)
+        const withPerms = await Promise.all(
+          handles.map(async (h) => {
+            try {
+              const perm = await h.handle.queryPermission({ mode: 'read' });
+              return { ...h, permissionState: perm };
+            } catch {
+              return { ...h, permissionState: 'error' };
+            }
+          })
+        );
+        setFolders(withPerms);
+        setSelectedFolder(prev => {
+          if (!prev) return withPerms[0] ?? null;
+          return withPerms.find(f => f.key === prev.key) ?? withPerms[0] ?? null;
+        });
+      }
     } finally {
       setLoadingFolders(false);
     }
@@ -493,8 +528,22 @@ export default function MediaLibrary() {
     }
   }, [selectedFolder, mode]);
 
-  // ── FSA: seleccionar carpeta (puede requerir permiso) ─────────────────────
+  // ── FSA: seleccionar carpeta (puede requerir permiso o handle nulo) ─────────
   const handleSelectFsaFolder = async (folder) => {
+    // Sin handle local: carpeta viene de BD pero no de este dispositivo — pedir re-selección
+    if (!folder.handle) {
+      try {
+        const handle = await pickFolder();
+        await saveFolder(handle, folder.key);
+        const perm = await handle.queryPermission({ mode: 'read' });
+        const updated = { ...folder, handle, permissionState: perm };
+        setFolders(prev => prev.map(f => f.key === folder.key ? updated : f));
+        setSelectedFolder(updated);
+      } catch (err) {
+        if (err.name !== 'AbortError') console.error('Error re-seleccionando carpeta:', err);
+      }
+      return;
+    }
     if (folder.permissionState !== 'granted') {
       try {
         const perm = await verifyPermission(folder.handle);
@@ -512,9 +561,20 @@ export default function MediaLibrary() {
   const handleAddFolderFsa = async () => {
     try {
       const handle = await pickFolder();
-      const key    = await saveFolder(handle);
+      const token  = localStorage.getItem('aio_sync_token');
+      let dbId = null;
+      if (token) {
+        try {
+          const saved = await saveFolderToDb(handle.name, API_BASE, token);
+          dbId = saved.id;
+        } catch (e) {
+          console.warn('No se pudo guardar carpeta en BD:', e);
+        }
+      }
+      const idbKey = dbId ? `db-folder:${dbId}` : undefined;
+      const key    = await saveFolder(handle, idbKey);
       const perm   = await handle.queryPermission({ mode: 'read' });
-      const newFolder = { key, name: handle.name, handle, permissionState: perm };
+      const newFolder = { key, dbId, name: handle.name, handle, permissionState: perm };
       setFolders(prev => [...prev, newFolder]);
       setSelectedFolder(newFolder);
     } catch (err) {
@@ -544,6 +604,10 @@ export default function MediaLibrary() {
     if (!window.confirm(`¿Quitar "${folder.name}" de la lista?`)) return;
     if (mode === 'fsa') {
       await fsaRemoveFolder(folder.key);
+      if (folder.dbId) {
+        const token = localStorage.getItem('aio_sync_token');
+        if (token) await removeFolderFromDb(folder.dbId, API_BASE, token);
+      }
       const updated = folders.filter(f => f.key !== folder.key);
       setFolders(updated);
       setSelectedFolder(prev => prev?.key === folder.key ? updated[0] ?? null : prev);

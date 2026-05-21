@@ -198,6 +198,15 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE songs           ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await pool.query(`ALTER TABLE events          ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await pool.query(`ALTER TABLE sync_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    // Carpetas multimedia por organización
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS media_folders (
+        id              SERIAL PRIMARY KEY,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        name            TEXT NOT NULL,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
     // Migraciones sync con Google Drive
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_file_id  TEXT`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);

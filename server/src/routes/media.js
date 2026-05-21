@@ -291,4 +291,61 @@ router.patch('/folders', async (req, res) => {
   }
 });
 
+// ─── Carpetas multimedia en BD (compartidas entre dispositivos) ───────────────
+const { optionalAuth, requireAuth } = require('../middleware/auth');
+
+async function resolveOrgId(user) {
+  if (user?.orgId) return user.orgId;
+  const { rows } = await pool.query('SELECT id FROM organizations ORDER BY id LIMIT 1');
+  return rows[0]?.id ?? null;
+}
+
+router.get('/db-folders', optionalAuth, async (req, res) => {
+  try {
+    const orgId = await resolveOrgId(req.user);
+    if (!orgId) return res.json([]);
+    const { rows } = await pool.query(
+      'SELECT id, name, created_at FROM media_folders WHERE organization_id = $1 ORDER BY created_at',
+      [orgId]
+    );
+    res.json(rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/db-folders', requireAuth, async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'name requerido' });
+  try {
+    const orgId = req.user.orgId;
+    // Evitar duplicados por nombre dentro de la org
+    const dup = await pool.query(
+      'SELECT id FROM media_folders WHERE organization_id = $1 AND name = $2',
+      [orgId, name]
+    );
+    if (dup.rows.length > 0) return res.json(dup.rows[0]);
+    const { rows } = await pool.query(
+      'INSERT INTO media_folders (organization_id, name) VALUES ($1, $2) RETURNING id, name, created_at',
+      [orgId, name]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.delete('/db-folders/:id', requireAuth, async (req, res) => {
+  try {
+    const orgId = req.user.orgId;
+    await pool.query(
+      'DELETE FROM media_folders WHERE id = $1 AND organization_id = $2',
+      [req.params.id, orgId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
