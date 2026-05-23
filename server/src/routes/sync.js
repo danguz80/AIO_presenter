@@ -19,26 +19,31 @@ function getTransporter() {
   return _transporter;
 }
 
-async function sendInviteEmail({ to, label, link, expiresAt, canPush, canPushAll }) {
+async function sendInviteEmail({ to, label, link, expiresAt, canPush, canPushAll, inviterName, inviterEmail }) {
   const transport = getTransporter();
   if (!transport) return; // SMTP no configurado → silencioso
-  const from    = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const smtpUser  = process.env.SMTP_USER;
+  // Mostrar el nombre del admin como remitente visible; Reply-To apunta a su correo real
+  const displayName = inviterName ? `${inviterName} (vía AIO Presenter)` : 'AIO Presenter';
+  const from    = `"${displayName}" <${smtpUser}>`;
   const expiry  = expiresAt ? `Expira el ${new Date(expiresAt).toLocaleDateString('es')}.` : 'Sin fecha de expiración.';
   const perms   = [canPush && 'subir canciones', canPushAll && 'reemplazar toda la biblioteca'].filter(Boolean).join(', ') || 'solo lectura';
   await transport.sendMail({
     from,
     to,
-    subject : 'Invitación a AIO Presenter',
+    ...(inviterEmail ? { replyTo: inviterEmail } : {}),
+    subject : `${inviterName ? inviterName + ' te invita a' : 'Invitación a'} AIO Presenter`,
     html    : `
       <div style="font-family:sans-serif;max-width:480px;margin:auto">
-        <h2 style="margin-bottom:8px">Te han invitado a AIO Presenter</h2>
+        <h2 style="margin-bottom:8px">${inviterName ? `${inviterName} te invita a AIO Presenter` : 'Te han invitado a AIO Presenter'}</h2>
+        ${inviterEmail ? `<p style="color:#888;font-size:13px;margin-top:-4px">De parte de: <a href="mailto:${inviterEmail}" style="color:#6366f1">${inviterEmail}</a></p>` : ''}
         ${label ? `<p style="color:#666">${label}</p>` : ''}
         <p>Haz clic en el botón para unirte. ${expiry}</p>
         <p style="font-size:12px;color:#888">Permisos: ${perms}</p>
         <a href="${link}" style="display:inline-block;margin-top:16px;padding:12px 24px;background:#6366f1;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Unirse a AIO Presenter</a>
         <p style="margin-top:24px;font-size:11px;color:#aaa">O copia este enlace: ${link}</p>
       </div>`,
-    text    : `Te han invitado a AIO Presenter.\n${label || ''}\nEnlace: ${link}\n${expiry}\nPermisos: ${perms}`,
+    text    : `${inviterName ? inviterName + ' te invita a' : 'Invitación a'} AIO Presenter.\n${inviterEmail ? 'De: ' + inviterEmail + '\n' : ''}${label || ''}\nEnlace: ${link}\n${expiry}\nPermisos: ${perms}`,
   });
 }
 
@@ -771,13 +776,20 @@ router.post('/invitations', async (req, res) => {
     const link = `${clientUrl}/?invite=${inv.code}`;
     // Enviar email si hay dirección y SMTP configurado
     if (inv.email) {
+      // Obtener nombre y email del admin que crea la invitación
+      const { rows: [adminRow] } = await pool.query(
+        'SELECT display_name, email FROM sync_users WHERE id = $1',
+        [req.user.userId]
+      );
       sendInviteEmail({
-        to         : inv.email,
-        label      : inv.label,
+        to          : inv.email,
+        label       : inv.label,
         link,
-        expiresAt  : inv.expires_at,
-        canPush    : inv.can_push,
-        canPushAll : inv.can_push_all,
+        expiresAt   : inv.expires_at,
+        canPush     : inv.can_push,
+        canPushAll  : inv.can_push_all,
+        inviterName : adminRow?.display_name || null,
+        inviterEmail: adminRow?.email || null,
       }).catch(e => console.warn('[mailer] No se pudo enviar invitación:', e.message));
     }
     res.json({ ...inv, link });
