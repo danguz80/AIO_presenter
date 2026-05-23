@@ -790,10 +790,34 @@ router.post('/invitations', async (req, res) => {
         canPushAll  : inv.can_push_all,
         inviterName : adminRow?.display_name || null,
         inviterEmail: adminRow?.email || null,
-      }).catch(e => console.warn('[mailer] No se pudo enviar invitación:', e.message));
+      }).then(() => console.log(`[mailer] Invitación enviada OK a ${inv.email}`))
+        .catch(e => console.error('[mailer] ERROR enviando invitación:', e.message, e.code, e.responseCode));
     }
     res.json({ ...inv, link });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── GET /sync/test-email — diagnóstico SMTP (solo admin) ───────────────────
+router.get('/test-email', async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admin' });
+  const transport = getTransporter();
+  if (!transport) return res.status(500).json({ error: 'SMTP no configurado', vars: {
+    SMTP_HOST: !!process.env.SMTP_HOST,
+    SMTP_USER: !!process.env.SMTP_USER,
+    SMTP_PASS: !!process.env.SMTP_PASS,
+  }});
+  try {
+    await transport.verify();
+    const info = await transport.sendMail({
+      from   : process.env.SMTP_FROM || process.env.SMTP_USER,
+      to     : req.user.email,
+      subject: '[AIO Presenter] Test SMTP desde Railway',
+      text   : `SMTP OK. Servidor: Railway. Usuario: ${req.user.email}`,
+    });
+    res.json({ ok: true, messageId: info.messageId, to: req.user.email });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message, code: e.code, responseCode: e.responseCode });
+  }
 });
 
 // ─── DELETE /sync/invitations/:id — revocar invitación (solo admin) ──────────
