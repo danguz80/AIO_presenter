@@ -171,6 +171,166 @@ async function getAdminDriveClient() {
   return { auth: oauth2Client, folderId: admin.drive_folder_id };
 }
 
+// ─── Helper: buscar archivo por nombre en una carpeta de Drive ────────────────
+async function findDriveFile(drive, folderId, name) {
+  const { data } = await drive.files.list({
+    q: `'${folderId}' in parents and name='${name}' and trashed=false`,
+    fields: 'files(id, modifiedTime)',
+    pageSize: 1,
+  });
+  return data.files[0] || null;
+}
+
+// ─── Helper: subir/actualizar archivo genérico en Drive ──────────────────────
+async function upsertDriveFile(drive, folderId, name, content, existingFileId) {
+  const media = { mimeType: 'application/json', body: content };
+  if (existingFileId) {
+    const res = await drive.files.update({ fileId: existingFileId, media, fields: 'id,modifiedTime' });
+    return res.data;
+  }
+  const res = await drive.files.create({
+    requestBody: { name, parents: [folderId], mimeType: 'application/json' },
+    media,
+    fields: 'id,modifiedTime',
+  });
+  return res.data;
+}
+
+// ─── Helper: sincronizar plantillas de eventos ────────────────────────────────
+async function syncTemplates(drive, folderId, lastSyncAt) {
+  const FILENAME = '_aio_templates.json';
+  const driveFile = await findDriveFile(drive, folderId, FILENAME);
+  const driveModified = driveFile ? new Date(driveFile.modifiedTime) : new Date(0);
+  const lastSync      = lastSyncAt ? new Date(lastSyncAt) : new Date(0);
+
+  // Drive más reciente → importar plantillas al local
+  if (driveFile && driveModified > lastSync) {
+    try {
+      let data = await downloadDriveFile(drive, driveFile.id);
+      if (typeof data === 'string') data = JSON.parse(data);
+      for (const tpl of data.templates || []) {
+        if (!tpl.name) continue;
+        await pool.query(
+          `INSERT INTO event_templates (name, items) VALUES ($1, $2)
+           ON CONFLICT (name) DO UPDATE SET items = EXCLUDED.items`,
+          [tpl.name, JSON.stringify(tpl.items || [])]
+        );
+      }
+    } catch (e) {
+      console.warn('[Sync] Error importando plantillas:', e.message);
+    }
+  }
+
+  // Siempre subir estado local actualizado
+  const { rows } = await pool.query('SELECT name, items FROM event_templates ORDER BY created_at');
+  const content = JSON.stringify({ aio_version: 1, type: 'templates',
+    exported_at: new Date().toISOString(), templates: rows }, null, 2);
+  await upsertDriveFile(drive, folderId, FILENAME, content, driveFile?.id || null);
+}
+
+// ─── Helper: sincronizar eventos del calendario ───────────────────────────────
+async function syncEvents(drive, folderId, orgId, lastSyncAt) {
+  const FILENAME = '_aio_events.json';
+  const driveFile = await findDriveFile(drive, folderId, FILENAME);
+  const driveModified = driveFile ? new Date(driveFile.modifiedTime) : new Date(0);
+  const lastSync      = lastSyncAt ? new Date(lastSyncAt) : new Date(0);
+
+  // Drive más reciente → importar eventos al local
+  if (driveFile && driveModified > lastSync) {
+    try {
+      let data = await downloadDriveFile(drive, driveFile.id);
+      if (typeof data === 'string') data = JSON.parse(data);
+      for (const ev of data.events || []) {
+        if (!ev.title || !ev.date) continue;
+        // Buscar evento existente por título+fecha
+        const { rows: existing } = await pool.query(
+          'SELECT id FROM events WHERE title=$1 AND date=$2 AND organization_id=$3',
+          [ev.title, ev.date, orgId]
+        );
+        let eventId;
+        if (existing.length) {
+          eventId = existing[0].id;
+          await pool.query(
+            `UPDATE events SET time=$1, description=$2, is_recurring=$3, recurrence=$4,
+             recur_end=$5, updated_at=NOW() WHERE id=$6`,
+            [ev.time || null, ev.description || null, ev.is_recurring || false,
+             ev.recurrence || null, ev.recur_end || null, eventId]
+          );
+        } else {
+          const { rows: [newEv] } = await pool.query(
+            `INSERT INTO events (title, date, time, description, is_recurring, recurrence, recur_end, organization_id)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+            [ev.title, ev.date, ev.time || null, ev.description || null,
+             ev.is_recurring || false, ev.recurrence || null, ev.recur_end || null, orgId]
+          );
+          eventId = newEv.id;
+        }
+        // Reemplazar items del evento (solo ocurrencia base, no excepciones)
+        await pool.query('DELETE FROM event_songs WHERE event_id=$1 AND occurrence_date IS NULL', [eventId]);
+        for (const item of ev.songs || []) {
+          if (item.item_type === 'separator') {
+            await pool.query(
+              `INSERT INTO event_songs (event_id, song_id, item_type, separator_label, separator_color, position, notes)
+               VALUES ($1,null,'separator',$2,$3,$4,$5)`,
+              [eventId, item.separator_label || '', item.separator_color || null,
+               item.position || 0, item.notes || null]
+            );
+          } else if (item.item_type === 'media') {
+            await pool.query(
+              `INSERT INTO event_songs (event_id, song_id, item_type, media_name, media_type, position, notes)
+               VALUES ($1,null,'media',$2,$3,$4,$5)`,
+              [eventId, item.media_name || '', item.media_type || null,
+               item.position || 0, item.notes || null]
+            );
+          } else {
+            // Canción: buscar por título para obtener el ID local
+            let songId = null;
+            if (item.song_title) {
+              const { rows: sr } = await pool.query(
+                'SELECT id FROM songs WHERE title=$1 AND organization_id=$2 LIMIT 1',
+                [item.song_title, orgId]
+              );
+              songId = sr[0]?.id || null;
+            }
+            if (songId) {
+              await pool.query(
+                `INSERT INTO event_songs (event_id, song_id, item_type, position, notes)
+                 VALUES ($1,$2,'song',$3,$4)`,
+                [eventId, songId, item.position || 0, item.notes || null]
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Sync] Error importando eventos:', e.message);
+    }
+  }
+
+  // Siempre subir estado local actualizado
+  const { rows: localEvents } = await pool.query(`
+    SELECT e.id, e.title, e.date::text AS date, e.time, e.description,
+           e.is_recurring, e.recurrence, e.recur_end::text AS recur_end, e.updated_at,
+           COALESCE(json_agg(
+             json_build_object(
+               'song_id', es.song_id, 'song_title', s.title,
+               'item_type', es.item_type,
+               'separator_label', es.separator_label, 'separator_color', es.separator_color,
+               'media_name', es.media_name, 'media_type', es.media_type,
+               'position', es.position, 'notes', es.notes
+             ) ORDER BY es.position
+           ) FILTER (WHERE es.id IS NOT NULL), '[]'::json) AS songs
+    FROM events e
+    LEFT JOIN event_songs es ON es.event_id = e.id AND es.occurrence_date IS NULL
+    LEFT JOIN songs s ON s.id = es.song_id
+    WHERE e.organization_id = $1
+    GROUP BY e.id
+  `, [orgId]);
+  const content = JSON.stringify({ aio_version: 1, type: 'events',
+    exported_at: new Date().toISOString(), events: localEvents }, null, 2);
+  await upsertDriveFile(drive, folderId, FILENAME, content, driveFile?.id || null);
+}
+
 // ─── Helper: importar/actualizar canción desde datos de Drive ────────────────
 async function importSongFromData(songData, driveFileId) {
   if (!songData?.title || !Array.isArray(songData.slides)) return null;
@@ -259,6 +419,12 @@ router.post('/smart', async (req, res) => {
     const { auth, folderId } = await getAdminDriveClient();
     const drive = google.drive({ version: 'v3', auth });
 
+    // Obtener last_sync_at antes de actualizar
+    const { rows: [userRow] } = await pool.query(
+      'SELECT last_sync_at FROM sync_users WHERE id=$1', [req.user.userId]
+    );
+    const lastSyncAt = userRow?.last_sync_at || null;
+
     // Obtener todas las canciones locales con slides
     const { rows: localSongs } = await pool.query(`
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.song_key, s.tags,
@@ -344,6 +510,10 @@ router.post('/smart', async (req, res) => {
       const result = await importSongFromData(songData, driveFile.id);
       if (result) downloadedCount++;
     }
+
+    // Sincronizar plantillas y eventos
+    await syncTemplates(drive, folderId, lastSyncAt);
+    await syncEvents(drive, folderId, req.user.orgId, lastSyncAt);
 
     await pool.query('UPDATE sync_users SET last_sync_at=NOW() WHERE id=$1', [req.user.userId]);
     res.json({ ok: true, uploaded: uploadedCount, downloaded: downloadedCount, skipped: skippedCount });
