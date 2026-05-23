@@ -11,12 +11,9 @@ function getTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
   _transporter = nodemailer.createTransport({
-    host       : SMTP_HOST,
-    port       : parseInt(SMTP_PORT || '587', 10),
-    secure     : SMTP_SECURE !== 'false',
-    requireTLS : true, // fuerza STARTTLS en puerto 587
-    auth       : { user: SMTP_USER, pass: SMTP_PASS },
-    family     : 4, // forzar IPv4 (Railway no tiene IPv6)
+    service : 'gmail',  // nodemailer conoce la config exacta de Gmail
+    auth    : { user: SMTP_USER, pass: SMTP_PASS },
+    family  : 4,
   });
   return _transporter;
 }
@@ -802,23 +799,30 @@ router.post('/invitations', async (req, res) => {
 // ─── GET /sync/test-email — diagnóstico SMTP (solo admin) ───────────────────
 router.get('/test-email', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admin' });
+  const { SMTP_USER, SMTP_PASS } = process.env;
+  // Diagnóstico de red: probar TCP a smtp.gmail.com:587 y :465
+  const net = require('net');
+  const tcpTest = (host, port) => new Promise(resolve => {
+    const s = net.createConnection({ host, port, family: 4 });
+    const t = setTimeout(() => { s.destroy(); resolve({ port, ok: false, err: 'timeout' }); }, 5000);
+    s.on('connect', () => { clearTimeout(t); s.destroy(); resolve({ port, ok: true }); });
+    s.on('error', e => { clearTimeout(t); resolve({ port, ok: false, err: e.message }); });
+  });
+  const [r465, r587] = await Promise.all([tcpTest('smtp.gmail.com', 465), tcpTest('smtp.gmail.com', 587)]);
+
   const transport = getTransporter();
-  if (!transport) return res.status(500).json({ error: 'SMTP no configurado', vars: {
-    SMTP_HOST: !!process.env.SMTP_HOST,
-    SMTP_USER: !!process.env.SMTP_USER,
-    SMTP_PASS: !!process.env.SMTP_PASS,
-  }});
+  if (!transport) return res.status(500).json({ error: 'SMTP no configurado', tcp: { r465, r587 } });
   try {
     await transport.verify();
     const info = await transport.sendMail({
-      from   : process.env.SMTP_FROM || process.env.SMTP_USER,
+      from   : process.env.SMTP_FROM || SMTP_USER,
       to     : req.user.email,
       subject: '[AIO Presenter] Test SMTP desde Railway',
       text   : `SMTP OK. Servidor: Railway. Usuario: ${req.user.email}`,
     });
-    res.json({ ok: true, messageId: info.messageId, to: req.user.email });
+    res.json({ ok: true, messageId: info.messageId, to: req.user.email, tcp: { r465, r587 } });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message, code: e.code, responseCode: e.responseCode });
+    res.status(500).json({ ok: false, error: e.message, code: e.code, responseCode: e.responseCode, tcp: { r465, r587 } });
   }
 });
 
