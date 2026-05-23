@@ -15,6 +15,7 @@ function getTransporter() {
     port   : parseInt(SMTP_PORT || '465', 10),
     secure : SMTP_SECURE !== 'false',
     auth   : { user: SMTP_USER, pass: SMTP_PASS },
+    family : 4, // forzar IPv4 (Railway no tiene IPv6)
   });
   return _transporter;
 }
