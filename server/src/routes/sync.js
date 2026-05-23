@@ -11,7 +11,9 @@ function getTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
   _transporter = nodemailer.createTransport({
-    service : 'gmail',  // nodemailer conoce la config exacta de Gmail
+    host    : SMTP_HOST,
+    port    : parseInt(SMTP_PORT || '465', 10),
+    secure  : SMTP_SECURE !== 'false',
     auth    : { user: SMTP_USER, pass: SMTP_PASS },
     family  : 4,
   });
@@ -799,8 +801,8 @@ router.post('/invitations', async (req, res) => {
 // ─── GET /sync/test-email — diagnóstico SMTP (solo admin) ───────────────────
 router.get('/test-email', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admin' });
-  const { SMTP_USER, SMTP_PASS } = process.env;
-  // Diagnóstico de red: probar TCP a smtp.gmail.com:587 y :465
+  const { SMTP_USER, SMTP_PASS, SMTP_HOST: smtpHost = 'smtp.gmail.com' } = process.env;
+  // Diagnóstico de red: probar TCP al host configurado en puertos 465 y 587
   const net = require('net');
   const tcpTest = (host, port) => new Promise(resolve => {
     const s = net.createConnection({ host, port, family: 4 });
@@ -808,7 +810,7 @@ router.get('/test-email', async (req, res) => {
     s.on('connect', () => { clearTimeout(t); s.destroy(); resolve({ port, ok: true }); });
     s.on('error', e => { clearTimeout(t); resolve({ port, ok: false, err: e.message }); });
   });
-  const [r465, r587] = await Promise.all([tcpTest('smtp.gmail.com', 465), tcpTest('smtp.gmail.com', 587)]);
+  const [r465, r587] = await Promise.all([tcpTest(smtpHost, 465), tcpTest(smtpHost, 587)]);
 
   const transport = getTransporter();
   if (!transport) return res.status(500).json({ error: 'SMTP no configurado', tcp: { r465, r587 } });
