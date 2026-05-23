@@ -863,6 +863,21 @@ router.get('/users', async (req, res) => {
   res.json(rows);
 });
 
+// ─── DELETE /sync/users/:id — eliminar usuario (solo admin, no puede eliminarse a sí mismo) ──
+router.delete('/users/:id', async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede eliminar usuarios' });
+  if (String(req.params.id) === String(req.user.userId)) {
+    return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta' });
+  }
+  try {
+    const { rowCount } = await pool.query('DELETE FROM sync_users WHERE id=$1', [req.params.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── PATCH /sync/users/:id — actualizar permisos (solo admin) ────────────────
 router.patch('/users/:id', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede cambiar permisos' });

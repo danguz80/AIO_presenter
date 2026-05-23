@@ -276,6 +276,12 @@ function UsersPanel() {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, [field]: value } : u));
   };
 
+  const removeUser = async (id, name) => {
+    if (!window.confirm(`¿Eliminar a ${name}? Esta acción no se puede deshacer.`)) return;
+    const res = await authFetch(`/api/sync/users/${id}`, { method: 'DELETE' });
+    if (res.ok) setUsers(prev => prev.filter(u => u.id !== id));
+  };
+
   if (loading) return <div className="text-xs text-zinc-500 py-2 text-center"><Loader2 size={12} className="inline animate-spin mr-1" />Cargando…</div>;
 
   return (
@@ -291,9 +297,14 @@ function UsersPanel() {
               <p className="text-xs font-medium text-white truncate">{u.display_name || u.email}</p>
               <p className="text-[9px] text-zinc-500 truncate">{u.email}</p>
             </div>
-            {u.is_admin && (
-              <span className="ml-auto text-[9px] bg-accent/20 text-accent px-1.5 py-0.5 rounded font-semibold shrink-0">Admin</span>
-            )}
+            {u.is_admin
+              ? <span className="ml-auto text-[9px] bg-accent/20 text-accent px-1.5 py-0.5 rounded font-semibold shrink-0">Admin</span>
+              : <button
+                  onClick={() => removeUser(u.id, u.display_name || u.email)}
+                  className="ml-auto text-[9px] text-red-400 hover:text-red-300 hover:bg-red-900/30 px-1.5 py-0.5 rounded transition-colors shrink-0"
+                  title="Eliminar usuario"
+                >✕ Eliminar</button>
+            }
           </div>
           <div className="flex gap-2 flex-wrap">
             <PermToggle label="Puede subir" value={u.can_push} onChange={v => toggle(u.id, 'can_push', v)} />

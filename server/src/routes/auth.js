@@ -284,10 +284,10 @@ async function requireAuth(req, res, next) {
       'SELECT is_admin, can_push, can_push_all FROM sync_users WHERE id=$1',
       [payload.userId]
     );
-    if (rows.length) {
-      payload.isAdmin  = rows[0].is_admin;
-      payload.canPush  = rows[0].can_push;
-    }
+    // Si el usuario fue eliminado, revocar acceso
+    if (!rows.length) return res.status(401).json({ error: 'Usuario eliminado o no encontrado' });
+    payload.isAdmin  = rows[0].is_admin;
+    payload.canPush  = rows[0].can_push;
     req.user = payload;
     next();
   } catch {

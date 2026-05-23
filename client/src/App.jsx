@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PresenterProvider } from './context/PresenterContext';
 import { usePresenter } from './context/usePresenter';
@@ -63,11 +63,28 @@ function isAuthenticated() {
   }
 }
 
-// Guard de ruta: redirige a '/' si no está autenticado
+// Guard de ruta: verifica JWT local y confirma con el servidor que el usuario sigue activo
 function RequireAuth({ children }) {
-  if (!isAuthenticated()) {
-    return <Navigate to="/" replace />;
-  }
+  const [status, setStatus] = useState('checking'); // 'checking' | 'ok' | 'denied'
+
+  useEffect(() => {
+    if (!isAuthenticated()) { setStatus('denied'); return; }
+    const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const token = localStorage.getItem('aio_sync_token');
+    fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => {
+        if (!r.ok) throw new Error('no autorizado');
+        setStatus('ok');
+      })
+      .catch(() => {
+        localStorage.removeItem('aio_sync_token');
+        localStorage.removeItem('aio_org_id');
+        setStatus('denied');
+      });
+  }, []);
+
+  if (status === 'checking') return null; // sin flash — espera silenciosa
+  if (status === 'denied')   return <Navigate to="/" replace />;
   return children;
 }
 
