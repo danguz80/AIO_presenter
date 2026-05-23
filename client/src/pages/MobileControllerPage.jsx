@@ -555,11 +555,6 @@ export default function MobileControllerPage() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* ── DEBUG: viewport info (BORRAR después de diagnosticar) ── */}
-      <div style={{ background: '#ff0', color: '#000', fontSize: 11, padding: '2px 8px', textAlign: 'center', fontFamily: 'monospace', flexShrink: 0 }}>
-        w={window.innerWidth} scr={window.screen.width} dpr={window.devicePixelRatio?.toFixed(2)}
-      </div>
-
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-3 xs:px-4 py-2 xs:py-3 bg-surface-800 border-b border-surface-700 shrink-0">
         {songDetail ? (
