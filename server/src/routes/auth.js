@@ -2,12 +2,47 @@ const express = require('express');
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/database');
+const { Resend } = require('resend');
 
 const router = express.Router();
 
 const CLIENT_URL     = process.env.CLIENT_URL     || 'http://localhost:5173';
 const JWT_SECRET     = process.env.JWT_SECRET     || 'aio-presenter-secret-change-me';
 const ADMIN_EMAIL    = process.env.ADMIN_EMAIL     || null;
+
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  return key ? new Resend(key) : null;
+}
+
+async function notifyAdminInviteAccepted({ orgId, newUserName, newUserEmail, newUserAvatar }) {
+  const resend = getResend();
+  if (!resend) return;
+  try {
+    const { rows } = await pool.query(
+      'SELECT email, display_name FROM sync_users WHERE organization_id=$1 AND is_admin=true LIMIT 1',
+      [orgId]
+    );
+    if (!rows.length) return;
+    const admin = rows[0];
+    const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
+    await resend.emails.send({
+      from   : `AIO Presenter <${fromDomain}>`,
+      to     : admin.email,
+      subject: `${newUserName || newUserEmail} aceptó tu invitación a AIO Presenter`,
+      html   : `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto">
+          ${newUserAvatar ? `<img src="${newUserAvatar}" alt="" style="width:48px;height:48px;border-radius:50%;margin-bottom:12px">` : ''}
+          <h2 style="margin-bottom:8px">¡Nueva persona en tu equipo!</h2>
+          <p><strong>${newUserName || newUserEmail}</strong> (${newUserEmail}) acaba de unirse a AIO Presenter usando tu invitación.</p>
+          <p style="color:#888;font-size:13px">Puedes gestionar sus permisos desde Configuración → Sincronización → Gestionar usuarios.</p>
+        </div>`,
+      text: `${newUserName || newUserEmail} (${newUserEmail}) aceptó tu invitación a AIO Presenter.`,
+    });
+  } catch (e) {
+    console.error('[Auth] Error notificando admin:', e.message);
+  }
+}
 
 function getOAuth2Client() {
   return new google.auth.OAuth2(
@@ -112,6 +147,14 @@ router.get('/google/callback', async (req, res) => {
         'UPDATE sync_invitations SET used_by=$1, used_at=NOW() WHERE id=$2',
         [rows[0].id, inv.id]
       );
+
+      // Notificar al admin que la invitación fue aceptada
+      notifyAdminInviteAccepted({
+        orgId,
+        newUserName  : userInfo.name,
+        newUserEmail : userInfo.email,
+        newUserAvatar: userInfo.picture,
+      }).catch(() => {});
 
       const user = rows[0];
       const jwtToken = jwt.sign(

@@ -216,11 +216,26 @@ function PhoneMockup() {
   );
 }
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function LandingPage() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [inviteRedirecting, setInviteRedirecting] = useState(false);
+
+  // Si llega con ?invite=CODE, redirigir directamente a Google OAuth
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite');
+    if (!invite) return;
+    setInviteRedirecting(true);
+    fetch(`${API}/auth/google/url?invite=${encodeURIComponent(invite)}`)
+      .then(r => r.json())
+      .then(({ url }) => { if (url) window.location.href = url; })
+      .catch(() => setInviteRedirecting(false));
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
@@ -232,6 +247,15 @@ export default function LandingPage() {
     setMenuOpen(false);
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
+
+  if (inviteRedirecting) {
+    return (
+      <div className="min-h-screen bg-[#1B3166] flex flex-col items-center justify-center gap-4 text-white">
+        <img src="/logo-circle.png" alt="AIO Presenter" className="h-16 w-16 object-contain animate-pulse" onError={e => { e.target.style.display='none'; }} />
+        <p className="text-lg font-semibold">Redirigiendo a Google para aceptar la invitación…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans antialiased">
