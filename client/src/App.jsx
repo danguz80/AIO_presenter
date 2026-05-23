@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { PresenterProvider } from './context/PresenterContext';
 import { usePresenter } from './context/usePresenter';
 import LandingPage          from './pages/LandingPage';
@@ -51,6 +51,26 @@ function ThemeApplier() {
   return null;
 }
 
+// Verifica que el JWT en localStorage exista y no haya expirado
+function isAuthenticated() {
+  const token = localStorage.getItem('aio_sync_token');
+  if (!token) return false;
+  try {
+    const { exp } = JSON.parse(atob(token.split('.')[1]));
+    return !exp || Date.now() / 1000 < exp;
+  } catch {
+    return false;
+  }
+}
+
+// Guard de ruta: redirige a '/' si no está autenticado
+function RequireAuth({ children }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/" replace />;
+  }
+  return children;
+}
+
 export default function App() {
   return (
     <PresenterProvider>
@@ -61,13 +81,14 @@ export default function App() {
         <Route path="/"            element={<LandingPage />} />
         <Route path="/login"        element={<LoginPage />} />
         <Route path="/mode-select" element={<ModeSelectPage />} />
-        {/* App principal */}
-        <Route path="/app"         element={<ControllerPage />} />
-        <Route path="/output"      element={<OutputPage />} />
-        <Route path="/stage"       element={<StagePage />} />
-        <Route path="/virtual"     element={<VirtualPage />} />
-        <Route path="/mobile"      element={<MobileControllerPage />} />
-        <Route path="/calendar"    element={<CalendarPage />} />
+        {/* App principal — requiere autenticación */}
+        <Route path="/app"      element={<RequireAuth><ControllerPage /></RequireAuth>} />
+        <Route path="/mobile"   element={<RequireAuth><MobileControllerPage /></RequireAuth>} />
+        <Route path="/calendar" element={<RequireAuth><CalendarPage /></RequireAuth>} />
+        {/* Páginas de display — abiertas en pantallas secundarias, sin auth */}
+        <Route path="/output"  element={<OutputPage />} />
+        <Route path="/stage"   element={<StagePage />} />
+        <Route path="/virtual" element={<VirtualPage />} />
       </Routes>
     </PresenterProvider>
   );
