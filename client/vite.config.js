@@ -10,23 +10,60 @@ export default defineConfig({
       devOptions: {
         enabled: false, // Evita blob workers de workbox en desarrollo
       },
-      includeAssets: ['icon.svg'],
+      includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'AIO Presenter Remote',
-        short_name: 'AIO Remote',
-        description: 'Control remoto para AIO Presenter',
+        name: 'AIO Presenter',
+        short_name: 'AIO Presenter',
+        description: 'Proyección de letras y Biblias para iglesias',
         theme_color: '#0f172a',
         background_color: '#0f172a',
         display: 'standalone',
-        orientation: 'portrait',
-        start_url: '/mobile',
+        orientation: 'any',
+        // start_url: '/app' → ControllerPage redirige a /mobile en teléfonos
+        // y permanece en /app en escritorio. Un solo manifest para ambos.
+        start_url: '/app',
         scope: '/',
         icons: [
+          {
+            src: '/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icon-512-maskable.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
           {
             src: '/icon.svg',
             sizes: 'any',
             type: 'image/svg+xml',
             purpose: 'any',
+          },
+        ],
+        // Shortcuts: acceso rápido desde el ícono instalado
+        shortcuts: [
+          {
+            name: 'Controlador',
+            short_name: 'Controlador',
+            description: 'Abre el controlador de presentación',
+            url: '/app',
+            icons: [{ src: '/icon-192.png', sizes: '192x192' }],
+          },
+          {
+            name: 'Control Móvil',
+            short_name: 'Móvil',
+            description: 'Abre el control remoto móvil',
+            url: '/mobile',
+            icons: [{ src: '/icon-192.png', sizes: '192x192' }],
           },
         ],
       },
