@@ -11,11 +11,12 @@ function getTransporter() {
   const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
   _transporter = nodemailer.createTransport({
-    host   : SMTP_HOST,
-    port   : parseInt(SMTP_PORT || '465', 10),
-    secure : SMTP_SECURE !== 'false',
-    auth   : { user: SMTP_USER, pass: SMTP_PASS },
-    family : 4, // forzar IPv4 (Railway no tiene IPv6)
+    host       : SMTP_HOST,
+    port       : parseInt(SMTP_PORT || '587', 10),
+    secure     : SMTP_SECURE !== 'false',
+    requireTLS : true, // fuerza STARTTLS en puerto 587
+    auth       : { user: SMTP_USER, pass: SMTP_PASS },
+    family     : 4, // forzar IPv4 (Railway no tiene IPv6)
   });
   return _transporter;
 }
