@@ -274,11 +274,21 @@ router.post('/logout', (req, res) => {
 });
 
 // ─── Middleware de autenticación JWT ────────────────────────────────────────
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) return res.status(401).json({ error: 'No autenticado' });
   try {
-    req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    const payload = jwt.verify(header.slice(7), JWT_SECRET);
+    // Refrescar permisos desde BD (el JWT puede ser antiguo si el admin cambió permisos)
+    const { rows } = await pool.query(
+      'SELECT is_admin, can_push, can_push_all FROM sync_users WHERE id=$1',
+      [payload.userId]
+    );
+    if (rows.length) {
+      payload.isAdmin  = rows[0].is_admin;
+      payload.canPush  = rows[0].can_push;
+    }
+    req.user = payload;
     next();
   } catch {
     res.status(401).json({ error: 'Token inválido o expirado' });
