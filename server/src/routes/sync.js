@@ -1,38 +1,28 @@
 const express    = require('express');
 const { google } = require('googleapis');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 const pool       = require('../config/database');
 const { requireAuth } = require('./auth');
 
-// ─── Mailer ───────────────────────────────────────────────────────────────────
-let _transporter = null;
-function getTransporter() {
-  if (_transporter) return _transporter;
-  const { SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER, SMTP_PASS } = process.env;
-  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
-  _transporter = nodemailer.createTransport({
-    host    : SMTP_HOST,
-    port    : parseInt(SMTP_PORT || '465', 10),
-    secure  : SMTP_SECURE !== 'false',
-    auth    : { user: SMTP_USER, pass: SMTP_PASS },
-    family  : 4,
-  });
-  return _transporter;
+// ─── Mailer (Resend — HTTPS, nunca bloqueado por Railway) ────────────────────
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return null;
+  return new Resend(key);
 }
 
 async function sendInviteEmail({ to, label, link, expiresAt, canPush, canPushAll, inviterName, inviterEmail }) {
-  const transport = getTransporter();
-  if (!transport) return; // SMTP no configurado → silencioso
-  const smtpUser  = process.env.SMTP_USER;
-  // Mostrar el nombre del admin como remitente visible; Reply-To apunta a su correo real
+  const resend = getResend();
+  if (!resend) return; // RESEND_API_KEY no configurada → silencioso
+  const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
   const displayName = inviterName ? `${inviterName} (vía AIO Presenter)` : 'AIO Presenter';
-  const from    = `"${displayName}" <${smtpUser}>`;
+  const from    = `${displayName} <${fromDomain}>`;
   const expiry  = expiresAt ? `Expira el ${new Date(expiresAt).toLocaleDateString('es')}.` : 'Sin fecha de expiración.';
   const perms   = [canPush && 'subir canciones', canPushAll && 'reemplazar toda la biblioteca'].filter(Boolean).join(', ') || 'solo lectura';
-  await transport.sendMail({
+  await resend.emails.send({
     from,
     to,
-    ...(inviterEmail ? { replyTo: inviterEmail } : {}),
+    reply_to: inviterEmail || undefined,
     subject : `${inviterName ? inviterName + ' te invita a' : 'Invitación a'} AIO Presenter`,
     html    : `
       <div style="font-family:sans-serif;max-width:480px;margin:auto">
@@ -798,33 +788,22 @@ router.post('/invitations', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── GET /sync/test-email — diagnóstico SMTP (solo admin) ───────────────────
+// ─── GET /sync/test-email — test envío con Resend (solo admin) ───────────────
 router.get('/test-email', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admin' });
-  const { SMTP_USER, SMTP_PASS, SMTP_HOST: smtpHost = 'smtp.gmail.com' } = process.env;
-  // Diagnóstico de red: probar TCP al host configurado en puertos 465 y 587
-  const net = require('net');
-  const tcpTest = (host, port) => new Promise(resolve => {
-    const s = net.createConnection({ host, port, family: 4 });
-    const t = setTimeout(() => { s.destroy(); resolve({ port, ok: false, err: 'timeout' }); }, 5000);
-    s.on('connect', () => { clearTimeout(t); s.destroy(); resolve({ port, ok: true }); });
-    s.on('error', e => { clearTimeout(t); resolve({ port, ok: false, err: e.message }); });
-  });
-  const [r465, r587] = await Promise.all([tcpTest(smtpHost, 465), tcpTest(smtpHost, 587)]);
-
-  const transport = getTransporter();
-  if (!transport) return res.status(500).json({ error: 'SMTP no configurado', tcp: { r465, r587 } });
+  const resend = getResend();
+  if (!resend) return res.status(500).json({ error: 'RESEND_API_KEY no configurada en Railway' });
   try {
-    await transport.verify();
-    const info = await transport.sendMail({
-      from   : process.env.SMTP_FROM || SMTP_USER,
+    const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
+    const result = await resend.emails.send({
+      from   : `AIO Presenter <${fromDomain}>`,
       to     : req.user.email,
-      subject: '[AIO Presenter] Test SMTP desde Railway',
-      text   : `SMTP OK. Servidor: Railway. Usuario: ${req.user.email}`,
+      subject: '[AIO Presenter] Test Resend desde Railway',
+      text   : `Resend OK. Enviado a: ${req.user.email}`,
     });
-    res.json({ ok: true, messageId: info.messageId, to: req.user.email, tcp: { r465, r587 } });
+    res.json({ ok: true, id: result.data?.id, to: req.user.email });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message, code: e.code, responseCode: e.responseCode, tcp: { r465, r587 } });
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
