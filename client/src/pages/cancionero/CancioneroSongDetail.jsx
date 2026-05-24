@@ -47,27 +47,52 @@ function renderContent(content, showChords, chordsColor) {
         return (
           <div key={li} className="flex flex-col">
             {hasChords ? (
-              <div className="flex flex-col mb-0.5">
-                {/* Fila 1: solo acordes, con minWidth para que no se solapen */}
-                <div className="flex flex-wrap leading-none mb-0.5">
-                  {segments.map((seg, si) => {
+              /*
+               * Cada segmento es un <span> inline con position:relative.
+               * El acorde flota con position:absolute top:-1.3em — sin afectar el flujo del texto.
+               * Segmentos sin texto (solo acorde) usan inline-block + minWidth para no solaparse.
+               */
+              <div
+                className="relative leading-relaxed whitespace-pre-wrap mb-1"
+                style={{ paddingTop: '1.3em' }}
+              >
+                {segments.map((seg, si) => {
+                  const chordEl = seg.chord ? (
+                    <span
+                      className="absolute font-bold"
+                      style={{
+                        top: '-1.3em', left: 0,
+                        color: chordsColor,
+                        fontSize: '0.82em', lineHeight: 1,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {seg.chord}
+                    </span>
+                  ) : null;
+
+                  if (!seg.text) {
+                    // Solo acorde, sin texto: necesita ancho mínimo para no solapar al siguiente
                     const minW = seg.chord
                       ? `${Math.max(seg.chord.length * 0.62 + 1.0, 2.2)}em`
-                      : `${(seg.text?.length ?? 0) * 0.55}em`;
+                      : undefined;
                     return (
-                      <span key={si} style={{ minWidth: minW }} className="font-bold text-[0.82em]">
-                        <span style={{ color: chordsColor }}>{seg.chord ?? ''}</span>
+                      <span key={si} className="relative inline-block" style={{ minWidth: minW }}>
+                        {chordEl}
                       </span>
                     );
-                  })}
-                  {comment && (
-                    <span className="italic text-white/40 font-normal text-[0.82em] ml-2">{comment}</span>
-                  )}
-                </div>
-                {/* Fila 2: letra corrida, sin restricciones de ancho de acordes */}
-                <div className="leading-relaxed whitespace-pre-wrap">
-                  {segments.map(s => s.text).join('')}
-                </div>
+                  }
+                  // Segmento con texto: inline puro, el acorde no afecta el flow de letras
+                  return (
+                    <span key={si} className="relative">
+                      {chordEl}
+                      {seg.text}
+                    </span>
+                  );
+                })}
+                {comment && (
+                  <span className="italic text-white/40 text-[0.85em] ml-2">{comment}</span>
+                )}
               </div>
             ) : (
               <div className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
