@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { usePresenter } from '../../context/usePresenter';
+import { usePresenterOptional } from '../../context/usePresenter';
 import { X, Trash2, Tag, Plus } from 'lucide-react';
 import api from '../../hooks/useApi';
 import { getLabelColor } from '../../utils/labelColors';
@@ -69,8 +69,13 @@ function textToSlides(text) {
   return slides.length > 0 ? slides : [{ label: '', content: text.trim() }];
 }
 
-export default function SongFormModal({ song, onClose }) {
-  const { actions } = usePresenter();
+/**
+ * Props opcionales para uso fuera del PresenterContext (ej: modo Cancionero):
+ *   onSaved(savedSong)  — se llama tras guardar exitosamente
+ *   onDeleted(id)       — se llama tras borrar exitosamente
+ */
+export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
+  const presenter = usePresenterOptional(); // null fuera del PresenterProvider
   const isEdit = Boolean(song?.id);
 
   const [title,       setTitle]       = useState(song?.title    || '');
@@ -157,8 +162,13 @@ export default function SongFormModal({ song, onClose }) {
   const handleDelete = async () => {
     if (!confirmDel) { setConfirmDel(true); return; }
     try {
-      await actions.deleteSong(song.id);
-      await actions.reloadSongs();
+      if (presenter) {
+        await presenter.actions.deleteSong(song.id);
+        await presenter.actions.reloadSongs();
+      } else {
+        await api.delete(`/songs/${song.id}`);
+      }
+      onDeleted?.(song.id);
       onClose();
     } catch (err) {
       setError(err?.message || 'Error al borrar');
@@ -177,15 +187,28 @@ export default function SongFormModal({ song, onClose }) {
     }));
     setSaving(true);
     setError('');
+    const payload = { title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, tags, slides };
     try {
-      if (isEdit) {
-        await actions.updateSong(song.id, { title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, tags, slides });
-        // Recargar el detalle completo para que el grid de slides se actualice
-        await actions.loadSongDetail(song.id);
+      let savedSong;
+      if (presenter) {
+        if (isEdit) {
+          savedSong = await presenter.actions.updateSong(song.id, payload);
+          await presenter.actions.loadSongDetail(song.id);
+        } else {
+          savedSong = await presenter.actions.createSong(payload);
+        }
+        await presenter.actions.reloadSongs();
       } else {
-        await actions.createSong({ title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, tags, slides });
+        // Fuera del PresenterContext (ej: Cancionero) → API directa
+        if (isEdit) {
+          const res = await api.put(`/songs/${song.id}`, payload);
+          savedSong = res.data;
+        } else {
+          const res = await api.post('/songs', payload);
+          savedSong = res.data;
+        }
       }
-      await actions.reloadSongs();
+      onSaved?.(savedSong);
       onClose();
     } catch (err) {
       const msg = err?.response?.data?.error || err?.message || 'Error al guardar';

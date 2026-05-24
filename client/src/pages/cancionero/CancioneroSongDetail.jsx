@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, Loader2
+  ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, Loader2, Pencil
 } from 'lucide-react';
 import { stripChords, parseChordLine, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
+import SongFormModal from '../../components/Library/SongFormModal';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -107,6 +108,7 @@ export default function CancioneroSongDetail() {
   const [song, setSong]       = useState(null);
   const [slides, setSlides]   = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editOpen, setEditOpen] = useState(false);
 
   // Opciones de visualización
   const [showChords, setShowChords] = useState(true);
@@ -178,6 +180,13 @@ export default function CancioneroSongDetail() {
             <h1 className="text-base font-bold truncate">{song?.title ?? '—'}</h1>
             {song?.author && <p className="text-xs text-white/40 truncate">{song.author}</p>}
           </div>
+          <button
+            onClick={() => setEditOpen(true)}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+            title="Editar canción"
+          >
+            <Pencil size={17} className="text-white/60" />
+          </button>
         </div>
 
         {/* Toolbar */}
@@ -253,6 +262,21 @@ export default function CancioneroSongDetail() {
         {/* Espacio final para scroll */}
         <div className="h-32" />
       </div>
+
+      {/* ── Modal edición ───────────────────────────────────────────── */}
+      {editOpen && song && (
+        <SongFormModal
+          song={song}
+          onClose={() => setEditOpen(false)}
+          onSaved={(updatedSong) => {
+            if (updatedSong) {
+              setSong(updatedSong);
+              setSlides(Array.isArray(updatedSong.slides) ? updatedSong.slides : []);
+            }
+          }}
+          onDeleted={() => navigate('/cancionero/canciones')}
+        />
+      )}
     </div>
   );
 }
