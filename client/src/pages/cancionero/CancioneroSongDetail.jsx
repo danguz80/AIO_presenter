@@ -11,16 +11,13 @@ function authHeaders() {
 }
 
 // Renderiza contenido en formato ChordPro: acordes encima de la letra.
-// Los comentarios (//) se muestran en cursiva encima de la línea de acordes.
+// Los comentarios (//) se muestran en cursiva, independiente de si se muestran acordes.
 function renderContent(content, showChords, chordsColor) {
-  if (!showChords) {
-    return <p className="whitespace-pre-wrap leading-relaxed">{stripChords(content)}</p>;
-  }
   const rawLines = content ? content.split('\n') : [];
   return (
     <div className="flex flex-col">
       {rawLines.map((rawLine, li) => {
-        // Línea completa de comentario (//)
+        // Línea completa de comentario (//): siempre en cursiva gris
         if (isCommentLine(rawLine)) {
           const text = rawLine.replace(/^\s*\/\/\s*/, '');
           return (
@@ -32,6 +29,18 @@ function renderContent(content, showChords, chordsColor) {
 
         // Separar comentario inline del resto de la línea
         const { visible, comment } = extractInlineComment(rawLine);
+
+        // Sin acordes: letra limpia + comentario inline en cursiva gris
+        if (!showChords) {
+          const cleanText = visible.replace(/\[[^\]]*\]/g, '').replace(/  +/g, ' ').trimEnd();
+          return (
+            <div key={li} className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
+              {cleanText}
+              {comment && <span className="italic text-white/40 text-[0.85em] ml-2">{comment}</span>}
+            </div>
+          );
+        }
+
         const segments = parseChordLine(visible);
         const hasChords = segments.some(s => s.chord);
 
@@ -92,7 +101,7 @@ export default function CancioneroSongDetail() {
 
   // Auto-scroll
   const [scrolling, setScrolling]   = useState(false);
-  const [scrollSpeed, setScrollSpeed] = useState(2); // 1–10
+  const [scrollSpeed, setScrollSpeed] = useState(2.0); // 1.0–10.0 en pasos de 0.1
   const scrollRef = useRef(null);
   const rafRef    = useRef(null);
   const lastTs    = useRef(null);
@@ -184,11 +193,11 @@ export default function CancioneroSongDetail() {
 
           {/* Velocidad scroll */}
           <div className="flex-shrink-0 flex items-center gap-1 bg-white/10 border border-white/10 rounded-lg px-1.5 py-1">
-            <button onClick={() => setScrollSpeed(s => Math.max(1, s - 1))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
+            <button onClick={() => setScrollSpeed(s => Math.max(1.0, Math.round((s - 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
               <ChevronDown size={13} className="text-white/60" />
             </button>
-            <span className="text-xs text-white/60 w-4 text-center">{scrollSpeed}</span>
-            <button onClick={() => setScrollSpeed(s => Math.min(10, s + 1))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
+            <span className="text-xs text-white/60 w-8 text-center">{scrollSpeed.toFixed(1)}</span>
+            <button onClick={() => setScrollSpeed(s => Math.min(10.0, Math.round((s + 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
               <ChevronUp size={13} className="text-white/60" />
             </button>
           </div>
