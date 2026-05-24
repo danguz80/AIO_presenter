@@ -4,6 +4,7 @@ import { stripChords, parseChordLines, isCommentLine, stripComments, extractInli
 import { injectGoogleFont } from '../../utils/fontUtils';
 import VirtualRenderer from '../shared/VirtualRenderer';
 import OutputRenderer from '../shared/OutputRenderer';
+import { Monitor, MonitorOff } from 'lucide-react';
 
 import { getLabelColor } from '../../utils/labelColors';
 
@@ -64,7 +65,71 @@ export default function LivePreview() {
     };
   })();
 
-  const openWindow = (path, screenId, windowName, resolution) => {
+  // ── Refs de ventanas de salida (toggle activar/desactivar) ─────────────
+  const outputWinRef = useRef(null);
+  const stageWinRef  = useRef(null);
+  const [outputsActive, setOutputsActive]       = useState(false);
+  const [showReopenBanner, setShowReopenBanner] = useState(
+    () => localStorage.getItem('aio_outputs_active') === '1'
+  );
+
+  // Detectar cierre manual de las ventanas
+  useEffect(() => {
+    if (!outputsActive) return;
+    const id = setInterval(() => {
+      const oClosed = !outputWinRef.current || outputWinRef.current.closed;
+      const sClosed = !stageWinRef.current  || stageWinRef.current.closed;
+      if (oClosed && sClosed) {
+        setOutputsActive(false);
+        localStorage.removeItem('aio_outputs_active');
+      }
+    }, 1500);
+    return () => clearInterval(id);
+  }, [outputsActive]);
+
+  // Abrir una sola ventana con ?fs=1 y guardar ref
+  const openOneOutput = (ref, path, screenId, windowName, resolution) => {
+    if (ref.current && !ref.current.closed) { ref.current.focus(); return; }
+    const res = resolution ?? { width: 1920, height: 1080 };
+    const url = `${path}?fs=1`;
+    if (screenId && 'getScreenDetails' in window) {
+      window.getScreenDetails().then(sd => {
+        const [, sLeft, sTop] = (screenId ?? '').split(':');
+        const target = Array.from(sd.screens).find(
+          s => String(s.left ?? 0) === sLeft && String(s.top ?? 0) === sTop
+        );
+        ref.current = target
+          ? window.open(url, windowName, `left=${target.left},top=${target.top},width=${target.width},height=${target.height},menubar=no,toolbar=no,location=no`)
+          : window.open(url, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+      }).catch(() => {
+        ref.current = window.open(url, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+      });
+    } else {
+      ref.current = window.open(url, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+    }
+  };
+
+  const activateOutputs = () => {
+    openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
+    openOneOutput(stageWinRef,  '/stage',  displayCfg.escenarioScreenId, 'aio-stage',  displayCfg.escenarioResolution);
+    setOutputsActive(true);
+    setShowReopenBanner(false);
+    localStorage.setItem('aio_outputs_active', '1');
+  };
+
+  const deactivateOutputs = () => {
+    if (outputWinRef.current && !outputWinRef.current.closed) outputWinRef.current.close();
+    if (stageWinRef.current  && !stageWinRef.current.closed)  stageWinRef.current.close();
+    outputWinRef.current = null;
+    stageWinRef.current  = null;
+    setOutputsActive(false);
+    setShowReopenBanner(false);
+    localStorage.removeItem('aio_outputs_active');
+  };
+
+  const toggleOutputs = () => outputsActive ? deactivateOutputs() : activateOutputs();
+
+
     const res = resolution ?? { width: 1920, height: 1080 };
     // Intentar abrir en la pantalla asignada si getScreenDetails está disponible
     if (screenId && 'getScreenDetails' in window) {
@@ -88,6 +153,41 @@ export default function LivePreview() {
 
   return (
     <div className="flex-1 min-h-0 border-b border-surface-700 p-3 flex flex-col gap-2 overflow-hidden">
+
+      {/* ── Banner de reabrir salidas (cuando estaban activas al cerrar la app) ── */}
+      {showReopenBanner && !outputsActive && (
+        <div className="flex items-center gap-2 px-2.5 py-1.5 bg-accent/15 border border-accent/30 rounded-lg text-xs shrink-0">
+          <Monitor size={12} className="text-accent shrink-0" />
+          <span className="flex-1 text-zinc-300">Las salidas estaban activas</span>
+          <button
+            onClick={activateOutputs}
+            className="text-accent font-semibold hover:underline shrink-0"
+          >
+            Reabrir
+          </button>
+          <button
+            onClick={() => { setShowReopenBanner(false); localStorage.removeItem('aio_outputs_active'); }}
+            className="text-zinc-500 hover:text-zinc-300 shrink-0 ml-1"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* ── Botón toggle Activar / Desactivar salidas ─────────────────── */}
+      <button
+        onClick={toggleOutputs}
+        title={outputsActive ? 'Cerrar salidas (Principal + Escenario)' : 'Activar salidas en pantalla completa (Principal + Escenario)'}
+        className={`shrink-0 flex items-center justify-center gap-2 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
+          outputsActive
+            ? 'bg-orange-500/20 border-orange-400 text-orange-300 hover:bg-orange-500/30'
+            : 'bg-surface-700 border-surface-600 text-zinc-400 hover:border-accent hover:text-accent'
+        }`}
+      >
+        {outputsActive ? <Monitor size={13} /> : <MonitorOff size={13} />}
+        {outputsActive ? 'Desactivar salidas' : 'Activar salidas'}
+        {outputsActive && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />}
+      </button>
 
       {/* ── Principal ───────────────────────────────────────────────── */}
       <PreviewBox

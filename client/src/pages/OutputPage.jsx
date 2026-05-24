@@ -4,7 +4,7 @@ import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { injectGoogleFont } from '../utils/fontUtils';
 import OutputRenderer from '../components/shared/OutputRenderer';
-import { Smartphone } from 'lucide-react';
+import { Smartphone, Maximize2 } from 'lucide-react';
 
 /**
  * Ventana de salida — se abre en una pestaña/ventana separada
@@ -57,6 +57,18 @@ export default function OutputPage() {
 
   const { slideData, isBlank, background, slideIndex, totalSlides, backgroundMedia } = liveState;
 
+  // Pantalla completa automática cuando se abre con ?fs=1 (desde "Activar salidas")
+  const [showFsHint, setShowFsHint] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('fs') !== '1') return;
+    document.documentElement.requestFullscreen?.()
+      .then(() => setShowFsHint(false))
+      .catch(() => setShowFsHint(true));
+    const onFsChange = () => { if (document.fullscreenElement) setShowFsHint(false); };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
   return (
     <div
       className="w-screen h-screen select-none overflow-hidden"
@@ -71,6 +83,19 @@ export default function OutputPage() {
         totalSlides={totalSlides}
         backgroundMedia={backgroundMedia}
       />
+      {/* Overlay pantalla completa (si auto-fullscreen falló) */}
+      {showFsHint && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center cursor-pointer select-none"
+          style={{ background: 'rgba(0,0,0,0.02)' }}
+          onClick={() => { document.documentElement.requestFullscreen?.().catch(() => {}); setShowFsHint(false); }}
+        >
+          <div className="flex flex-col items-center gap-3 px-8 py-5 bg-black/90 rounded-2xl border border-white/20 pointer-events-none">
+            <Maximize2 size={28} className="text-white/70" />
+            <p className="text-white/90 text-sm font-medium">Clic para activar pantalla completa</p>
+          </div>
+        </div>
+      )}
       {/* Botón flotante — solo visible en móvil, aparece al tocar */}
       <div
         className={`md:hidden fixed bottom-6 right-4 z-50 flex flex-col gap-2 transition-opacity duration-300 ${

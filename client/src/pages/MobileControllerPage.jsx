@@ -281,6 +281,7 @@ export default function MobileControllerPage() {
         setEventDetail(prev => ({ ...prev, songs: eventEditSongs }));
         setEventEditMode(false);
         loadEvents();
+        actions.setSchedule(eventEditSongs); // actualizar schedule en tiempo real
       }
     } catch { /* noop */ }
     finally { setEventSaving(false); }
@@ -418,6 +419,12 @@ export default function MobileControllerPage() {
       actions.loadPlays(eventDetail.id, occDate);
     }
   }, [eventDetail?.id]); // eslint-disable-line
+
+  // Publicar el schedule al contexto global cuando se abre/cierra un evento desde móvil
+  // (necesario para que StagePage pueda mostrar la siguiente canción del listado)
+  useEffect(() => {
+    actions.setSchedule(eventDetail ? (eventDetail.songs ?? []) : []);
+  }, [eventDetail?.id, eventDetail?.songs?.length]); // eslint-disable-line
 
   // Sincronizar diapo activa cuando el servidor navega (flechas prev/next)
   useEffect(() => {

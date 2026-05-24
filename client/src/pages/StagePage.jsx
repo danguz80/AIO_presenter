@@ -3,6 +3,7 @@ import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
+import { Maximize2 } from 'lucide-react';
 
 const FONT_PRESETS = {
   sans:      'system-ui, -apple-system, sans-serif',
@@ -37,6 +38,18 @@ export default function StagePage() {
   const outputCfg = state.outputConfig ?? {};
   const [time, setTime] = useState(new Date());
   const [lastLabel, setLastLabel] = useState(null);
+  const [showFsHint, setShowFsHint] = useState(false);
+
+  // Pantalla completa automática cuando se abre con ?fs=1 (desde "Activar salidas")
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('fs') !== '1') return;
+    document.documentElement.requestFullscreen?.()
+      .then(() => setShowFsHint(false))
+      .catch(() => setShowFsHint(true));
+    const onFsChange = () => { if (document.fullscreenElement) setShowFsHint(false); };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
 
   useKeyboardRelay();
 
@@ -383,6 +396,19 @@ export default function StagePage() {
                 {time.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false })}
               </span>
             )}
+          </div>
+        </div>
+      )}
+      {/* Overlay pantalla completa (si auto-fullscreen falló) */}
+      {showFsHint && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center cursor-pointer select-none"
+          style={{ background: 'rgba(0,0,0,0.02)' }}
+          onClick={() => { document.documentElement.requestFullscreen?.().catch(() => {}); setShowFsHint(false); }}
+        >
+          <div className="flex flex-col items-center gap-3 px-8 py-5 bg-black/90 rounded-2xl border border-white/20 pointer-events-none">
+            <Maximize2 size={28} className="text-white/70" />
+            <p className="text-white/90 text-sm font-medium">Clic para activar pantalla completa</p>
           </div>
         </div>
       )}
