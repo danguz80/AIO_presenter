@@ -129,28 +129,6 @@ export default function LivePreview() {
 
   const toggleOutputs = () => outputsActive ? deactivateOutputs() : activateOutputs();
 
-
-    const res = resolution ?? { width: 1920, height: 1080 };
-    // Intentar abrir en la pantalla asignada si getScreenDetails está disponible
-    if (screenId && 'getScreenDetails' in window) {
-      window.getScreenDetails().then(sd => {
-        const [, sLeft, sTop] = (screenId ?? '').split(':');
-        const target = Array.from(sd.screens).find(
-          s => String(s.left ?? 0) === sLeft && String(s.top ?? 0) === sTop
-        );
-        if (target) {
-          window.open(path, windowName, `left=${target.left},top=${target.top},width=${target.width},height=${target.height},menubar=no,toolbar=no,location=no`);
-          return;
-        }
-        window.open(path, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
-      }).catch(() => {
-        window.open(path, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
-      });
-    } else {
-      window.open(path, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
-    }
-  };
-
   return (
     <div className="flex-1 min-h-0 border-b border-surface-700 p-3 flex flex-col gap-2 overflow-hidden">
 
