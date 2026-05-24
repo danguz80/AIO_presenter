@@ -224,6 +224,11 @@ export default function MobileControllerPage() {
 
   const apiBase = getApiBase;
 
+  const authHeaders = () => {
+    const token = localStorage.getItem('aio_sync_token');
+    return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } : { 'Content-Type': 'application/json' };
+  };
+
   const saveEventForm = async () => {
     if (!eventFormData.title || !eventFormData.date) return;
     setEventSaving(true);
@@ -236,7 +241,7 @@ export default function MobileControllerPage() {
         songs: isEdit ? (eventDetail?.songs || []) : [],
         ...(isEdit && eventDetail?.occurrence_date ? { occurrence_date: eventDetail.occurrence_date } : {}),
       };
-      const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: authHeaders(), body: JSON.stringify(body) });
       if (res.ok) {
         if (isEdit) setEventDetail(prev => ({ ...prev, ...eventFormData }));
         setEventFormMode(null);
@@ -248,7 +253,7 @@ export default function MobileControllerPage() {
 
   const deleteEventById = async (id) => {
     try {
-      await fetch(`${apiBase()}/api/events/${id}`, { method: 'DELETE' });
+      await fetch(`${apiBase()}/api/events/${id}`, { method: 'DELETE', headers: authHeaders() });
       setConfirmDeleteId(null);
       setEventDetail(null);
       loadEvents();
@@ -261,7 +266,7 @@ export default function MobileControllerPage() {
       const dateStr = String(eventDetail.occurrence_date || eventDetail.date).split('T')[0];
       const res = await fetch(`${apiBase()}/api/events/${eventDetail.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({
           title: eventDetail.title,
           date: dateStr,
