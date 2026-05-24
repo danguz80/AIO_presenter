@@ -59,14 +59,14 @@ export default function CancioneroSongDetail() {
   const lastTs    = useRef(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/api/songs/${id}`,        { headers: authHeaders() }).then(r => r.json()),
-      fetch(`${API}/api/songs/${id}/slides`, { headers: authHeaders() }).then(r => r.json()),
-    ]).then(([s, sl]) => {
-      setSong(s);
-      setSlides(Array.isArray(sl) ? sl : []);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+    fetch(`${API}/api/songs/${id}`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(s => {
+        setSong(s);
+        setSlides(Array.isArray(s.slides) ? s.slides : []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, [id]);
 
   // Auto-scroll loop
