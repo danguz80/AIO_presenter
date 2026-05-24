@@ -47,12 +47,12 @@ function renderContent(content, showChords, chordsColor) {
             {hasChords ? (
               <div className="flex flex-wrap items-end mb-1">
                 {segments.map((seg, si) => {
-                  // Ancho mínimo por acorde para evitar solapamiento
+                  // minWidth basado en largo del acorde (em es más fiable que ch en fuentes proporcionales)
                   const minW = seg.chord
-                    ? `${Math.max(seg.chord.length * 0.68 + 0.6, 2)}ch`
+                    ? `${Math.max(seg.chord.length * 0.62 + 1.0, 2.2)}em`
                     : undefined;
                   return (
-                    <span key={si} className="inline-flex flex-col" style={{ minWidth: minW }}>
+                    <span key={si} className="inline-flex flex-col" style={{ minWidth: minW, paddingRight: seg.chord ? '0.45em' : undefined }}>
                       <span style={{ color: chordsColor }} className="font-bold leading-none text-[0.82em]">
                         {seg.chord ?? ''}
                       </span>
