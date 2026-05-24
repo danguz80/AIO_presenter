@@ -77,60 +77,74 @@ function textToSlides(text) {
 
 // Detecta la posición de inicio de la próxima sílaba en `text` a partir de `pos`.
 // Reglas simplificadas de silabificación española:
-//   - Un consonante entre vocales va con la sílaba siguiente
+//   - Una consonante entre vocales va con la sílaba siguiente
 //   - Dos o más consonantes: el último (o los dos en grupos inseparables) van con la siguiente
-//   - Grupos inseparables: bl br cl cr dr fl fr gl gr pl pr tr
+//   - Grupos inseparables: bl br cl cr dr fl fr gl gr pl pr tr rr ll ch
 //   - Los marcadores [acorde] y {sección} se saltan automáticamente
 function findNextSyllablePos(text, pos) {
   const VOWELS = 'aeiouáéíóúüAEIOUÁÉÍÓÚÜ';
-  const INSEP  = new Set(['bl','br','cl','cr','dr','fl','fr','gl','gr','pl','pr','tr']);
-  const isVowel = (c) => c !== undefined && VOWELS.includes(c);
-  const isAlpha = (c) => c !== undefined && /[a-záéíóúüA-ZÁÉÍÓÚÜñÑ']/.test(c);
+  // Grupos consonánticos que van JUNTOS con la siguiente sílaba
+  const INSEP = new Set(['bl','br','cl','cr','dr','fl','fr','gl','gr','pl','pr','tr','rr','ll','ch']);
+  const isVowel = c => c !== undefined && VOWELS.includes(c);
+  const isAlpha = c => c !== undefined && /[a-záéíóúüA-ZÁÉÍÓÚÜñÑ']/.test(c);
+  const n = text.length;
 
-  // Salta marcadores [Acorde] o {Sección} desde la posición i
+  // Salta marcadores [Acorde] y {Sección}
   const skipMarkers = (i) => {
-    while (i < text.length && (text[i] === '[' || text[i] === '{')) {
+    while (i < n && (text[i] === '[' || text[i] === '{')) {
       const close = text[i] === '[' ? ']' : '}';
-      while (i < text.length && text[i] !== close && text[i] !== '\n') i++;
-      if (i < text.length && text[i] === close) i++;
+      while (i < n && text[i] !== close && text[i] !== '\n') i++;
+      if (i < n && text[i] === close) i++;
     }
     return i;
   };
 
+  // Salta separadores (espacios, puntuación, saltos de línea) y marcadores
+  const skipSep = (i) => {
+    while (i < n && !isAlpha(text[i]) && text[i] !== '[' && text[i] !== '{') i++;
+    return skipMarkers(i);
+  };
+
   let i = skipMarkers(pos);
-  const n = text.length;
+
+  // Si saltamos un marcador desde `pos`, aterrizamos justo después de él (inicio de sílaba asociada)
+  if (i > pos) return i;
 
   if (i >= n) return n;
 
-  // 1. Si estamos en una vocal, saltar el grupo de vocales (diptongos incluidos)
+  // ── Paso 1: Avanzar más allá de la sílaba actual ────────────────────────────
   if (isVowel(text[i])) {
+    // Estamos en la vocal/núcleo: saltarla completa (diptongos incluidos)
     while (i < n && isVowel(text[i])) i++;
+  } else if (isAlpha(text[i])) {
+    // Estamos en consonante de onset: saltar onset + núcleo vocálico de esta sílaba
+    while (i < n && isAlpha(text[i]) && !isVowel(text[i])) i++;
     i = skipMarkers(i);
+    // Saltar la vocal del núcleo
+    while (i < n && isVowel(text[i])) i++;
+  } else {
+    // Puntuación u otro no alfanumérico: avanzar uno
+    i++;
   }
 
-  // 2. Si después de la vocal hay espacio/salto de línea → siguiente palabra
-  if (i >= n || text[i] === ' ' || text[i] === '\n' || text[i] === '\t') {
-    while (i < n && (text[i] === ' ' || text[i] === '\n' || text[i] === '\t')) i++;
-    return skipMarkers(i);
-  }
+  i = skipMarkers(i);
 
-  // 3. Estamos en consonantes: contar hasta la siguiente vocal
+  // Si hay separador (espacio, coma, salto de línea...), saltar hasta el próximo alfa
+  if (i >= n || !isAlpha(text[i])) return skipSep(i);
+
+  // ── Paso 2: Aplicar reglas de silabificación sobre las consonantes restantes ─
   const cStart = i;
   while (i < n && isAlpha(text[i]) && !isVowel(text[i])) i++;
   i = skipMarkers(i);
 
-  if (i >= n || !isAlpha(text[i])) {
-    // Fin de texto o fin de palabra sin vocal siguiente
-    while (i < n && (text[i] === ' ' || text[i] === '\n' || text[i] === '\t')) i++;
-    return skipMarkers(i);
-  }
+  // Sin vocal siguiente en esta palabra → saltar al próximo segmento
+  if (i >= n || !isAlpha(text[i])) return skipSep(i);
 
-  // 4. text[i] es una vocal → determinar inicio de sílaba según reglas españolas
   const cCount = i - cStart;
-  if (cCount <= 1) return cStart;            // consonante única → va con esta sílaba
+  if (cCount <= 1) return cStart;                          // consonante única → va con esta sílaba
   const lastTwo = text.slice(i - 2, i).toLowerCase();
-  if (INSEP.has(lastTwo)) return i - 2;      // grupo inseparable → ambas van juntas
-  return i - 1;                              // resto: último consonante va con la sílaba
+  if (INSEP.has(lastTwo)) return i - 2;                    // grupo inseparable (ll, rr, tr, etc.)
+  return i - 1;                                            // resto: último consonante va con la sílaba
 }
 
 export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
