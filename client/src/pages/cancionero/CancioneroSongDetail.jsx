@@ -3,28 +3,46 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, Loader2
 } from 'lucide-react';
-import { stripChords } from '../../utils/chordUtils';
+import { stripChords, parseChordLines } from '../../utils/chordUtils';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
 }
 
-// Colorea los acordes dentro del contenido
+// Renderiza contenido en formato ChordPro: acordes encima de la letra
 function renderContent(content, showChords, chordsColor) {
   if (!showChords) {
-    return <span className="whitespace-pre-line">{stripChords(content)}</span>;
+    return <p className="whitespace-pre-wrap leading-relaxed">{stripChords(content)}</p>;
   }
-  // Resaltar [Acorde]
-  const parts = content.split(/(\[[^\]]*\])/g);
+  const lines = parseChordLines(content);
   return (
-    <span className="whitespace-pre-line">
-      {parts.map((part, i) =>
-        part.startsWith('[') && part.endsWith(']')
-          ? <span key={i} style={{ color: chordsColor }} className="font-bold">{part.slice(1, -1)}</span>
-          : part
-      )}
-    </span>
+    <div className="flex flex-col">
+      {lines.map((segments, li) => {
+        const hasChords = segments.some(s => s.chord);
+        if (!hasChords) {
+          // Línea solo de letra (sin acordes)
+          return (
+            <div key={li} className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
+              {segments.map(s => s.text).join('')}
+            </div>
+          );
+        }
+        // Línea con acordes → cada segmento: acorde arriba + letra abajo
+        return (
+          <div key={li} className="flex flex-wrap items-end mb-1">
+            {segments.map((seg, si) => (
+              <span key={si} className="inline-flex flex-col" style={{ marginRight: seg.text ? '0' : '6px' }}>
+                <span style={{ color: chordsColor }} className="font-bold leading-none text-[0.82em]">
+                  {seg.chord ?? ''}
+                </span>
+                <span className="leading-snug">{seg.text || (seg.chord ? '\u00a0' : '')}</span>
+              </span>
+            ))}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
