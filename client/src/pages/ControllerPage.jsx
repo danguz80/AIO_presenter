@@ -11,7 +11,7 @@ import SongFormModal   from '../components/Library/SongFormModal';
 import { ScheduleAddProvider } from '../context/ScheduleAddContext';
 import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -154,6 +154,16 @@ export default function ControllerPage() {
               : <><WifiOff size={14} className="text-red-400" /><span className="text-red-400">Sin conexión</span></>
             }
           </div>
+
+          {/* Botón Cancionero */}
+          <button
+            onClick={() => navigate('/cancionero')}
+            title="Ir al Modo Cancionero"
+            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-yellow-400 transition-colors px-2 py-1 rounded hover:bg-surface-700"
+          >
+            <Music2 size={15} />
+            <span className="hidden sm:inline">Cancionero</span>
+          </button>
 
           {/* Botón calendario */}
           <Link

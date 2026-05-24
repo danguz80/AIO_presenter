@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Music2, CalendarDays, Settings2, Bell,
-  LogOut, ChevronRight, Loader2, Building2, Clock
+  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -96,6 +96,14 @@ export default function CancioneroDashboard() {
 
         {/* Avatar + menú */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => navigate('/app')}
+            title="Ir al Modo Presenter"
+            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-blue-300 transition-colors px-2 py-1 rounded hover:bg-white/10"
+          >
+            <Monitor size={15} />
+            <span className="hidden sm:inline">Presenter</span>
+          </button>
           <button
             onClick={() => navigate('/mode-select')}
             title="Cambiar modo"
