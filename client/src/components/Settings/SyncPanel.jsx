@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   CloudUpload, RefreshCw, LogIn, LogOut, CheckCircle,
   AlertCircle, Users, Folder, ChevronRight, Shield,
-  X, Loader2, HardDrive, Cloud, UploadCloud, Link2, Copy, Trash2, Plus, Clock,
+  X, Loader2, HardDrive, Cloud, UploadCloud, Link2, Copy, Trash2, Plus, Clock, Building2,
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -107,6 +107,172 @@ function FolderPicker({ folderId, onSave }) {
             className="px-2 py-1.5 bg-accent hover:bg-accent-hover rounded text-white text-xs transition-colors disabled:opacity-40">
             OK
           </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Panel de organizaciones ──────────────────────────────────────────────────
+function OrgsPanel({ currentUser }) {
+  const [orgs, setOrgs]             = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [renaming, setRenaming]     = useState(false);
+  const [newName, setNewName]       = useState('');
+  const [creating, setCreating]     = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [status, setStatus]         = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await authFetch('/auth/my-orgs');
+      if (res.ok) {
+        const data = await res.json();
+        setOrgs(data);
+        const active = data.find(o => o.is_active);
+        if (active && !newName) setNewName(active.name);
+      }
+    } finally { setLoading(false); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { load(); }, [load]);
+
+  const renameOrg = async () => {
+    if (!newName.trim()) return;
+    setRenaming(true);
+    try {
+      const res = await authFetch('/auth/org', { method: 'PATCH', body: { name: newName.trim() } });
+      if (res.ok) {
+        setOrgs(prev => prev.map(o => o.is_active ? { ...o, name: newName.trim() } : o));
+        setStatus({ type: 'ok', msg: 'Nombre actualizado' });
+      } else {
+        const d = await res.json();
+        setStatus({ type: 'error', msg: d.error || 'Error' });
+      }
+    } catch { setStatus({ type: 'error', msg: 'Error al actualizar' }); }
+    finally { setRenaming(false); setTimeout(() => setStatus(null), 3000); }
+  };
+
+  const switchOrg = async (orgId) => {
+    try {
+      const res = await authFetch(`/auth/switch-org/${orgId}`, { method: 'POST' });
+      if (res.ok) {
+        const { token } = await res.json();
+        localStorage.setItem('aio_sync_token', token);
+        window.location.reload();
+      }
+    } catch { /* ignore */ }
+  };
+
+  const createOrg = async () => {
+    if (!newOrgName.trim()) return;
+    setCreating(true);
+    try {
+      const res = await authFetch('/auth/orgs', { method: 'POST', body: { name: newOrgName.trim() } });
+      if (res.ok) {
+        const { token } = await res.json();
+        localStorage.setItem('aio_sync_token', token);
+        window.location.reload();
+      } else {
+        const d = await res.json();
+        setStatus({ type: 'error', msg: d.error || 'Error' });
+        setTimeout(() => setStatus(null), 3000);
+      }
+    } finally { setCreating(false); }
+  };
+
+  if (loading) return (
+    <div className="text-xs text-zinc-500 py-2 text-center">
+      <Loader2 size={12} className="inline animate-spin mr-1" />Cargando…
+    </div>
+  );
+
+  const activeOrg = orgs.find(o => o.is_active);
+
+  return (
+    <div className="space-y-2.5">
+      {/* Nombre de la org activa (solo admin) */}
+      {currentUser.is_admin && (
+        <div className="bg-surface-700 rounded-lg p-2.5 space-y-1.5">
+          <p className="text-[10px] font-semibold text-zinc-300">
+            Nombre de la organización activa
+          </p>
+          <div className="flex gap-2">
+            <input
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && renameOrg()}
+              placeholder="Nombre de la organización"
+              className="flex-1 bg-surface-600 text-white text-xs rounded px-2 py-1.5 border border-surface-500 focus:border-accent outline-none"
+            />
+            <button
+              onClick={renameOrg}
+              disabled={renaming || !newName.trim() || newName.trim() === activeOrg?.name}
+              className="px-3 py-1.5 bg-accent hover:bg-accent-hover rounded text-white text-xs transition-colors disabled:opacity-40"
+            >
+              {renaming ? <Loader2 size={11} className="animate-spin" /> : 'Guardar'}
+            </button>
+          </div>
+          {status && (
+            <p className={`text-[10px] ${status.type === 'ok' ? 'text-green-400' : 'text-red-400'}`}>{status.msg}</p>
+          )}
+        </div>
+      )}
+
+      {/* Lista de orgs cuando hay más de una */}
+      {orgs.length > 1 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">Mis organizaciones</p>
+          {orgs.map(org => (
+            <div
+              key={org.id}
+              className={`flex items-center gap-2 rounded-lg px-2.5 py-2 border ${
+                org.is_active
+                  ? 'bg-accent/10 border-accent/30'
+                  : 'bg-surface-700 border-surface-600'
+              }`}
+            >
+              <Building2 size={13} className={org.is_active ? 'text-accent shrink-0' : 'text-zinc-500 shrink-0'} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-white truncate">{org.name}</p>
+                <p className="text-[9px] text-zinc-500 capitalize">{org.role}</p>
+              </div>
+              {org.is_active
+                ? <span className="text-[9px] bg-accent/20 text-accent px-1.5 py-0.5 rounded font-semibold shrink-0">Activa</span>
+                : <button
+                    onClick={() => switchOrg(org.id)}
+                    className="text-[10px] text-accent hover:text-accent-hover border border-accent/30 hover:bg-accent/10 px-2 py-0.5 rounded transition-colors shrink-0"
+                  >Cambiar</button>
+              }
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Crear nueva organización (solo admin) */}
+      {currentUser.is_admin && (
+        <div className="bg-surface-700 rounded-lg p-2.5 space-y-1.5">
+          <p className="text-[10px] font-semibold text-zinc-300">Nueva organización</p>
+          <div className="flex gap-2">
+            <input
+              value={newOrgName}
+              onChange={e => setNewOrgName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && createOrg()}
+              placeholder="Nombre de la nueva organización"
+              className="flex-1 bg-surface-600 text-white text-xs rounded px-2 py-1.5 border border-surface-500 focus:border-accent outline-none"
+            />
+            <button
+              onClick={createOrg}
+              disabled={creating || !newOrgName.trim()}
+              className="flex items-center gap-1 px-3 py-1.5 bg-accent hover:bg-accent-hover rounded text-white text-xs transition-colors disabled:opacity-40"
+            >
+              {creating ? <Loader2 size={11} className="animate-spin" /> : <Plus size={11} />}
+            </button>
+          </div>
+          <p className="text-[9px] text-zinc-600 leading-relaxed">
+            Serás admin de la nueva org. Los datos (canciones, eventos, multimedia) son independientes por organización.
+          </p>
         </div>
       )}
     </div>
@@ -338,9 +504,10 @@ export default function SyncPanel() {
   const [status, setStatus]             = useState(null);
   const [loading, setLoading]           = useState(false);
   const [inviteCode, setInviteCode]     = useState(''); // código de invitación al hacer login
-  const [showUsers, setShowUsers]           = useState(false);
-  const [showInvitations, setShowInvitations] = useState(false);
-  const [showFolder, setShowFolder]         = useState(false);
+  const [showUsers, setShowUsers]               = useState(false);
+  const [showInvitations, setShowInvitations]   = useState(false);
+  const [showOrgs, setShowOrgs]                 = useState(false);
+  const [showFolder, setShowFolder]             = useState(false);
   const [checkingAuth, setCheckingAuth]     = useState(true);
   const [driveBackupProgress, setDriveBackupProgress] = useState(null); // { current, total, title }
 
@@ -585,6 +752,22 @@ export default function SyncPanel() {
         <button onClick={handleLogout} title="Cerrar sesión" className="text-zinc-500 hover:text-red-400 transition-colors shrink-0 ml-1">
           <LogOut size={13} />
         </button>
+      </div>
+
+      {/* Organización */}
+      <div>
+        <button
+          onClick={() => setShowOrgs(v => !v)}
+          className="flex items-center justify-between w-full text-[10px] font-semibold text-zinc-400 uppercase tracking-wider hover:text-white transition-colors"
+        >
+          <span className="flex items-center gap-1"><Building2 size={11} />Organización</span>
+          <ChevronRight size={11} className={`transition-transform ${showOrgs ? 'rotate-90' : ''}`} />
+        </button>
+        {showOrgs && (
+          <div className="mt-2">
+            <OrgsPanel currentUser={user} />
+          </div>
+        )}
       </div>
 
       {/* Carpeta de Drive */}

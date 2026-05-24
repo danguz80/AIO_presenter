@@ -147,6 +147,12 @@ router.get('/google/callback', async (req, res) => {
         'UPDATE sync_invitations SET used_by=$1, used_at=NOW() WHERE id=$2',
         [rows[0].id, inv.id]
       );
+      // Registrar membresía en user_organizations
+      await pool.query(
+        `INSERT INTO user_organizations (user_id, organization_id, role)
+         VALUES ($1, $2, 'member') ON CONFLICT DO NOTHING`,
+        [rows[0].id, orgId]
+      );
 
       // Notificar al admin que la invitación fue aceptada
       notifyAdminInviteAccepted({
@@ -177,6 +183,12 @@ router.get('/google/callback', async (req, res) => {
         `UPDATE sync_users SET access_token=$1, refresh_token=COALESCE($2, refresh_token),
          token_expiry=$3, updated_at=NOW() WHERE id=$4`,
         [tokens.access_token, tokens.refresh_token || null, tokens.expiry_date || null, existingRows[0].id]
+      );
+      // Asegurar membresía en user_organizations
+      await pool.query(
+        `INSERT INTO user_organizations (user_id, organization_id, role)
+         VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
+        [existingRows[0].id, orgId, existingRows[0].is_admin ? 'admin' : 'member']
       );
       const user = existingRows[0];
       const jwtToken = jwt.sign(
@@ -225,6 +237,12 @@ router.get('/google/callback', async (req, res) => {
     ]);
 
     const user = newUserRows[0];
+    // Registrar membresía en user_organizations
+    await pool.query(
+      `INSERT INTO user_organizations (user_id, organization_id, role)
+       VALUES ($1, $2, 'admin') ON CONFLICT DO NOTHING`,
+      [user.id, orgId]
+    );
     const jwtToken = jwt.sign(
       { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true },
       JWT_SECRET, { expiresIn: '30d' }
@@ -271,6 +289,99 @@ router.get('/org', requireAuth, async (req, res) => {
 /** POST /auth/logout — instrucción al cliente para borrar token */
 router.post('/logout', (req, res) => {
   res.json({ ok: true });
+});
+
+// ─── Endpoints multi-organización ───────────────────────────────────────────
+
+/** GET /auth/my-orgs — lista todas las orgs a las que pertenece el usuario */
+router.get('/my-orgs', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT o.id, o.name, o.plan, o.created_at, uo.role,
+             (o.id = $2) AS is_active
+      FROM user_organizations uo
+      JOIN organizations o ON o.id = uo.organization_id
+      WHERE uo.user_id = $1
+      ORDER BY o.created_at ASC
+    `, [req.user.userId, req.user.orgId]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** PATCH /auth/org — renombrar la organización activa (solo admin) */
+router.patch('/org', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede renombrar la organización' });
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
+  try {
+    await pool.query(
+      'UPDATE organizations SET name=$1, updated_at=NOW() WHERE id=$2',
+      [name.trim(), req.user.orgId]
+    );
+    res.json({ ok: true, name: name.trim() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /auth/orgs — crear una nueva organización (solo admin) */
+router.post('/orgs', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede crear organizaciones' });
+  const { name } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
+  try {
+    const { rows: orgRows } = await pool.query(
+      'INSERT INTO organizations (name) VALUES ($1) RETURNING id, name, plan, created_at',
+      [name.trim()]
+    );
+    const org = orgRows[0];
+    // Registrar al usuario como admin de la nueva org
+    await pool.query(
+      'INSERT INTO user_organizations (user_id, organization_id, role) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [req.user.userId, org.id, 'admin']
+    );
+    // Cambiar org activa del usuario a la nueva
+    await pool.query(
+      'UPDATE sync_users SET organization_id=$1, is_admin=TRUE WHERE id=$2',
+      [org.id, req.user.userId]
+    );
+    const newToken = jwt.sign(
+      { userId: req.user.userId, orgId: org.id, email: req.user.email, isAdmin: true, canPush: true },
+      JWT_SECRET, { expiresIn: '30d' }
+    );
+    res.json({ org, token: newToken });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /auth/switch-org/:orgId — cambiar a otra organización */
+router.post('/switch-org/:orgId', requireAuth, async (req, res) => {
+  const orgId = parseInt(req.params.orgId, 10);
+  if (isNaN(orgId)) return res.status(400).json({ error: 'orgId inválido' });
+  try {
+    // Verificar que el usuario es miembro de esa org
+    const { rows } = await pool.query(
+      'SELECT role FROM user_organizations WHERE user_id=$1 AND organization_id=$2',
+      [req.user.userId, orgId]
+    );
+    if (!rows.length) return res.status(403).json({ error: 'No tienes acceso a esa organización' });
+    const role = rows[0].role;
+    // Actualizar org activa
+    await pool.query(
+      'UPDATE sync_users SET organization_id=$1, is_admin=$2 WHERE id=$3',
+      [orgId, role === 'admin', req.user.userId]
+    );
+    const newToken = jwt.sign(
+      { userId: req.user.userId, orgId, email: req.user.email, isAdmin: role === 'admin', canPush: true },
+      JWT_SECRET, { expiresIn: '30d' }
+    );
+    res.json({ token: newToken });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── Middleware de autenticación JWT ────────────────────────────────────────

@@ -198,6 +198,25 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE songs           ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await pool.query(`ALTER TABLE events          ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
     await pool.query(`ALTER TABLE sync_invitations ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)`);
+    // Membresías usuario ↔ organización (muchos a muchos)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_organizations (
+        user_id         INTEGER NOT NULL REFERENCES sync_users(id) ON DELETE CASCADE,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        role            VARCHAR(20) NOT NULL DEFAULT 'member',
+        joined_at       TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (user_id, organization_id)
+      )
+    `);
+    // Poblar user_organizations desde sync_users.organization_id (migración)
+    await pool.query(`
+      INSERT INTO user_organizations (user_id, organization_id, role)
+      SELECT id, organization_id,
+             CASE WHEN is_admin THEN 'admin' ELSE 'member' END
+      FROM sync_users
+      WHERE organization_id IS NOT NULL
+      ON CONFLICT DO NOTHING
+    `);
     // Carpetas multimedia por organización
     await pool.query(`
       CREATE TABLE IF NOT EXISTS media_folders (
