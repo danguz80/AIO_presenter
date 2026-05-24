@@ -74,15 +74,8 @@ function renderContent(content, showChords, chordsColor) {
   );
 }
 
-const SECTION_COLORS = {
-  intro: '#94a3b8', verso: '#60a5fa', coro: '#facc15', puente: '#4ade80',
-  pre: '#f97316', outro: '#c084fc', tag: '#fb7185',
-};
-function sectionColor(label) {
-  const l = (label || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  for (const [k, v] of Object.entries(SECTION_COLORS)) { if (l.includes(k)) return v; }
-  return '#94a3b8';
-}
+const SECTION_COLOR = '#60a5fa'; // azul uniforme para todas las labels
+function sectionColor() { return SECTION_COLOR; }
 
 export default function CancioneroSongDetail() {
   const { id } = useParams();
@@ -125,7 +118,7 @@ export default function CancioneroSongDetail() {
     const step = (ts) => {
       if (lastTs.current !== null && scrollRef.current) {
         const dt = ts - lastTs.current;
-        const pxPerSec = scrollSpeed * 20; // velocidad base
+        const pxPerSec = scrollSpeed * 12 + 3; // speed 1=15px/s … speed 10=123px/s
         scrollRef.current.scrollTop += pxPerSec * dt / 1000;
         // Detener al llegar al fondo
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
