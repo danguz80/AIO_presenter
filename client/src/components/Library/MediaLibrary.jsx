@@ -452,6 +452,7 @@ export default function MediaLibrary() {
   const [filter, setFilter]             = useState('all'); // 'all' | 'image' | 'video'
   const [localServerUp, setLocalServerUp] = useState(null); // null=checking, true, false
   const [sendError, setSendError]       = useState(null);
+  const [restoringPermissions, setRestoringPermissions] = useState(false);
   // Para forzar re-render cuando cambia primerPlano en localStorage
   const [primerPlanoVersion, setPrimerPlanoVersion] = useState(0);
 
@@ -470,35 +471,10 @@ export default function MediaLibrary() {
       const token   = localStorage.getItem('aio_sync_token');
       const handles = await fsaListFolders();
 
-      // Si hay token, BD es la fuente de verdad compartida entre dispositivos
-      if (token) {
-        const dbFolders = await fetchFoldersFromDb(API_BASE, token);
-        const merged = await Promise.all(
-          dbFolders.map(async ({ id, name }) => {
-            const idbKey  = `db-folder:${id}`;
-            const byKey   = handles.find(h => h.key === idbKey);
-            const byName  = handles.find(h => h.name === name);
-            const entry   = byKey ?? byName;
-            if (entry) {
-              try {
-                const perm = await entry.handle.queryPermission({ mode: 'read' });
-                return { key: idbKey, dbId: id, name, handle: entry.handle, permissionState: perm };
-              } catch {
-                return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
-              }
-            }
-            return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
-          })
-        );
-        setFolders(merged);
-        setSelectedFolder(prev => {
-          if (!prev) return merged[0] ?? null;
-          return merged.find(f => f.key === prev.key) ?? merged[0] ?? null;
-        });
-      } else {
-        // Sin sesión: usar solo IndexedDB (comportamiento anterior)
-        const withPerms = await Promise.all(
-          handles.map(async (h) => {
+      // Función interna: construir lista a partir de handles de IndexedDB
+      const buildFromHandles = async (list) => {
+        return Promise.all(
+          list.map(async (h) => {
             try {
               const perm = await h.handle.queryPermission({ mode: 'read' });
               return { ...h, permissionState: perm };
@@ -507,6 +483,52 @@ export default function MediaLibrary() {
             }
           })
         );
+      };
+
+      // Si hay token, BD es la fuente de verdad compartida entre dispositivos
+      if (token) {
+        const dbFolders = await fetchFoldersFromDb(API_BASE, token);
+        // Si la BD devuelve carpetas, usarlas como fuente de verdad
+        if (dbFolders.length > 0) {
+          const merged = await Promise.all(
+            dbFolders.map(async ({ id, name }) => {
+              const idbKey  = `db-folder:${id}`;
+              const byKey   = handles.find(h => h.key === idbKey);
+              const byName  = handles.find(h => h.name === name);
+              const entry   = byKey ?? byName;
+              if (entry) {
+                try {
+                  const perm = await entry.handle.queryPermission({ mode: 'read' });
+                  return { key: idbKey, dbId: id, name, handle: entry.handle, permissionState: perm };
+                } catch {
+                  return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
+                }
+              }
+              return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
+            })
+          );
+          setFolders(merged);
+          setSelectedFolder(prev => {
+            if (!prev) return merged[0] ?? null;
+            return merged.find(f => f.key === prev.key) ?? merged[0] ?? null;
+          });
+          return;
+        }
+        // BD vacía o no disponible — usar IndexedDB como fallback para no perder acceso local
+        if (handles.length > 0) {
+          const withPerms = await buildFromHandles(handles);
+          setFolders(withPerms);
+          setSelectedFolder(prev => {
+            if (!prev) return withPerms[0] ?? null;
+            return withPerms.find(f => f.key === prev.key) ?? withPerms[0] ?? null;
+          });
+          return;
+        }
+        setFolders([]);
+        setSelectedFolder(null);
+      } else {
+        // Sin sesión: usar solo IndexedDB
+        const withPerms = await buildFromHandles(handles);
         setFolders(withPerms);
         setSelectedFolder(prev => {
           if (!prev) return withPerms[0] ?? null;
@@ -592,6 +614,32 @@ export default function MediaLibrary() {
       } catch { return; }
     }
     setSelectedFolder(folder);
+  };
+
+  // ── FSA: restaurar permisos de todas las carpetas en lote ─────────────────
+  const handleRestoreAllPermissions = async () => {
+    setRestoringPermissions(true);
+    const pending = folders.filter(f => f.permissionState !== 'granted');
+    const updated = [...folders];
+    for (const folder of pending) {
+      try {
+        let handle = folder.handle;
+        if (!handle) {
+          // Sin handle: pedir al usuario que re-seleccione esta carpeta
+          handle = await pickFolder();
+          await saveFolder(handle, folder.key);
+        }
+        const perm = await verifyPermission(handle);
+        const idx = updated.findIndex(f => f.key === folder.key);
+        if (idx >= 0) updated[idx] = { ...updated[idx], handle, permissionState: perm };
+      } catch (err) {
+        if (err.name === 'AbortError') break; // usuario canceló
+      }
+    }
+    setFolders(updated);
+    const firstGranted = updated.find(f => f.permissionState === 'granted');
+    if (firstGranted) setSelectedFolder(firstGranted);
+    setRestoringPermissions(false);
   };
 
   // ── FSA: agregar carpeta con selector nativo ───────────────────────────────
@@ -800,6 +848,20 @@ export default function MediaLibrary() {
         </div>
 
         <div className="flex-1 overflow-y-auto py-1">
+          {/* Banner de restaurar permisos — solo en FSA mode cuando hay carpetas bloqueadas */}
+          {mode === 'fsa' && folders.length > 0 && folders.some(f => f.permissionState !== 'granted') && (
+            <button
+              onClick={handleRestoreAllPermissions}
+              disabled={restoringPermissions}
+              className="w-full flex items-center gap-1.5 px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 border-b border-yellow-500/20 text-yellow-400 text-[10px] transition-colors disabled:opacity-60"
+              title="Restaurar acceso a todas las carpetas bloqueadas"
+            >
+              <ShieldCheck size={11} className="shrink-0" />
+              <span className="flex-1 text-left truncate">
+                {restoringPermissions ? 'Restaurando…' : 'Restaurar acceso a carpetas'}
+              </span>
+            </button>
+          )}
           {folders.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-2 px-3 text-center">
               <FolderX size={24} className="text-zinc-600" />
