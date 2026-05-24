@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { RefreshCw } from 'lucide-react';
 import { PresenterProvider } from './context/PresenterContext';
 import { usePresenter } from './context/usePresenter';
 import LandingPage          from './pages/LandingPage';
@@ -88,9 +89,34 @@ function RequireAuth({ children }) {
   return children;
 }
 
+// Banner de actualización cuando el SW activa una nueva versión
+function UpdateBanner() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handler = () => setReady(true);
+    navigator.serviceWorker.addEventListener('controllerchange', handler);
+    return () => navigator.serviceWorker.removeEventListener('controllerchange', handler);
+  }, []);
+  if (!ready) return null;
+  return (
+    <div className="fixed top-0 inset-x-0 z-[9999] flex items-center justify-between gap-3 px-4 py-2 bg-accent text-white text-xs shadow-lg">
+      <span>¡Nueva versión disponible!</span>
+      <button
+        onClick={() => window.location.reload()}
+        className="flex items-center gap-1 font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition-colors"
+      >
+        <RefreshCw size={12} />
+        Actualizar
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <PresenterProvider>
+      <UpdateBanner />
       <OAuthCallbackHandler />
       <ThemeApplier />
       <Routes>

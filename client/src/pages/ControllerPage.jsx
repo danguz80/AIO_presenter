@@ -165,6 +165,15 @@ export default function ControllerPage() {
             <span className="hidden sm:inline">Calendario</span>
           </Link>
 
+          {/* Botón recargar */}
+          <button
+            onClick={() => window.location.reload()}
+            title="Recargar aplicación"
+            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-accent transition-colors px-2 py-1 rounded hover:bg-surface-700"
+          >
+            <RefreshCw size={15} />
+          </button>
+
           {/* Botón configuración */}
           <button
             onClick={() => setShowSettings(true)}
