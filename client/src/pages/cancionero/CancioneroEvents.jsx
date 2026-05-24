@@ -11,13 +11,14 @@ function futureStr(days) {
   const d = new Date(); d.setDate(d.getDate() + days);
   return d.toISOString().split('T')[0];
 }
+function toDateStr(d) { return String(d).slice(0, 10); }
 function formatDate(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = new Date(toDateStr(dateStr) + 'T12:00:00');
   return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
 function daysUntil(dateStr) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const diff = Math.round((new Date(dateStr + 'T00:00:00') - today) / 86400000);
+  const diff = Math.round((new Date(toDateStr(dateStr) + 'T12:00:00') - today) / 86400000);
   if (diff === 0) return { label: 'Hoy', color: 'text-yellow-400' };
   if (diff === 1) return { label: 'Mañana', color: 'text-green-400' };
   return { label: `En ${diff} días`, color: 'text-blue-300' };
@@ -100,7 +101,7 @@ export default function CancioneroEvents() {
                       isToday ? 'bg-yellow-500/20 border-yellow-400/30' : 'bg-blue-500/10 border-blue-400/20'
                     }`}>
                       <span className={`text-[10px] font-bold uppercase ${isToday ? 'text-yellow-300' : 'text-blue-300'}`}>
-                        {new Date(ev.date + 'T00:00:00').toLocaleDateString('es', { month: 'short' })}
+                        {new Date(toDateStr(ev.date) + 'T12:00:00').toLocaleDateString('es', { month: 'short' })}
                       </span>
                       <span className={`text-xl font-extrabold leading-none ${isToday ? 'text-yellow-200' : 'text-white'}`}>
                         {new Date(ev.date + 'T00:00:00').getDate()}
