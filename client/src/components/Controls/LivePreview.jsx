@@ -198,7 +198,13 @@ export default function LivePreview() {
         onClick={() => openWindow('/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution)}
       >
         {/* Canvas escalado: mismo render que /output, reducido proporcionalmente */}
-        <div ref={principalRef} className="w-full h-full relative overflow-hidden">
+        <div
+          ref={principalRef}
+          className="w-full relative overflow-hidden"
+          style={{
+            aspectRatio: `${displayCfg.principalResolution?.width ?? 1920} / ${displayCfg.principalResolution?.height ?? 1080}`,
+          }}
+        >
           {principalW > 0 && (() => {
             const res = displayCfg.principalResolution ?? { width: 1920, height: 1080 };
             const scale = principalW / res.width;
@@ -258,7 +264,13 @@ export default function LivePreview() {
         onClick={() => openWindow('/virtual', null, 'aio-virtual', displayCfg.virtualResolution)}
       >
         {/* Canvas escalado: mismo render que /virtual, pero reducido proporcionalmente */}
-        <div ref={streamRef} className="w-full h-full relative overflow-hidden">
+        <div
+          ref={streamRef}
+          className="w-full relative overflow-hidden"
+          style={{
+            aspectRatio: `${displayCfg.virtualResolution?.width ?? 1920} / ${displayCfg.virtualResolution?.height ?? 1080}`,
+          }}
+        >
           {streamW > 0 && (() => {
             const res = displayCfg.virtualResolution ?? { width: 1920, height: 1080 };
             const scale = streamW / res.width;
