@@ -3,42 +3,69 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, Loader2
 } from 'lucide-react';
-import { stripChords, parseChordLines } from '../../utils/chordUtils';
+import { stripChords, parseChordLine, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
 }
 
-// Renderiza contenido en formato ChordPro: acordes encima de la letra
+// Renderiza contenido en formato ChordPro: acordes encima de la letra.
+// Los comentarios (//) se muestran en cursiva encima de la línea de acordes.
 function renderContent(content, showChords, chordsColor) {
   if (!showChords) {
     return <p className="whitespace-pre-wrap leading-relaxed">{stripChords(content)}</p>;
   }
-  const lines = parseChordLines(content);
+  const rawLines = content ? content.split('\n') : [];
   return (
     <div className="flex flex-col">
-      {lines.map((segments, li) => {
-        const hasChords = segments.some(s => s.chord);
-        if (!hasChords) {
-          // Línea solo de letra (sin acordes)
+      {rawLines.map((rawLine, li) => {
+        // Línea completa de comentario (//)
+        if (isCommentLine(rawLine)) {
+          const text = rawLine.replace(/^\s*\/\/\s*/, '');
           return (
-            <div key={li} className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
-              {segments.map(s => s.text).join('')}
+            <div key={li} className="italic text-white/40 leading-snug text-[0.85em] min-h-[1.2em]">
+              {text || '\u00a0'}
             </div>
           );
         }
-        // Línea con acordes → cada segmento: acorde arriba + letra abajo
+
+        // Separar comentario inline del resto de la línea
+        const { visible, comment } = extractInlineComment(rawLine);
+        const segments = parseChordLine(visible);
+        const hasChords = segments.some(s => s.chord);
+
         return (
-          <div key={li} className="flex flex-wrap items-end mb-1">
-            {segments.map((seg, si) => (
-              <span key={si} className="inline-flex flex-col" style={{ marginRight: seg.text ? '0' : '6px' }}>
-                <span style={{ color: chordsColor }} className="font-bold leading-none text-[0.82em]">
-                  {seg.chord ?? ''}
-                </span>
-                <span className="leading-snug">{seg.text || (seg.chord ? '\u00a0' : '')}</span>
-              </span>
-            ))}
+          <div key={li} className="flex flex-col">
+            {/* Comentario inline: aparece encima de los acordes, en cursiva */}
+            {comment && (
+              <div className="italic text-white/40 leading-none text-[0.8em] mb-0.5">
+                {comment}
+              </div>
+            )}
+
+            {hasChords ? (
+              <div className="flex flex-wrap items-end mb-1">
+                {segments.map((seg, si) => {
+                  // Ancho mínimo por acorde para evitar solapamiento
+                  const minW = seg.chord
+                    ? `${Math.max(seg.chord.length * 0.68 + 0.6, 2)}ch`
+                    : undefined;
+                  return (
+                    <span key={si} className="inline-flex flex-col" style={{ minWidth: minW }}>
+                      <span style={{ color: chordsColor }} className="font-bold leading-none text-[0.82em]">
+                        {seg.chord ?? ''}
+                      </span>
+                      <span className="leading-snug">{seg.text || (seg.chord ? '\u00a0' : '')}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
+                {segments.map(s => s.text).join('')}
+              </div>
+            )}
           </div>
         );
       })}
