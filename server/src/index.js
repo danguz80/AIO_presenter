@@ -256,9 +256,21 @@ io.use((socket, next) => {
   if (token) {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
-      socket.orgId  = decoded.orgId;
       socket.userId = decoded.userId;
-      return next();
+      // Si el JWT lleva orgId válido y coincide con el usuario en DB, usarlo directamente
+      // Si no (ej. JWT emitido antes de asignar org), consultar DB para obtener el org real
+      if (decoded.orgId) {
+        socket.orgId = decoded.orgId;
+        return next();
+      }
+      // JWT sin orgId → buscar en DB
+      pool.query('SELECT organization_id FROM sync_users WHERE id = $1', [decoded.userId])
+        .then(({ rows }) => {
+          socket.orgId = rows[0]?.organization_id ?? null;
+          return next();
+        })
+        .catch(() => next(new Error('Error verificando organización')));
+      return;
     } catch {
       // token inválido — intentar con fallbackOrgId
     }

@@ -944,9 +944,9 @@ router.post('/invitations', async (req, res) => {
       ? new Date(Date.now() + expires_in_days * 86400000)
       : null;
     const { rows: [inv] } = await pool.query(
-      `INSERT INTO sync_invitations (code, label, email, can_push, can_push_all, created_by, expires_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, code, label, email, can_push, can_push_all, expires_at, created_at`,
-      [code, label || null, email || null, can_push, can_push_all, req.user.userId, expiresAt]
+      `INSERT INTO sync_invitations (code, label, email, can_push, can_push_all, created_by, expires_at, organization_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, code, label, email, can_push, can_push_all, expires_at, created_at`,
+      [code, label || null, email || null, can_push, can_push_all, req.user.userId, expiresAt, req.user.orgId]
     );
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     const link = `${clientUrl}/?invite=${inv.code}`;
