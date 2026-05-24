@@ -104,7 +104,7 @@ export default function CancioneroEvents() {
                         {new Date(toDateStr(ev.date) + 'T12:00:00').toLocaleDateString('es', { month: 'short' })}
                       </span>
                       <span className={`text-xl font-extrabold leading-none ${isToday ? 'text-yellow-200' : 'text-white'}`}>
-                        {new Date(ev.date + 'T00:00:00').getDate()}
+                        {new Date(toDateStr(ev.date) + 'T12:00:00').getDate()}
                       </span>
                     </div>
 
