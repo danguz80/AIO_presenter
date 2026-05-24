@@ -272,6 +272,7 @@ export default function LivePreview() {
                 transform:       `scale(${scale})`,
                 transformOrigin: 'top left',
                 pointerEvents:   'none',
+                backgroundColor: 'black',
               }}>
               <VirtualRenderer
                 vc={virtualConfig}
@@ -282,12 +283,6 @@ export default function LivePreview() {
             </div>
             );
           })()}
-          {/* Indicador de transparente cuando no hay contenido */}
-          {virtualConfig.background?.type === 'transparent' && !live && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-zinc-500 text-[8px]">Transparente</span>
-            </div>
-          )}
         </div>
       </PreviewBox>
 
