@@ -47,28 +47,27 @@ function renderContent(content, showChords, chordsColor) {
         return (
           <div key={li} className="flex flex-col">
             {hasChords ? (
-              <div className="flex flex-wrap items-end mb-1">
-                {segments.map((seg, si) => {
-                  // minWidth basado en largo del acorde (em es más fiable que ch en fuentes proporcionales)
-                  const minW = seg.chord
-                    ? `${Math.max(seg.chord.length * 0.62 + 1.0, 2.2)}em`
-                    : undefined;
-                  return (
-                    <span key={si} className="inline-flex flex-col" style={{ minWidth: minW, paddingRight: seg.chord ? '0.45em' : undefined }}>
-                      <span style={{ color: chordsColor }} className="font-bold leading-none text-[0.82em]">
-                        {seg.chord ?? ''}
+              <div className="flex flex-col mb-0.5">
+                {/* Fila 1: solo acordes, con minWidth para que no se solapen */}
+                <div className="flex flex-wrap leading-none mb-0.5">
+                  {segments.map((seg, si) => {
+                    const minW = seg.chord
+                      ? `${Math.max(seg.chord.length * 0.62 + 1.0, 2.2)}em`
+                      : `${(seg.text?.length ?? 0) * 0.55}em`;
+                    return (
+                      <span key={si} style={{ minWidth: minW }} className="font-bold text-[0.82em]">
+                        <span style={{ color: chordsColor }}>{seg.chord ?? ''}</span>
                       </span>
-                      <span className="leading-snug">{seg.text || (seg.chord ? '\u00a0' : '')}</span>
-                    </span>
-                  );
-                })}
-                {/* Comentario inline: al final del row, a la altura de los acordes */}
-                {comment && (
-                  <span className="inline-flex flex-col ml-2">
-                    <span className="italic text-white/40 font-normal leading-none text-[0.82em]">{comment}</span>
-                    <span className="leading-snug">&nbsp;</span>
-                  </span>
-                )}
+                    );
+                  })}
+                  {comment && (
+                    <span className="italic text-white/40 font-normal text-[0.82em] ml-2">{comment}</span>
+                  )}
+                </div>
+                {/* Fila 2: letra corrida, sin restricciones de ancho de acordes */}
+                <div className="leading-relaxed whitespace-pre-wrap">
+                  {segments.map(s => s.text).join('')}
+                </div>
               </div>
             ) : (
               <div className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
