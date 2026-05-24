@@ -12,6 +12,11 @@ import StagePage            from './pages/StagePage';
 import VirtualPage          from './pages/VirtualPage';
 import MobileControllerPage from './pages/MobileControllerPage';
 import CalendarPage         from './pages/CalendarPage';
+import OrgSelectPage           from './pages/cancionero/OrgSelectPage';
+import CancioneroDashboard     from './pages/cancionero/CancioneroDashboard';
+import CancioneroSongs         from './pages/cancionero/CancioneroSongs';
+import CancioneroSongDetail    from './pages/cancionero/CancioneroSongDetail';
+import CancioneroEvents        from './pages/cancionero/CancioneroEvents';
 
 // Intercepta sync_token / sync_error de la URL (redirect post-OAuth) y redirige a /app
 function OAuthCallbackHandler() {
@@ -128,6 +133,12 @@ export default function App() {
         <Route path="/app"      element={<RequireAuth><ControllerPage /></RequireAuth>} />
         <Route path="/mobile"   element={<RequireAuth><MobileControllerPage /></RequireAuth>} />
         <Route path="/calendar" element={<RequireAuth><CalendarPage /></RequireAuth>} />
+        {/* Cancionero — requiere autenticación */}
+        <Route path="/cancionero/select-org"         element={<RequireAuth><OrgSelectPage /></RequireAuth>} />
+        <Route path="/cancionero"                    element={<RequireAuth><CancioneroDashboard /></RequireAuth>} />
+        <Route path="/cancionero/canciones"          element={<RequireAuth><CancioneroSongs /></RequireAuth>} />
+        <Route path="/cancionero/canciones/:id"      element={<RequireAuth><CancioneroSongDetail /></RequireAuth>} />
+        <Route path="/cancionero/eventos"            element={<RequireAuth><CancioneroEvents /></RequireAuth>} />
         {/* Páginas de display — abiertas en pantallas secundarias, sin auth */}
         <Route path="/output"  element={<OutputPage />} />
         <Route path="/stage"   element={<StagePage />} />
