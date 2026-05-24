@@ -37,13 +37,6 @@ function renderContent(content, showChords, chordsColor) {
 
         return (
           <div key={li} className="flex flex-col">
-            {/* Comentario inline: aparece encima de los acordes, en cursiva */}
-            {comment && (
-              <div className="italic text-white/40 leading-none text-[0.8em] mb-0.5">
-                {comment}
-              </div>
-            )}
-
             {hasChords ? (
               <div className="flex flex-wrap items-end mb-1">
                 {segments.map((seg, si) => {
@@ -60,10 +53,18 @@ function renderContent(content, showChords, chordsColor) {
                     </span>
                   );
                 })}
+                {/* Comentario inline: al final del row, a la altura de los acordes */}
+                {comment && (
+                  <span className="inline-flex flex-col ml-2">
+                    <span className="italic text-white/40 font-normal leading-none text-[0.82em]">{comment}</span>
+                    <span className="leading-snug">&nbsp;</span>
+                  </span>
+                )}
               </div>
             ) : (
               <div className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
                 {segments.map(s => s.text).join('')}
+                {comment && <span className="italic text-white/40 text-[0.85em] ml-2">{comment}</span>}
               </div>
             )}
           </div>
