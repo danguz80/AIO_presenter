@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 // Ícono de Google
 function GoogleIcon() {
@@ -15,11 +18,14 @@ function GoogleIcon() {
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
   const handleGoogleLogin = () => {
-    // TODO: implementar Google OAuth
-    // Por ahora redirige a selección de modo como demo
-    navigate('/mode-select');
+    setLoading(true);
+    fetch(`${API}/auth/google/url`)
+      .then(r => r.json())
+      .then(({ url }) => { if (url) window.location.href = url; else setLoading(false); })
+      .catch(() => setLoading(false));
   };
 
   return (
@@ -71,10 +77,11 @@ export default function LoginPage() {
         {/* Botón Google */}
         <button
           onClick={handleGoogleLogin}
-          className="w-full flex items-center justify-center gap-3 px-5 py-3.5 bg-white hover:bg-gray-50 text-gray-800 font-semibold rounded-xl text-sm transition-all shadow-lg active:scale-[0.98]"
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 px-5 py-3.5 bg-white hover:bg-gray-50 text-gray-800 font-semibold rounded-xl text-sm transition-all shadow-lg active:scale-[0.98] disabled:opacity-60"
         >
           <GoogleIcon />
-          Continuar con Google
+          {loading ? 'Redirigiendo…' : 'Continuar con Google'}
         </button>
 
         {/* Separador con texto */}
