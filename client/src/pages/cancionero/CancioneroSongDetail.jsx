@@ -85,8 +85,6 @@ function renderContent(content, showChords, chordsColor) {
                 </div>
               </div>
             ) : (
-              </div>
-            ) : (
               <div className="whitespace-pre-wrap leading-relaxed min-h-[1.4em]">
                 {segments.map(s => s.text).join('')}
                 {comment && <span className="italic text-white/40 text-[0.85em] ml-2">{comment}</span>}
