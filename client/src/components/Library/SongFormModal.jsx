@@ -74,6 +74,65 @@ function textToSlides(text) {
  *   onSaved(savedSong)  — se llama tras guardar exitosamente
  *   onDeleted(id)       — se llama tras borrar exitosamente
  */
+
+// Detecta la posición de inicio de la próxima sílaba en `text` a partir de `pos`.
+// Reglas simplificadas de silabificación española:
+//   - Un consonante entre vocales va con la sílaba siguiente
+//   - Dos o más consonantes: el último (o los dos en grupos inseparables) van con la siguiente
+//   - Grupos inseparables: bl br cl cr dr fl fr gl gr pl pr tr
+//   - Los marcadores [acorde] y {sección} se saltan automáticamente
+function findNextSyllablePos(text, pos) {
+  const VOWELS = 'aeiouáéíóúüAEIOUÁÉÍÓÚÜ';
+  const INSEP  = new Set(['bl','br','cl','cr','dr','fl','fr','gl','gr','pl','pr','tr']);
+  const isVowel = (c) => c !== undefined && VOWELS.includes(c);
+  const isAlpha = (c) => c !== undefined && /[a-záéíóúüA-ZÁÉÍÓÚÜñÑ']/.test(c);
+
+  // Salta marcadores [Acorde] o {Sección} desde la posición i
+  const skipMarkers = (i) => {
+    while (i < text.length && (text[i] === '[' || text[i] === '{')) {
+      const close = text[i] === '[' ? ']' : '}';
+      while (i < text.length && text[i] !== close && text[i] !== '\n') i++;
+      if (i < text.length && text[i] === close) i++;
+    }
+    return i;
+  };
+
+  let i = skipMarkers(pos);
+  const n = text.length;
+
+  if (i >= n) return n;
+
+  // 1. Si estamos en una vocal, saltar el grupo de vocales (diptongos incluidos)
+  if (isVowel(text[i])) {
+    while (i < n && isVowel(text[i])) i++;
+    i = skipMarkers(i);
+  }
+
+  // 2. Si después de la vocal hay espacio/salto de línea → siguiente palabra
+  if (i >= n || text[i] === ' ' || text[i] === '\n' || text[i] === '\t') {
+    while (i < n && (text[i] === ' ' || text[i] === '\n' || text[i] === '\t')) i++;
+    return skipMarkers(i);
+  }
+
+  // 3. Estamos en consonantes: contar hasta la siguiente vocal
+  const cStart = i;
+  while (i < n && isAlpha(text[i]) && !isVowel(text[i])) i++;
+  i = skipMarkers(i);
+
+  if (i >= n || !isAlpha(text[i])) {
+    // Fin de texto o fin de palabra sin vocal siguiente
+    while (i < n && (text[i] === ' ' || text[i] === '\n' || text[i] === '\t')) i++;
+    return skipMarkers(i);
+  }
+
+  // 4. text[i] es una vocal → determinar inicio de sílaba según reglas españolas
+  const cCount = i - cStart;
+  if (cCount <= 1) return cStart;            // consonante única → va con esta sílaba
+  const lastTwo = text.slice(i - 2, i).toLowerCase();
+  if (INSEP.has(lastTwo)) return i - 2;      // grupo inseparable → ambas van juntas
+  return i - 1;                              // resto: último consonante va con la sílaba
+}
+
 export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const presenter = usePresenterOptional(); // null fuera del PresenterProvider
   const isEdit = Boolean(song?.id);
@@ -390,6 +449,16 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 onChange={e => setBody(e.target.value)}
                 onBlur={() => { savedCursorPos.current = textareaRef.current?.selectionStart ?? null; }}
                 onSelect={() => { savedCursorPos.current = textareaRef.current?.selectionStart ?? null; }}
+                onKeyDown={e => {
+                  if (e.key !== 'Tab') return;
+                  e.preventDefault();
+                  const ta = textareaRef.current;
+                  if (!ta) return;
+                  const pos = ta.selectionStart;
+                  const next = findNextSyllablePos(body, pos);
+                  savedCursorPos.current = next;
+                  ta.setSelectionRange(next, next);
+                }}
                 placeholder={`{Verso 1}\nPrimera línea del verso\nSegunda línea\n\n{Coro}\nLetra del coro`}
                 spellCheck={false}
               />

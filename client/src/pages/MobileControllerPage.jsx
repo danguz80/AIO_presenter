@@ -12,7 +12,7 @@ import { stripChords, stripComments, isCommentLine, extractInlineComment, buildS
 import { getLabelColor } from '../utils/labelColors';
 import {
   ChevronLeft, ChevronRight, EyeOff, Eye,
-  Wifi, WifiOff, Music, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
+  Wifi, WifiOff, Music, Music2, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
   CalendarDays, BookOpen, Clock,
   Pencil, Trash2, Plus, Check, ChevronUp, ChevronDown, LayoutTemplate, SkipForward, Minus,
   CheckCircle2, Circle, MonitorPlay,
@@ -632,6 +632,14 @@ export default function MobileControllerPage() {
                 <MonitorPlay size={14} />
                 <span className="hidden xs:inline">Pantalla</span>
               </Link>
+              <button
+                onClick={() => navigate('/cancionero')}
+                title="Ir al Modo Cancionero"
+                className="flex items-center gap-1 text-zinc-400 text-xs mr-1 hover:text-yellow-400 transition-colors"
+              >
+                <Music2 size={14} />
+                <span className="hidden xs:inline">Cancionero</span>
+              </button>
               {connected
                 ? <><Wifi size={13} className="text-green-400" /><span className="text-green-400">Conectado</span></>
                 : <><WifiOff size={13} className="text-red-400" /><span className="text-red-400">Sin conexión</span></>
