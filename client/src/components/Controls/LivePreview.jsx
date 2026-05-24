@@ -14,27 +14,31 @@ export default function LivePreview() {
   const outputCfg    = state.outputConfig  ?? {};
   const displayCfg   = state.displayConfig ?? {};
 
-  // Medir el contenedor del preview Principal para canvas escalado
+  // Medir el contenedor del preview Principal para canvas escalado (ancho + alto)
   const principalRef = useRef(null);
   const [principalW, setPrincipalW] = useState(0);
+  const [principalH, setPrincipalH] = useState(0);
   useEffect(() => {
     if (!principalRef.current) return;
     const ro = new ResizeObserver(entries => {
-      const w = entries[0].contentRect.width;
+      const { width: w, height: h } = entries[0].contentRect;
       if (w > 0) setPrincipalW(w);
+      if (h > 0) setPrincipalH(h);
     });
     ro.observe(principalRef.current);
     return () => ro.disconnect();
   }, []);
 
-  // Medir el contenedor del preview Stream para el canvas escalado
+  // Medir el contenedor del preview Stream para el canvas escalado (ancho + alto)
   const streamRef = useRef(null);
   const [streamW, setStreamW] = useState(0);
+  const [streamH, setStreamH] = useState(0);
   useEffect(() => {
     if (!streamRef.current) return;
     const ro = new ResizeObserver(entries => {
-      const w = entries[0].contentRect.width;
+      const { width: w, height: h } = entries[0].contentRect;
       if (w > 0) setStreamW(w);
+      if (h > 0) setStreamH(h);
     });
     ro.observe(streamRef.current);
     return () => ro.disconnect();
@@ -197,22 +201,21 @@ export default function LivePreview() {
         live={live}
         onClick={() => openWindow('/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution)}
       >
-        {/* Canvas escalado: mismo render que /output, reducido proporcionalmente */}
+        {/* Canvas escalado: object-fit:contain — escala para caber en ancho Y alto */}
         <div
           ref={principalRef}
-          className="w-full relative overflow-hidden"
-          style={{
-            aspectRatio: `${displayCfg.principalResolution?.width ?? 1920} / ${displayCfg.principalResolution?.height ?? 1080}`,
-          }}
+          className="w-full h-full relative overflow-hidden"
         >
-          {principalW > 0 && (() => {
-            const res = displayCfg.principalResolution ?? { width: 1920, height: 1080 };
-            const scale = principalW / res.width;
+          {principalW > 0 && principalH > 0 && (() => {
+            const res   = displayCfg.principalResolution ?? { width: 1920, height: 1080 };
+            const scale = Math.min(principalW / res.width, principalH / res.height);
+            const left  = (principalW - res.width  * scale) / 2;
+            const top   = (principalH - res.height * scale) / 2;
             return (
               <div style={{
                 position:        'absolute',
-                top:             0,
-                left:            0,
+                top:             `${top}px`,
+                left:            `${left}px`,
                 width:           `${res.width}px`,
                 height:          `${res.height}px`,
                 transform:       `scale(${scale})`,
@@ -263,36 +266,35 @@ export default function LivePreview() {
         live={live}
         onClick={() => openWindow('/virtual', null, 'aio-virtual', displayCfg.virtualResolution)}
       >
-        {/* Canvas escalado: mismo render que /virtual, pero reducido proporcionalmente */}
+        {/* Canvas escalado: object-fit:contain — escala para caber en ancho Y alto */}
         <div
           ref={streamRef}
-          className="w-full relative overflow-hidden"
-          style={{
-            aspectRatio: `${displayCfg.virtualResolution?.width ?? 1920} / ${displayCfg.virtualResolution?.height ?? 1080}`,
-          }}
+          className="w-full h-full relative overflow-hidden"
+          style={{ backgroundColor: 'black' }}
         >
-          {streamW > 0 && (() => {
-            const res = displayCfg.virtualResolution ?? { width: 1920, height: 1080 };
-            const scale = streamW / res.width;
+          {streamW > 0 && streamH > 0 && (() => {
+            const res   = displayCfg.virtualResolution ?? { width: 1920, height: 1080 };
+            const scale = Math.min(streamW / res.width, streamH / res.height);
+            const left  = (streamW - res.width  * scale) / 2;
+            const top   = (streamH - res.height * scale) / 2;
             return (
               <div style={{
                 position:        'absolute',
-                top:             0,
-                left:            0,
+                top:             `${top}px`,
+                left:            `${left}px`,
                 width:           `${res.width}px`,
                 height:          `${res.height}px`,
                 transform:       `scale(${scale})`,
                 transformOrigin: 'top left',
                 pointerEvents:   'none',
-                backgroundColor: 'black',
               }}>
-              <VirtualRenderer
-                vc={virtualConfig}
-                slideData={liveState.slideData}
-                isBlank={liveState.isBlank}
-                backgroundMedia={liveState.backgroundMedia}
-              />
-            </div>
+                <VirtualRenderer
+                  vc={virtualConfig}
+                  slideData={liveState.slideData}
+                  isBlank={liveState.isBlank}
+                  backgroundMedia={liveState.backgroundMedia}
+                />
+              </div>
             );
           })()}
         </div>
