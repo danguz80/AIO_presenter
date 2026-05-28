@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, Loader2, Pencil
+  ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Pencil
 } from 'lucide-react';
 import { stripChords, parseChordLine, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import SongFormModal from '../../components/Library/SongFormModal';
@@ -104,6 +104,23 @@ function sectionColor() { return SECTION_COLOR; }
 export default function CancioneroSongDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Contexto de evento: lista de canciones para navegar prev/next
+  const songList   = location.state?.songList   ?? null; // [{id, title}, ...]
+  const eventTitle = location.state?.eventTitle ?? null;
+  const currentIdx = songList ? songList.findIndex(s => String(s.id) === String(id)) : -1;
+  const prevSong   = songList && currentIdx > 0                   ? songList[currentIdx - 1] : null;
+  const nextSong   = songList && currentIdx < songList.length - 1 ? songList[currentIdx + 1] : null;
+
+  const goTo = (song) => {
+    if (!song) return;
+    setScrolling(false);
+    navigate(`/cancionero/canciones/${song.id}`, {
+      state: { songList, eventTitle },
+      replace: false,
+    });
+  };
 
   const [song, setSong]       = useState(null);
   const [slides, setSlides]   = useState([]);
@@ -133,19 +150,31 @@ export default function CancioneroSongDetail() {
   // Mantener el ref sincronizado sin tocar el loop
   useEffect(() => { scrollSpeedRef.current = scrollSpeed; }, [scrollSpeed]);
 
-  // Barra espaciadora → toggle scroll (solo cuando el modal de edición está cerrado)
+  // Barra espaciadora → toggle scroll; flechas → prev/next canción (solo con lista de evento)
   useEffect(() => {
     const onKey = (e) => {
-      if (editOpen) return;                      // no interferir con el modal
+      if (editOpen) return;
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if (e.code === 'Space') {
-        e.preventDefault();
-        setScrolling(v => !v);
-      }
+      if (e.code === 'Space') { e.preventDefault(); setScrolling(v => !v); }
+      if (e.code === 'ArrowLeft')  { e.preventDefault(); goTo(prevSong); }
+      if (e.code === 'ArrowRight') { e.preventDefault(); goTo(nextSong); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editOpen]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editOpen, prevSong, nextSong]);
+
+  // Swipe horizontal → prev/next canción
+  const touchStartX = useRef(null);
+  const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
+  const onTouchEnd   = (e) => {
+    if (touchStartX.current === null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    touchStartX.current = null;
+    if (Math.abs(dx) < 60) return;   // umbral mínimo 60px
+    if (dx > 0) goTo(prevSong);      // deslizar derecha → canción anterior
+    else        goTo(nextSong);      // deslizar izquierda → canción siguiente
+  };
 
   useEffect(() => {
     fetch(`${API}/api/songs/${id}`, { headers: authHeaders() })
@@ -216,17 +245,52 @@ export default function CancioneroSongDetail() {
   }
 
   return (
-    <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
+    <div
+      className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+    >
       {/* ── Header ─────────────────────────────────────────────────── */}
       <header className="flex-shrink-0 bg-[#0f1a2e]/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-3 mb-2">
-          <button onClick={() => navigate('/cancionero/canciones')} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+          <button
+            onClick={() => navigate(eventTitle ? -1 : '/cancionero/canciones')}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+          >
             <ArrowLeft size={20} className="text-white/70" />
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold truncate">{song?.title ?? '—'}</h1>
-            {song?.author && <p className="text-xs text-white/40 truncate">{song.author}</p>}
+            {/* Breadcrumb: muestra el evento si venimos de ahí, si no el autor */}
+            {eventTitle
+              ? <p className="text-xs text-yellow-400/60 truncate">{eventTitle}</p>
+              : song?.author && <p className="text-xs text-white/40 truncate">{song.author}</p>
+            }
           </div>
+          {/* Prev / next dentro del evento */}
+          {songList && (
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => goTo(prevSong)}
+                disabled={!prevSong}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-20"
+                title={prevSong?.title ?? ''}
+              >
+                <ChevronLeft size={18} className="text-white/70" />
+              </button>
+              <span className="text-xs text-white/30 tabular-nums w-10 text-center">
+                {currentIdx + 1}/{songList.length}
+              </span>
+              <button
+                onClick={() => goTo(nextSong)}
+                disabled={!nextSong}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-20"
+                title={nextSong?.title ?? ''}
+              >
+                <ChevronRight size={18} className="text-white/70" />
+              </button>
+            </div>
+          )}
           <button
             onClick={() => setEditOpen(true)}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"

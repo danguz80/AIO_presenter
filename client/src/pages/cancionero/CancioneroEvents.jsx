@@ -161,7 +161,16 @@ export default function CancioneroEvents() {
                 return (
                   <li key={item.id ?? idx}>
                     <button
-                      onClick={() => item.song_id && navigate(`/cancionero/canciones/${item.song_id}`)}
+                      onClick={() => {
+                        if (!item.song_id) return;
+                        // Pasar la lista de canciones del evento para navegación prev/next
+                        const songList = items
+                          .filter(i => i.item_type !== 'separator' && i.song_id)
+                          .map(i => ({ id: i.song_id, title: i.title ?? '' }));
+                        navigate(`/cancionero/canciones/${item.song_id}`, {
+                          state: { songList, eventTitle: ev.title },
+                        });
+                      }}
                       className="group w-full flex items-center gap-2.5 py-1.5 text-left hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"
                     >
                       <Music2 size={13} className="text-yellow-400/60 flex-shrink-0" />
