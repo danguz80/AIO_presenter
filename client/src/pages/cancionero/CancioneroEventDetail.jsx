@@ -30,9 +30,15 @@ function EventEditModal({ event, onClose, onSaved }) {
   const [recurEnd,    setRecurEnd]    = useState(event?.recur_end ? String(event.recur_end).slice(0, 10) : '');
   const [playlist,    setPlaylist]    = useState(
     (event?.songs ?? [])
-      .filter(s => s.item_type !== 'separator' && s.song_id)
       .sort((a, b) => a.position - b.position)
-      .map(s => ({ song_id: s.song_id, title: s.title, author: s.author }))
+      .map(s => ({
+        song_id:         s.song_id         || null,
+        item_type:       s.item_type       || 'song',
+        title:           s.title           || null,
+        author:          s.author          || null,
+        separator_label: s.separator_label || null,
+        separator_color: s.separator_color || null,
+      }))
   );
   const [allSongs,         setAllSongs]         = useState([]);
   const [songSearch,       setSongSearch]       = useState('');
@@ -69,12 +75,12 @@ function EventEditModal({ event, onClose, onSaved }) {
 
   const addSong = (song) => {
     if (playlist.find(p => p.song_id === song.id)) return;
-    setPlaylist(prev => [...prev, { song_id: song.id, title: song.title, author: song.author }]);
+    setPlaylist(prev => [...prev, { song_id: song.id, item_type: 'song', title: song.title, author: song.author, separator_label: null, separator_color: null }]);
     setSongSearch('');
     searchRef.current?.focus();
   };
-  const removeSong = (song_id) => setPlaylist(prev => prev.filter(p => p.song_id !== song_id));
-  const moveSong = (idx, dir) => {
+  const removeItem = (idx) => setPlaylist(prev => prev.filter((_, i) => i !== idx));
+  const moveItem = (idx, dir) => {
     const arr = [...playlist];
     const ni = idx + dir;
     if (ni < 0 || ni >= arr.length) return;
@@ -93,7 +99,13 @@ function EventEditModal({ event, onClose, onSaved }) {
       is_recurring: isRecurring,
       recurrence:   isRecurring ? recurrence : null,
       recur_end:    isRecurring && recurEnd ? recurEnd : null,
-      songs: playlist.map((p, i) => ({ song_id: p.song_id, position: i })),
+      songs: playlist.map((p, i) => ({
+        song_id:         p.song_id         || null,
+        item_type:       p.item_type       || 'song',
+        separator_label: p.separator_label || null,
+        separator_color: p.separator_color || null,
+        position: i,
+      })),
     };
     try {
       const res = await fetch(`${API}/api/events/${event.id}`, {
@@ -245,32 +257,38 @@ function EventEditModal({ event, onClose, onSaved }) {
                 ) : (
                   <div className="divide-y divide-surface-600/50">
                     {templates.map(tpl => {
-                      const tplSongs = (tpl.items || []).filter(it => it.song_id);
+                      const tplItems = (tpl.items || []).map(it => ({
+                        song_id:         it.song_id         || null,
+                        item_type:       it.item_type       || 'song',
+                        title:           it.title           || null,
+                        author:          it.author          || null,
+                        separator_label: it.separator_label || null,
+                        separator_color: it.separator_color || null,
+                      }));
+                      const songCount = tplItems.filter(it => it.song_id).length;
                       return (
                         <div key={tpl.id} className="flex items-center gap-2 px-3 py-2.5">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-zinc-200 truncate">{tpl.name}</p>
-                            <p className="text-xs text-zinc-500">{tplSongs.length} canción{tplSongs.length !== 1 ? 'es' : ''}</p>
+                            <p className="text-xs text-zinc-500">{tplItems.length} ít.{songCount ? ` · ${songCount} canciones` : ''}</p>
                           </div>
                           <button
                             onClick={() => {
                               setPlaylist(prev => [
                                 ...prev,
-                                ...tplSongs
-                                  .filter(it => !prev.find(p => p.song_id === it.song_id))
-                                  .map(it => ({ song_id: it.song_id, title: it.title, author: it.author }))
+                                ...tplItems.filter(it => !it.song_id || !prev.find(p => p.song_id === it.song_id))
                               ]);
                               setTemplatePicker(false);
-                              setLoadedTplMsg(`Plantilla "${tpl.name}" agregada`);
+                              setLoadedTplMsg(`Plantilla “${tpl.name}” agregada (${tplItems.length} ít.)`);
                               setTimeout(() => setLoadedTplMsg(''), 3000);
                             }}
                             className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-surface-600 transition-colors shrink-0"
                           >+ Agregar</button>
                           <button
                             onClick={() => {
-                              setPlaylist(tplSongs.map(it => ({ song_id: it.song_id, title: it.title, author: it.author })));
+                              setPlaylist(tplItems);
                               setTemplatePicker(false);
-                              setLoadedTplMsg(`Plantilla "${tpl.name}" cargada`);
+                              setLoadedTplMsg(`Plantilla “${tpl.name}” cargada (${tplItems.length} ít.)`);
                               setTimeout(() => setLoadedTplMsg(''), 3000);
                             }}
                             className="text-xs text-accent font-semibold px-2 py-1 rounded-lg hover:bg-accent/10 transition-colors shrink-0"
@@ -309,16 +327,28 @@ function EventEditModal({ event, onClose, onSaved }) {
             {playlist.length > 0 && (
               <div className="flex flex-col gap-1">
                 {playlist.map((item, i) => (
-                  <div key={item.song_id} className="flex items-center gap-2 bg-surface-700 rounded-lg px-2 py-1.5 group">
-                    <span className="text-zinc-500 text-xs w-5 text-center shrink-0">{i + 1}</span>
-                    <Music size={12} className="text-accent shrink-0" />
-                    <span className="text-sm flex-1 truncate">{item.title}</span>
-                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => moveSong(i, -1)} disabled={i === 0} className="text-zinc-500 hover:text-white disabled:opacity-20 p-0.5 text-xs">▲</button>
-                      <button onClick={() => moveSong(i, 1)} disabled={i === playlist.length - 1} className="text-zinc-500 hover:text-white disabled:opacity-20 p-0.5 text-xs">▼</button>
-                      <button onClick={() => removeSong(item.song_id)} className="text-zinc-500 hover:text-red-400 p-0.5 ml-0.5"><X size={13} /></button>
+                  item.item_type === 'separator' ? (
+                    <div key={i} className="flex items-center gap-2 bg-surface-700/60 rounded-lg px-2 py-1.5 group border-l-2" style={{ borderColor: item.separator_color || '#6366f1' }}>
+                      <span className="text-zinc-500 text-xs w-5 text-center shrink-0">—</span>
+                      <span className="text-xs italic flex-1 truncate" style={{ color: item.separator_color || '#a5b4fc' }}>{item.separator_label || 'Separador'}</span>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => moveItem(i, -1)} disabled={i === 0} className="text-zinc-500 hover:text-white disabled:opacity-20 p-0.5 text-xs">▲</button>
+                        <button onClick={() => moveItem(i, 1)} disabled={i === playlist.length - 1} className="text-zinc-500 hover:text-white disabled:opacity-20 p-0.5 text-xs">▼</button>
+                        <button onClick={() => removeItem(i)} className="text-zinc-500 hover:text-red-400 p-0.5 ml-0.5"><X size={13} /></button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div key={i} className="flex items-center gap-2 bg-surface-700 rounded-lg px-2 py-1.5 group">
+                      <span className="text-zinc-500 text-xs w-5 text-center shrink-0">{i + 1}</span>
+                      <Music size={12} className="text-accent shrink-0" />
+                      <span className="text-sm flex-1 truncate">{item.title}</span>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => moveItem(i, -1)} disabled={i === 0} className="text-zinc-500 hover:text-white disabled:opacity-20 p-0.5 text-xs">▲</button>
+                        <button onClick={() => moveItem(i, 1)} disabled={i === playlist.length - 1} className="text-zinc-500 hover:text-white disabled:opacity-20 p-0.5 text-xs">▼</button>
+                        <button onClick={() => removeItem(i)} className="text-zinc-500 hover:text-red-400 p-0.5 ml-0.5"><X size={13} /></button>
+                      </div>
+                    </div>
+                  )
                 ))}
               </div>
             )}
