@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, User, Users, Calendar,
+  ArrowLeft, User, Users, Calendar, Building2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Check, Plus, Trash2, Save, Loader2, Lock, X,
+  Check, Plus, Trash2, Save, Loader2, Lock, X, CheckCircle2,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -457,6 +457,71 @@ function CalendarSection({ myUserId }) {
   );
 }
 
+// ─── Organización ────────────────────────────────────────────────────────────
+function OrgSection({ orgs, onSwitch }) {
+  const currentOrgId = Number(localStorage.getItem('aio_org_id'));
+  const [switching, setSwitching] = useState(null);
+  const navigate = useNavigate();
+
+  const selectOrg = async (org) => {
+    if (switching || org.id === currentOrgId) return;
+    setSwitching(org.id);
+    try {
+      const res = await fetch(`${API}/auth/switch-org/${org.id}`, {
+        method: 'POST',
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error();
+      const { token: newToken } = await res.json();
+      localStorage.setItem('aio_sync_token', newToken);
+      localStorage.setItem('aio_org_id', String(org.id));
+      onSwitch?.();
+      navigate('/cancionero', { replace: true });
+    } catch {
+      setSwitching(null);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      {orgs.map(org => {
+        const isActive  = org.id === currentOrgId;
+        const isLoading = switching === org.id;
+        return (
+          <button
+            key={org.id}
+            onClick={() => selectOrg(org)}
+            disabled={isActive || !!switching}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
+              isActive
+                ? 'bg-yellow-500/15 border-yellow-400/40 cursor-default'
+                : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
+            }`}
+          >
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+              isActive ? 'bg-yellow-500/20' : 'bg-white/10'
+            }`}>
+              {isLoading
+                ? <Loader2 size={16} className="animate-spin text-yellow-300" />
+                : <Building2 size={16} className={isActive ? 'text-yellow-300' : 'text-white/40'} />
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className={`text-sm font-semibold truncate ${isActive ? 'text-yellow-200' : 'text-white/80'}`}>
+                {org.name}
+              </p>
+              {isActive && (
+                <p className="text-[10px] text-yellow-400/60 font-medium">Organización actual</p>
+              )}
+            </div>
+            {isActive && <CheckCircle2 size={16} className="text-yellow-400 flex-shrink-0" />}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Tarjeta acordeón ─────────────────────────────────────────────────────────
 function SectionCard({ icon: Icon, title, subtitle, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -493,15 +558,18 @@ export default function CancioneroSettings() {
   const navigate = useNavigate();
   const [user, setUser]       = useState(null);
   const [members, setMembers] = useState([]);
+  const [orgs, setOrgs]       = useState([]);
 
   useEffect(() => {
     const h = authHeaders();
     Promise.all([
       fetch(`${API}/auth/me`,          { headers: h }).then(r => r.json()),
       fetch(`${API}/auth/org/members`, { headers: h }).then(r => r.json()),
-    ]).then(([u, m]) => {
+      fetch(`${API}/auth/my-orgs`,     { headers: h }).then(r => r.json()),
+    ]).then(([u, m, o]) => {
       if (u?.id) setUser(u);
       setMembers(Array.isArray(m) ? m : []);
+      setOrgs(Array.isArray(o) ? o : []);
     }).catch(() => {});
   }, []);
 
@@ -544,6 +612,16 @@ export default function CancioneroSettings() {
         >
           <CalendarSection myUserId={user?.id} />
         </SectionCard>
+
+        {orgs.length > 1 && (
+          <SectionCard
+            icon={Building2}
+            title="Organización"
+            subtitle={orgs.find(o => o.id === Number(localStorage.getItem('aio_org_id')))?.name || 'Cambiar organización'}
+          >
+            <OrgSection orgs={orgs} />
+          </SectionCard>
+        )}
       </div>
 
       <CancioneroNavbar />
