@@ -39,15 +39,17 @@ function EventEditModal({ event, onClose, onSaved }) {
   const [saving,           setSaving]           = useState(false);
   const [templates,        setTemplates]        = useState([]);
   const [templatePicker,   setTemplatePicker]   = useState(false);
+  const [loadedTplMsg,     setLoadedTplMsg]     = useState('');
   const searchRef = useRef(null);
 
   const openTemplatePicker = async () => {
-    if (!templates.length) {
-      try {
-        const res = await fetch(`${API}/api/event-templates`, { headers: authHeaders() });
-        if (res.ok) setTemplates(await res.json());
-      } catch { /* noop */ }
-    }
+    try {
+      const res = await fetch(`${API}/api/event-templates`, { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setTemplates(Array.isArray(data) ? data : []);
+      }
+    } catch { /* noop */ }
     setTemplatePicker(true);
   };
 
@@ -221,6 +223,12 @@ function EventEditModal({ event, onClose, onSaved }) {
                 <LayoutTemplate size={12} /> Cargar plantilla
               </button>
             </div>
+            {/* Toast de confirmación */}
+            {loadedTplMsg && (
+              <div className="mb-2 flex items-center gap-2 px-3 py-2 rounded-lg bg-green-900/40 border border-green-600/40 text-green-300 text-xs font-medium">
+                <Check size={13} /> {loadedTplMsg}
+              </div>
+            )}
             {/* Template picker */}
             {templatePicker && (
               <div className="mb-3 bg-surface-700/60 border border-surface-600 rounded-xl overflow-hidden">
@@ -237,7 +245,7 @@ function EventEditModal({ event, onClose, onSaved }) {
                 ) : (
                   <div className="divide-y divide-surface-600/50">
                     {templates.map(tpl => {
-                      const tplSongs = (tpl.items || []).filter(it => it.item_type !== 'separator' && it.song_id);
+                      const tplSongs = (tpl.items || []).filter(it => it.song_id);
                       return (
                         <div key={tpl.id} className="flex items-center gap-2 px-3 py-2.5">
                           <div className="flex-1 min-w-0">
@@ -253,6 +261,8 @@ function EventEditModal({ event, onClose, onSaved }) {
                                   .map(it => ({ song_id: it.song_id, title: it.title, author: it.author }))
                               ]);
                               setTemplatePicker(false);
+                              setLoadedTplMsg(`Plantilla "${tpl.name}" agregada`);
+                              setTimeout(() => setLoadedTplMsg(''), 3000);
                             }}
                             className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-surface-600 transition-colors shrink-0"
                           >+ Agregar</button>
@@ -260,6 +270,8 @@ function EventEditModal({ event, onClose, onSaved }) {
                             onClick={() => {
                               setPlaylist(tplSongs.map(it => ({ song_id: it.song_id, title: it.title, author: it.author })));
                               setTemplatePicker(false);
+                              setLoadedTplMsg(`Plantilla "${tpl.name}" cargada`);
+                              setTimeout(() => setLoadedTplMsg(''), 3000);
                             }}
                             className="text-xs text-accent font-semibold px-2 py-1 rounded-lg hover:bg-accent/10 transition-colors shrink-0"
                           >Reemplazar</button>
