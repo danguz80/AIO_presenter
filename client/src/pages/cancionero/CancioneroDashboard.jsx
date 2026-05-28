@@ -288,12 +288,25 @@ export default function CancioneroDashboard() {
                       <p className="text-xs font-semibold text-white truncate">{n.title}</p>
                       <p className="text-xs text-white/40 mt-0.5 truncate">
                         {(() => {
-                          // Limpiar body viejo que pueda tener "Invalid Date"
-                          const cleanBody = n.body ? n.body.replace(/·?\s*Invalid Date/g, '').trim() : '';
-                          // Formatear fecha desde metadata (siempre YYYY-MM-DD)
-                          const dateLabel = n.metadata?.date
-                            ? new Date(n.metadata.date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' })
-                            : '';
+                          // Limpiar body de posibles restos de "Invalid Date"
+                          const cleanBody = (n.body || '').replace(/·?\s*Invalid Date/g, '').trim();
+                          // Validar que metadata.date sea YYYY-MM-DD antes de usarlo
+                          const rawDate = n.metadata?.date ?? '';
+                          const isValidFormat = /^\d{4}-\d{2}-\d{2}$/.test(rawDate);
+                          let dateLabel = '';
+                          if (isValidFormat) {
+                            const d = new Date(rawDate + 'T12:00:00');
+                            if (!isNaN(d)) {
+                              dateLabel = d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+                            }
+                          }
+                          // Fallback: usar created_at del registro
+                          if (!dateLabel && n.created_at) {
+                            const d = new Date(n.created_at);
+                            if (!isNaN(d)) {
+                              dateLabel = d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' });
+                            }
+                          }
                           if (cleanBody && dateLabel) return `${cleanBody} · ${dateLabel}`;
                           return cleanBody || dateLabel || '';
                         })()}
