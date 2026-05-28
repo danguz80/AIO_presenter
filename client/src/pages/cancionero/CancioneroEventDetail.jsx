@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, Clock, Music2, Pencil, Trash2,
-  ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus, Send, Check, Users,
+  ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus, Send, Check, Users, LayoutTemplate,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -34,10 +34,22 @@ function EventEditModal({ event, onClose, onSaved }) {
       .sort((a, b) => a.position - b.position)
       .map(s => ({ song_id: s.song_id, title: s.title, author: s.author }))
   );
-  const [allSongs,    setAllSongs]    = useState([]);
-  const [songSearch,  setSongSearch]  = useState('');
-  const [saving,      setSaving]      = useState(false);
+  const [allSongs,         setAllSongs]         = useState([]);
+  const [songSearch,       setSongSearch]       = useState('');
+  const [saving,           setSaving]           = useState(false);
+  const [templates,        setTemplates]        = useState([]);
+  const [templatePicker,   setTemplatePicker]   = useState(false);
   const searchRef = useRef(null);
+
+  const openTemplatePicker = async () => {
+    if (!templates.length) {
+      try {
+        const res = await fetch(`${API}/api/event-templates`, { headers: authHeaders() });
+        if (res.ok) setTemplates(await res.json());
+      } catch { /* noop */ }
+    }
+    setTemplatePicker(true);
+  };
 
   useEffect(() => {
     fetch(`${API}/api/songs?limit=9999`, { headers: authHeaders() })
@@ -197,10 +209,67 @@ function EventEditModal({ event, onClose, onSaved }) {
 
           {/* Playlist */}
           <div>
-            <div className="flex items-center gap-1.5 text-xs text-zinc-400 mb-2">
-              <Music size={12} />
-              <span>Lista de canciones ({playlist.length})</span>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <Music size={12} />
+                <span>Lista de canciones ({playlist.length})</span>
+              </div>
+              <button
+                onClick={openTemplatePicker}
+                className="flex items-center gap-1 text-xs text-zinc-400 hover:text-accent transition-colors px-2 py-1 rounded-lg hover:bg-surface-700"
+              >
+                <LayoutTemplate size={12} /> Cargar plantilla
+              </button>
             </div>
+            {/* Template picker */}
+            {templatePicker && (
+              <div className="mb-3 bg-surface-700/60 border border-surface-600 rounded-xl overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-surface-600">
+                  <p className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                    <LayoutTemplate size={12} /> Plantillas
+                  </p>
+                  <button onClick={() => setTemplatePicker(false)} className="text-zinc-500 hover:text-white">
+                    <X size={14} />
+                  </button>
+                </div>
+                {templates.length === 0 ? (
+                  <p className="text-center text-zinc-500 text-xs py-4">No hay plantillas guardadas</p>
+                ) : (
+                  <div className="divide-y divide-surface-600/50">
+                    {templates.map(tpl => {
+                      const tplSongs = (tpl.items || []).filter(it => it.item_type !== 'separator' && it.song_id);
+                      return (
+                        <div key={tpl.id} className="flex items-center gap-2 px-3 py-2.5">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-zinc-200 truncate">{tpl.name}</p>
+                            <p className="text-xs text-zinc-500">{tplSongs.length} canción{tplSongs.length !== 1 ? 'es' : ''}</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              setPlaylist(prev => [
+                                ...prev,
+                                ...tplSongs
+                                  .filter(it => !prev.find(p => p.song_id === it.song_id))
+                                  .map(it => ({ song_id: it.song_id, title: it.title, author: it.author }))
+                              ]);
+                              setTemplatePicker(false);
+                            }}
+                            className="text-xs text-zinc-400 hover:text-white px-2 py-1 rounded-lg hover:bg-surface-600 transition-colors shrink-0"
+                          >+ Agregar</button>
+                          <button
+                            onClick={() => {
+                              setPlaylist(tplSongs.map(it => ({ song_id: it.song_id, title: it.title, author: it.author })));
+                              setTemplatePicker(false);
+                            }}
+                            className="text-xs text-accent font-semibold px-2 py-1 rounded-lg hover:bg-accent/10 transition-colors shrink-0"
+                          >Reemplazar</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="relative mb-2">
               <input
                 ref={searchRef}
