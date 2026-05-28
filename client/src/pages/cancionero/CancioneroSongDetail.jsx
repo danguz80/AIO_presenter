@@ -2,11 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } fr
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Pencil,
-  LayoutList, X, Trash2, Save,
+  LayoutList, X, Trash2, Save, NotebookPen, SlidersHorizontal,
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { stripChords, parseChordLine, isCommentLine, extractInlineComment, transposeContent, transposeKey } from '../../utils/chordUtils';
 import SongFormModal from '../../components/Library/SongFormModal';
+import AnnotationCanvas from '../../components/cancionero/AnnotationCanvas';
 import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -39,7 +40,14 @@ const SECTION_COLORS = {
   'Outro': '#94a3b8', 'Instrumental': '#22d3ee', 'Interludio': '#22d3ee', 'Tag': '#fb923c',
 };
 function labelColor(label) {
-  return SECTION_COLORS[label] ?? '#6b7280';
+  if (!label) return '#6b7280';
+  const norm = label.toLowerCase().trim();
+  const exactKey = Object.keys(SECTION_COLORS).find(k => k.toLowerCase() === norm);
+  if (exactKey) return SECTION_COLORS[exactKey];
+  // Intenta sin número final: "Verso 2" → "Verso"
+  const base = norm.replace(/\s*\d+$/, '').trim();
+  const baseKey = Object.keys(SECTION_COLORS).find(k => k.toLowerCase() === base);
+  return baseKey ? SECTION_COLORS[baseKey] : '#6b7280';
 }
 
 // ─── Modal de Estructura ─────────────────────────────────────────────────────────
@@ -55,18 +63,29 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
     return result;
   }, [slides]);
 
-  // Estructura actual guardada (o vacía si no hay)
-  const [structure, setStructure] = useState(
-    () => Array.isArray(song?.structure) && song.structure.length > 0
-      ? [...song.structure]
-      : []
-  );
+  // Estructura interna: [{label, count}] — agrupa consecutivos al cargar
+  const [structure, setStructure] = useState(() => {
+    const flat = Array.isArray(song?.structure) && song.structure.length > 0 ? song.structure : [];
+    return flat.reduce((acc, lbl) => {
+      const last = acc[acc.length - 1];
+      if (last && last.label === lbl) { last.count += 1; return acc; }
+      acc.push({ label: lbl, count: 1 });
+      return acc;
+    }, []);
+  });
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
 
+  // Array plano expandido (para guardar y para preview)
+  const flatStructure = useMemo(
+    () => structure.flatMap(({ label, count }) => Array(count).fill(label)),
+    [structure]
+  );
+  const totalSections = flatStructure.length;
+
   // ── Drag & Drop ──────────────────────────────────────────────────────────────
-  const dragItem = useRef(null);       // índice en structure siendo arrastrado
-  const dragOver = useRef(null);       // índice en structure sobre el que se pasa
+  const dragItem = useRef(null);
+  const dragOver = useRef(null);
 
   const handleDragStartStructure = (idx) => { dragItem.current = idx; };
   const handleDragOverStructure  = (e, idx) => { e.preventDefault(); dragOver.current = idx; };
@@ -80,23 +99,33 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
     dragOver.current = null;
   };
 
-  // Añadir etiqueta desde la paleta
-  const addLabel = (lbl) => setStructure(prev => [...prev, lbl]);
+  // Añadir desde paleta — siempre crea nueva entrada con count=1
+  const addLabel = (lbl) => setStructure(prev => [...prev, { label: lbl, count: 1 }]);
 
-  // Eliminar ítem de la estructura
+  // Incrementar/decrementar repeticiones (decrementar a 0 elimina la entrada)
+  const incrementCount = (idx) =>
+    setStructure(prev => prev.map((item, i) => i === idx ? { ...item, count: item.count + 1 } : item));
+  const decrementCount = (idx) =>
+    setStructure(prev => {
+      const item = prev[idx];
+      if (item.count <= 1) return prev.filter((_, i) => i !== idx);
+      return prev.map((it, i) => i === idx ? { ...it, count: it.count - 1 } : it);
+    });
+
+  // Eliminar ítem completo
   const removeItem = (idx) => setStructure(prev => prev.filter((_, i) => i !== idx));
 
   // Limpiar todo
   const clearAll = () => setStructure([]);
 
-  // Guardar
+  // Guardar (envía el flat array expandido)
   const handleSave = async () => {
     setSaving(true);
     try {
       const res = await fetch(`${API}/api/songs/${song.id}/structure`, {
         method: 'PATCH',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ structure }),
+        body: JSON.stringify({ structure: flatStructure }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -138,7 +167,7 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
                   <button
                     key={lbl}
                     onClick={() => addLabel(lbl)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors hover:scale-105 active:scale-95"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all hover:scale-105 active:scale-95"
                     style={{
                       borderColor: labelColor(lbl) + '60',
                       backgroundColor: labelColor(lbl) + '18',
@@ -157,7 +186,7 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
           <div className="flex-1 overflow-y-auto px-5 py-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] uppercase tracking-widest text-white/30">
-                Estructura — arrastra para reordenar
+                Estructura — arrastra para reordenar · flechas para repetir
               </p>
               {structure.length > 0 && (
                 <button onClick={clearAll} className="text-[10px] text-white/25 hover:text-red-400 transition-colors flex items-center gap-1">
@@ -173,7 +202,7 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                {structure.map((lbl, idx) => (
+                {structure.map(({ label, count }, idx) => (
                   <div
                     key={idx}
                     draggable
@@ -181,18 +210,45 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
                     onDragOver={e => handleDragOverStructure(e, idx)}
                     onDrop={handleDropStructure}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-grab active:cursor-grabbing select-none transition-colors hover:bg-white/5"
-                    style={{ borderColor: labelColor(lbl) + '40', backgroundColor: labelColor(lbl) + '0d' }}
+                    style={{ borderColor: labelColor(label) + '40', backgroundColor: labelColor(label) + '0d' }}
                   >
                     {/* Drag handle */}
                     <span className="text-white/20 text-[10px] font-mono w-5 text-center shrink-0">⠿</span>
                     {/* Número */}
                     <span className="text-white/25 text-[10px] w-4 shrink-0">{idx + 1}</span>
                     {/* Abreviación */}
-                    <span className="text-[10px] font-bold shrink-0 w-8 text-right" style={{ color: labelColor(lbl) }}>
-                      {labelAbbr(lbl)}
+                    <span className="text-[10px] font-bold shrink-0 w-8 text-right" style={{ color: labelColor(label) }}>
+                      {labelAbbr(label)}
                     </span>
                     {/* Label */}
-                    <span className="flex-1 text-xs font-semibold text-white">{lbl}</span>
+                    <span className="flex-1 text-xs font-semibold text-white">{label}</span>
+                    {/* Flechas repetición — alineadas a la derecha, no inician drag */}
+                    <div
+                      className="flex items-center gap-0.5"
+                      onDragStart={e => e.stopPropagation()}
+                      draggable={false}
+                    >
+                      <button
+                        onClick={() => decrementCount(idx)}
+                        className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                        title="Menos repeticiones"
+                      >
+                        <ChevronDown size={13} className="text-white/40" />
+                      </button>
+                      <span
+                        className="text-[12px] font-mono font-bold min-w-[20px] text-center"
+                        style={{ color: count > 1 ? labelColor(label) : 'rgba(255,255,255,0.35)' }}
+                      >
+                        {count}
+                      </span>
+                      <button
+                        onClick={() => incrementCount(idx)}
+                        className="p-1 rounded-lg hover:bg-white/10 transition-colors"
+                        title="Más repeticiones"
+                      >
+                        <ChevronUp size={13} className="text-white/40" />
+                      </button>
+                    </div>
                     {/* Eliminar */}
                     <button
                       onClick={() => removeItem(idx)}
@@ -210,7 +266,7 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
               <div className="mt-4 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10">
                 <p className="text-[10px] text-white/25 uppercase tracking-widest mb-1.5">Vista previa</p>
                 <p className="text-xs font-mono text-white/60 leading-relaxed">
-                  {structure.map(labelAbbr).join(' · ')}
+                  {flatStructure.map(labelAbbr).join(' · ')}
                 </p>
               </div>
             )}
@@ -219,7 +275,7 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
 
         {/* Footer */}
         <div className="px-5 py-4 border-t border-white/10 flex items-center justify-between gap-3">
-          <p className="text-xs text-white/30">{structure.length} sección{structure.length !== 1 ? 'es' : ''}</p>
+          <p className="text-xs text-white/30">{totalSections} sección{totalSections !== 1 ? 'es' : ''}</p>
           <div className="flex gap-2">
             <button
               onClick={onClose}
@@ -379,6 +435,10 @@ export default function CancioneroSongDetail() {
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [estructuraOpen, setEstructuraOpen] = useState(false);
+  const [annotating, setAnnotating]   = useState(false);
+  const [annotations, setAnnotations] = useState([]);
+  const [annotationsSaved, setAnnotationsSaved] = useState(true);
+  const [toolbarOpen, setToolbarOpen] = useState(false);
 
   // Transposición global (todos en la org) y capo personal
   const [keyOffset, setKeyOffset]   = useState(0);
@@ -387,6 +447,24 @@ export default function CancioneroSongDetail() {
 
   // displayOffset: lo que YO veo (keyOffset global - capo personal)
   const displayOffset = useMemo(() => keyOffset - capoOffset, [keyOffset, capoOffset]);
+
+  // Slides reordenados según la estructura guardada
+  const orderedSlides = useMemo(() => {
+    if (!song?.structure?.length || !slides.length) return slides;
+    const byLabel = {};
+    for (const s of slides) {
+      const lbl = s.label?.trim() ?? '';
+      if (!byLabel[lbl]) byLabel[lbl] = [];
+      byLabel[lbl].push(s);
+    }
+    const result = [];
+    for (const lbl of song.structure) {
+      const group = byLabel[lbl] ?? [];
+      result.push(...group);
+    }
+    return result.length > 0 ? result : slides;
+  }, [slides, song?.structure]);
+
 
   // Conectar socket y pedir offset actual al montar
   useEffect(() => {
@@ -435,15 +513,33 @@ export default function CancioneroSongDetail() {
 
   // Auto-scroll
   const [scrolling, setScrolling]     = useState(false);
-  const [scrollSpeed, setScrollSpeed] = useState(2.0); // 1.0–10.0 en pasos de 0.1
+  const [scrollSpeed, setScrollSpeed] = useState(() => {
+    const saved = localStorage.getItem(`aio_scroll_speed_${id}`);
+    return saved ? parseFloat(saved) : 2.0;
+  });
   const scrollRef      = useRef(null);
   const rafRef         = useRef(null);
   const lastTs         = useRef(null);
   const scrollSpeedRef = useRef(scrollSpeed); // siempre actualizado, sin reiniciar el loop
   const accumRef       = useRef(0);           // acumulador de píxeles fraccionarios
 
-  // Mantener el ref sincronizado sin tocar el loop
-  useEffect(() => { scrollSpeedRef.current = scrollSpeed; }, [scrollSpeed]);
+  // Refs para scroll a sección — clave: "label:occurrenceIndex"
+  const sectionRefs = useRef({});
+
+  // Persistir velocidad en localStorage al cambiar
+  useEffect(() => {
+    localStorage.setItem(`aio_scroll_speed_${id}`, scrollSpeed);
+    scrollSpeedRef.current = scrollSpeed;
+  }, [scrollSpeed, id]);
+
+  // Scroll a la primera ocurrencia de una sección en orderedSlides
+  const scrollToSection = useCallback((lbl, occurrenceIdx = 0) => {
+    const key = `${lbl}:${occurrenceIdx}`;
+    const el = sectionRefs.current[key];
+    if (el && scrollRef.current) {
+      scrollRef.current.scrollTo({ top: el.offsetTop - 16, behavior: 'smooth' });
+    }
+  }, []);
 
   // Barra espaciadora → toggle scroll; flechas → prev/next canción (solo con lista de evento)
   useEffect(() => {
@@ -480,6 +576,27 @@ export default function CancioneroSongDetail() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  }, [id]);
+
+  // Cargar anotaciones personales
+  useEffect(() => {
+    fetch(`${API}/api/songs/${id}/annotations`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : { data: [] })
+      .then(({ data }) => setAnnotations(data ?? []))
+      .catch(() => {});
+  }, [id]);
+
+  const handleSaveAnnotations = useCallback(async (newItems) => {
+    setAnnotationsSaved(false);
+    try {
+      await fetch(`${API}/api/songs/${id}/annotations`, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: newItems }),
+      });
+      setAnnotations(newItems);
+      setAnnotationsSaved(true);
+    } catch { setAnnotationsSaved(true); }
   }, [id]);
 
   // Auto-scroll loop — solo depende de `scrolling`, no de scrollSpeed
@@ -602,147 +719,261 @@ export default function CancioneroSongDetail() {
           </button>
         </div>
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-          {/* Mostrar acordes */}
+        {/* ════════════════════════════════════════════
+             TOOLBAR — responsive
+             · Móvil: barra compacta + panel colapsable
+             · Desktop: scroll horizontal clásico
+        ════════════════════════════════════════════ */}
+
+        {/* ─ Barra compacta visible siempre en móvil ─ */}
+        <div className="flex items-center gap-1.5 md:hidden">
+          {/* Acordes toggle */}
           <button
             onClick={() => setShowChords(v => !v)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-              showChords
-                ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-300'
-                : 'bg-white/10 border-white/10 text-white/50'
+            className={`flex-shrink-0 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              showChords ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-300' : 'bg-white/10 border-white/10 text-white/50'
             }`}
           >
             {showChords ? 'Acordes ✓' : 'Acordes'}
           </button>
+          {/* Key rápido */}
+          <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-400/25 rounded-lg px-1.5 py-1">
+            <button onClick={() => changeKey(-1)} className="p-0.5"><Minus size={12} className="text-yellow-300/70" /></button>
+            <span className="text-xs font-bold text-yellow-300 min-w-[1.8rem] text-center">
+              {song?.song_key ? transposeKey(song.song_key, keyOffset) : keyOffset === 0 ? 'Key' : (keyOffset > 0 ? `+${keyOffset}` : `${keyOffset}`)}
+            </span>
+            <button onClick={() => changeKey(+1)} className="p-0.5"><Plus size={12} className="text-yellow-300/70" /></button>
+          </div>
+          {/* Auto-scroll */}
+          <button
+            onClick={() => setScrolling(v => !v)}
+            className={`flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              scrolling ? 'bg-red-500/20 border-red-400/40 text-red-300' : 'bg-green-500/20 border-green-400/40 text-green-300'
+            }`}
+          >
+            {scrolling ? <Pause size={11} /> : <Play size={11} />}
+            {scrolling ? 'Pausar' : 'Scroll'}
+          </button>
+          {/* Expand ⚙ */}
+          <button
+            onClick={() => setToolbarOpen(v => !v)}
+            className={`ml-auto flex-shrink-0 p-2 rounded-lg border transition-colors ${
+              toolbarOpen ? 'bg-white/15 border-white/20 text-white' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'
+            }`}
+            title="Más controles"
+          >
+            <SlidersHorizontal size={14} />
+          </button>
+        </div>
 
+        {/* ─ Panel expandido (sólo móvil) ─ */}
+        {toolbarOpen && (
+          <div className="md:hidden grid grid-cols-2 gap-2 pt-1 pb-0.5">
+            {/* Tamaño fuente */}
+            <div className="flex items-center justify-between bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5">
+              <span className="text-[10px] text-white/40 uppercase tracking-wide">Tamaño</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setFontSize(f => Math.max(12, f - 2))} className="p-0.5"><Minus size={12} className="text-white/60" /></button>
+                <span className="text-xs text-white/70 w-8 text-center">{fontSize}px</span>
+                <button onClick={() => setFontSize(f => Math.min(36, f + 2))} className="p-0.5"><Plus size={12} className="text-white/60" /></button>
+              </div>
+            </div>
+            {/* Velocidad */}
+            <div className="flex items-center justify-between bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5">
+              <span className="text-[10px] text-white/40 uppercase tracking-wide">Velocidad</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setScrollSpeed(s => Math.max(1.0, Math.round((s - 0.1) * 10) / 10))} className="p-0.5"><ChevronDown size={12} className="text-white/60" /></button>
+                <span className="text-xs text-white/70 w-6 text-center">{scrollSpeed.toFixed(1)}</span>
+                <button onClick={() => setScrollSpeed(s => Math.min(10.0, Math.round((s + 0.1) * 10) / 10))} className="p-0.5"><ChevronUp size={12} className="text-white/60" /></button>
+              </div>
+            </div>
+            {/* Capo */}
+            <div className="flex items-center justify-between bg-blue-500/10 border border-blue-400/25 rounded-lg px-2.5 py-1.5">
+              <span className="text-[10px] text-blue-400/60 uppercase tracking-wide">Capo</span>
+              <div className="flex items-center gap-1">
+                <button onClick={() => changeCapo(-1)} disabled={capoOffset === 0} className="p-0.5 disabled:opacity-20"><Minus size={12} className="text-blue-300/70" /></button>
+                <span className="text-xs font-bold text-blue-300 w-12 text-center">{capoOffset === 0 ? 'Sin' : capoOffset === 1 ? 'Traste 1' : `Traste ${capoOffset}`}</span>
+                <button onClick={() => changeCapo(+1)} disabled={capoOffset >= 11} className="p-0.5 disabled:opacity-20"><Plus size={12} className="text-blue-300/70" /></button>
+              </div>
+            </div>
+            {/* Estructura */}
+            <button
+              onClick={() => { setEstructuraOpen(true); setToolbarOpen(false); }}
+              className="flex items-center justify-center gap-1.5 bg-purple-500/10 border border-purple-400/25 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-purple-300"
+            >
+              <LayoutList size={13} /> Estructura
+            </button>
+            {/* Anotar */}
+            <button
+              onClick={() => { setAnnotating(v => !v); setToolbarOpen(false); }}
+              className={`col-span-2 flex items-center justify-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold border transition-colors ${
+                annotating ? 'bg-amber-500/25 border-amber-400/40 text-amber-300' : 'bg-white/5 border-white/10 text-white/50'
+              }`}
+            >
+              <NotebookPen size={13} />
+              {annotating ? (annotationsSaved ? 'Anotando ✓' : 'Guardando...') : (annotations.length > 0 ? `Anotar (${annotations.length})` : 'Anotar')}
+            </button>
+          </div>
+        )}
+
+        {/* ─ Toolbar desktop (oculto en móvil) ─ */}
+        <div className="hidden md:flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
+          {/* Mostrar acordes */}
+          <button
+            onClick={() => setShowChords(v => !v)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              showChords ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-300' : 'bg-white/10 border-white/10 text-white/50'
+            }`}
+          >
+            {showChords ? 'Acordes ✓' : 'Acordes'}
+          </button>
           {/* Tamaño fuente */}
           <div className="flex-shrink-0 flex items-center gap-1 bg-white/10 border border-white/10 rounded-lg px-1.5 py-1">
-            <button onClick={() => setFontSize(f => Math.max(12, f - 2))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
-              <Minus size={13} className="text-white/60" />
-            </button>
+            <button onClick={() => setFontSize(f => Math.max(12, f - 2))} className="p-0.5 rounded hover:bg-white/10 transition-colors"><Minus size={13} className="text-white/60" /></button>
             <span className="text-xs text-white/60 w-8 text-center">{fontSize}px</span>
-            <button onClick={() => setFontSize(f => Math.min(36, f + 2))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
-              <Plus size={13} className="text-white/60" />
-            </button>
+            <button onClick={() => setFontSize(f => Math.min(36, f + 2))} className="p-0.5 rounded hover:bg-white/10 transition-colors"><Plus size={13} className="text-white/60" /></button>
           </div>
-
           {/* Velocidad scroll */}
           <div className="flex-shrink-0 flex items-center gap-1 bg-white/10 border border-white/10 rounded-lg px-1.5 py-1">
-            <button onClick={() => setScrollSpeed(s => Math.max(1.0, Math.round((s - 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
-              <ChevronDown size={13} className="text-white/60" />
-            </button>
+            <button onClick={() => setScrollSpeed(s => Math.max(1.0, Math.round((s - 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors"><ChevronDown size={13} className="text-white/60" /></button>
             <span className="text-xs text-white/60 w-8 text-center">{scrollSpeed.toFixed(1)}</span>
-            <button onClick={() => setScrollSpeed(s => Math.min(10.0, Math.round((s + 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors">
-              <ChevronUp size={13} className="text-white/60" />
-            </button>
+            <button onClick={() => setScrollSpeed(s => Math.min(10.0, Math.round((s + 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors"><ChevronUp size={13} className="text-white/60" /></button>
           </div>
-
           {/* Botón scroll */}
           <button
             onClick={() => setScrolling(v => !v)}
             className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-              scrolling
-                ? 'bg-red-500/20 border-red-400/40 text-red-300'
-                : 'bg-green-500/20 border-green-400/40 text-green-300'
+              scrolling ? 'bg-red-500/20 border-red-400/40 text-red-300' : 'bg-green-500/20 border-green-400/40 text-green-300'
             }`}
           >
             {scrolling ? <><Pause size={12} /> Pausar</> : <><Play size={12} /> Auto-scroll</>}
           </button>
-
-          {/* ── Key (global, todos la ven) ── */}
+          {/* Key */}
           <div className="flex-shrink-0 flex items-center gap-1 bg-yellow-500/10 border border-yellow-400/25 rounded-lg px-1.5 py-1">
-            <button
-              onClick={() => changeKey(-1)}
-              className="p-0.5 rounded hover:bg-white/10 transition-colors"
-              title="Bajar semitono (global)"
-            >
-              <Minus size={13} className="text-yellow-300/70" />
-            </button>
+            <button onClick={() => changeKey(-1)} className="p-0.5 rounded hover:bg-white/10 transition-colors" title="Bajar semitono (global)"><Minus size={13} className="text-yellow-300/70" /></button>
             <div className="flex flex-col items-center leading-none" style={{ minWidth: '3rem' }}>
               <span className="text-[8px] uppercase tracking-widest text-yellow-400/50 leading-none">Key</span>
               <span className="text-xs font-bold text-yellow-300 leading-tight">
-                {song?.song_key
-                  ? transposeKey(song.song_key, keyOffset)
-                  : keyOffset === 0 ? '—' : (keyOffset > 0 ? `+${keyOffset}` : `${keyOffset}`)}
+                {song?.song_key ? transposeKey(song.song_key, keyOffset) : keyOffset === 0 ? '—' : (keyOffset > 0 ? `+${keyOffset}` : `${keyOffset}`)}
               </span>
             </div>
-            <button
-              onClick={() => changeKey(+1)}
-              className="p-0.5 rounded hover:bg-white/10 transition-colors"
-              title="Subir semitono (global)"
-            >
-              <Plus size={13} className="text-yellow-300/70" />
-            </button>
+            <button onClick={() => changeKey(+1)} className="p-0.5 rounded hover:bg-white/10 transition-colors" title="Subir semitono (global)"><Plus size={13} className="text-yellow-300/70" /></button>
           </div>
-
-          {/* ── Capo (personal, solo yo) ── */}
+          {/* Capo */}
           <div className="flex-shrink-0 flex items-center gap-1 bg-blue-500/10 border border-blue-400/25 rounded-lg px-1.5 py-1">
-            <button
-              onClick={() => changeCapo(-1)}
-              disabled={capoOffset === 0}
-              className="p-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-20"
-              title="Bajar capo"
-            >
-              <Minus size={13} className="text-blue-300/70" />
-            </button>
+            <button onClick={() => changeCapo(-1)} disabled={capoOffset === 0} className="p-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-20" title="Bajar capo"><Minus size={13} className="text-blue-300/70" /></button>
             <div className="flex flex-col items-center leading-none" style={{ minWidth: '3rem' }}>
               <span className="text-[8px] uppercase tracking-widest text-blue-400/50 leading-none">Capo</span>
               <span className="text-xs font-bold text-blue-300 leading-tight">
-                {capoOffset === 0
-                  ? 'Sin'
-                  : capoOffset === 1 ? 'Traste 1'
-                  : `Traste ${capoOffset}`}
+                {capoOffset === 0 ? 'Sin' : capoOffset === 1 ? 'Traste 1' : `Traste ${capoOffset}`}
               </span>
             </div>
-            <button
-              onClick={() => changeCapo(+1)}
-              disabled={capoOffset >= 11}
-              className="p-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-20"
-              title="Subir capo"
-            >
-              <Plus size={13} className="text-blue-300/70" />
-            </button>
+            <button onClick={() => changeCapo(+1)} disabled={capoOffset >= 11} className="p-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-20" title="Subir capo"><Plus size={13} className="text-blue-300/70" /></button>
           </div>
-
-          {/* ── Estructura ── */}
+          {/* Estructura */}
           <button
             onClick={() => setEstructuraOpen(true)}
             className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-purple-500/10 border-purple-400/25 text-purple-300 hover:bg-purple-500/20"
             title="Ver / editar estructura de la canción"
           >
-            <LayoutList size={13} />
-            {song?.structure?.length > 0
-              ? song.structure.map(labelAbbr).join('·')
-              : 'Estructura'}
+            <LayoutList size={13} className="shrink-0" />
+            Estructura
+          </button>
+          {/* Anotar */}
+          <button
+            onClick={() => setAnnotating(v => !v)}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              annotating ? 'bg-amber-500/25 border-amber-400/40 text-amber-300' : 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10'
+            }`}
+            title="Anotaciones personales"
+          >
+            <NotebookPen size={13} className="shrink-0" />
+            {annotating ? (annotationsSaved ? 'Guardado ✓' : 'Guardando...') : (annotations.length > 0 ? `Anotar (${annotations.length})` : 'Anotar')}
           </button>
         </div>
+
+        {/* ── Fila de abreviaciones de estructura ── */}
+        {song?.structure?.length > 0 && (() => {
+          const seen = {};
+          return (
+            <div className="flex flex-wrap gap-1 pt-0.5">
+              {song.structure.map((lbl, i) => {
+                if (seen[lbl] === undefined) seen[lbl] = 0;
+                const occ = seen[lbl]++;
+                return (
+                  <button
+                    key={i}
+                    onClick={() => scrollToSection(lbl, occ)}
+                    className="text-xs font-bold font-mono px-2 py-0.5 rounded-lg transition-opacity hover:opacity-80 active:opacity-60"
+                    style={{ color: labelColor(lbl), backgroundColor: labelColor(lbl) + '25', border: `1px solid ${labelColor(lbl)}35` }}
+                    title={`Ir a ${lbl}`}
+                  >
+                    {labelAbbr(lbl)}
+                  </button>
+                );
+              })}
+            </div>
+          );
+        })()}
       </header>
 
       {/* ── Content ─────────────────────────────────────────────────── */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 lg:px-16 py-5 space-y-6">
-        {slides.length === 0 ? (
+      <div className="flex-1 overflow-hidden relative">
+        <div ref={scrollRef} className="h-full overflow-y-auto px-4 md:px-8 lg:px-16 py-5 space-y-6">
+        {orderedSlides.length === 0 ? (
           <p className="text-white/30 text-sm text-center py-8">Esta canción no tiene secciones.</p>
         ) : (
-          slides.map((slide, idx) => (
-            <div key={slide.id}>
-              {/* Label de sección: solo cuando cambia respecto al slide anterior */}
-              {slide.label && slide.label !== slides[idx - 1]?.label && (
-                <p className="font-bold uppercase tracking-widest mb-2"
-                  style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}>
-                  {slide.label}
+          orderedSlides.map((slide, idx) => {
+            const prevSlide = orderedSlides[idx - 1];
+            const isNewSection = slide.label !== prevSlide?.label;
+            // Calcular cuántas veces ya apareció este label antes en orderedSlides
+            const occurrenceIdx = isNewSection
+              ? orderedSlides.slice(0, idx).filter(s => s.label === slide.label).length
+              : -1;
+            const sectionKey = isNewSection ? `${slide.label}:${occurrenceIdx}` : null;
+            return (
+              <div
+                key={`${slide.id}-${idx}`}
+                ref={sectionKey ? el => { if (el) sectionRefs.current[sectionKey] = el; } : null}
+              >
+                {/* Separador entre secciones */}
+                {isNewSection && idx > 0 && (
+                  <div className="flex items-center gap-3 mb-4 mt-2">
+                    <div className="flex-1 h-px" style={{ backgroundColor: labelColor(slide.label) + '30' }} />
+                    <span className="text-[9px] font-bold font-mono px-1.5 py-0.5 rounded"
+                      style={{ color: labelColor(slide.label) + 'aa', backgroundColor: labelColor(slide.label) + '18' }}>
+                      {labelAbbr(slide.label)}
+                    </span>
+                    <div className="flex-1 h-px" style={{ backgroundColor: labelColor(slide.label) + '30' }} />
+                  </div>
+                )}
+                {/* Label de sección */}
+                {isNewSection && slide.label && (
+                  <p className="font-bold uppercase tracking-widest mb-2"
+                    style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}>
+                    {slide.label}
+                  </p>
+                )}
+                {/* Contenido */}
+                <p className="leading-relaxed text-white/90" style={{ fontSize: `${fontSize}px` }}>
+                  {renderContent(transposeContent(slide.content, displayOffset), showChords, chordsColor)}
                 </p>
-              )}
-              {/* Contenido */}
-              <p className="leading-relaxed text-white/90" style={{ fontSize: `${fontSize}px` }}>
-                {renderContent(transposeContent(slide.content, displayOffset), showChords, chordsColor)}
-              </p>
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
         {/* Espacio final para scroll */}
         <div className="h-16" />
       </div>
+
+      {/* ── Canvas de anotaciones (dentro del wrapper relativo) ── */}
+      <AnnotationCanvas
+        containerRef={scrollRef}
+        annotations={annotations}
+        onSave={handleSaveAnnotations}
+        visible={annotating}
+      />
+    </div>
 
       {/* ── A continuación: barra fija inferior ─────────────────────── */}
       {nextSong && (

@@ -22,6 +22,7 @@ const syncRouter   = require('./routes/sync');
 const bandConfigsRouter  = require('./routes/bandConfigs');
 const blockedDatesRouter = require('./routes/blockedDates');
 const notificationsRouter = require('./routes/notifications');
+const annotationsRouter = require('./routes/annotations');
 const ndi          = require('./ndi/ndiSender');
 
 const app    = express();
@@ -655,6 +656,7 @@ app.use('/api/sync',  syncRouter);
 app.use('/api/band-configs',  bandConfigsRouter);
 app.use('/api/blocked-dates', blockedDatesRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/songs',         annotationsRouter);  // anotaciones personales por canción
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

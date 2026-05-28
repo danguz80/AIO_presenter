@@ -649,10 +649,10 @@ export default function CancioneroEventDetail() {
             const res = await fetch(`${API}/api/songs/${item.song_id}`, { headers: authHeaders() });
             if (!res.ok) return item;
             const data = await res.json();
-            const structure = (data.slides ?? [])
-              .map(sl => sl.label)
-              .filter(Boolean)
-              .filter((v, i, a) => a.indexOf(v) === i); // unique ordered labels
+            // Usar structure guardada; si no existe, derivar desde slides (labels únicos en orden)
+            const structure = Array.isArray(data.structure) && data.structure.length > 0
+              ? data.structure
+              : (data.slides ?? []).map(sl => sl.label).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
             return { ...item, bpm: data.bpm, time_sig: data.time_sig, _structure: structure };
           } catch { return item; }
         })
