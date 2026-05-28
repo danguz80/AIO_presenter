@@ -267,6 +267,8 @@ async function saveOrgSetting(orgId, key, value) {
     // ─── Publicación de eventos ────────────────────────────────────────────
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT false`);
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ`);
+    // ─── Configuración de banda por evento ────────────────────────────────
+    await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS band_config_id INTEGER REFERENCES band_configs(id) ON DELETE SET NULL`);
     // ─── Notificaciones in-app ─────────────────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (

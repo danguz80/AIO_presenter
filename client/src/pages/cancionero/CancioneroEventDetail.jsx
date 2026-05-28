@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, Clock, Music2, Pencil, Trash2,
-  ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus, Send, Check,
+  ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus, Send, Check, Users,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -265,12 +265,14 @@ export default function CancioneroEventDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [event,       setEvent]       = useState(null);
-  const [loading,     setLoading]     = useState(true);
-  const [editOpen,    setEditOpen]    = useState(false);
-  const [confirmDel,  setConfirmDel]  = useState(false);
-  const [deleting,    setDeleting]    = useState(false);
-  const [publishing,  setPublishing]  = useState(false);
+  const [event,        setEvent]       = useState(null);
+  const [loading,      setLoading]     = useState(true);
+  const [editOpen,     setEditOpen]    = useState(false);
+  const [confirmDel,   setConfirmDel]  = useState(false);
+  const [deleting,     setDeleting]    = useState(false);
+  const [publishing,   setPublishing]  = useState(false);
+  const [bandConfigs,  setBandConfigs] = useState([]);
+  const [savingBand,   setSavingBand]  = useState(false);
 
   const isAdmin = (() => {
     try {
@@ -300,6 +302,26 @@ export default function CancioneroEventDetail() {
   };
 
   useEffect(() => { loadEvent(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cargar configuraciones de banda
+  useEffect(() => {
+    fetch(`${API}/api/band-configs`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(data => setBandConfigs(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  const saveBandConfig = async (configId) => {
+    setSavingBand(true);
+    try {
+      const res = await fetch(`${API}/api/events/${id}/band-config`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ band_config_id: configId || null }),
+      });
+      if (res.ok) setEvent(prev => ({ ...prev, band_config_id: configId || null }));
+    } finally { setSavingBand(false); }
+  };
 
   const handleDelete = async () => {
     if (!confirmDel) { setConfirmDel(true); return; }
@@ -454,6 +476,73 @@ export default function CancioneroEventDetail() {
             <p className="text-sm text-white/50 mt-1 italic">{event.description}</p>
           )}
         </div>
+
+        {/* Configuración de banda */}
+        {isAdmin ? (
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-3 flex items-center gap-1.5">
+              <Users size={12} /> Configuración de banda
+            </p>
+            <div className="flex gap-2">
+              <select
+                value={event.band_config_id ?? ''}
+                onChange={e => saveBandConfig(e.target.value ? Number(e.target.value) : null)}
+                disabled={savingBand}
+                className="flex-1 bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-yellow-400/50 disabled:opacity-50"
+              >
+                <option value="">— Sin configuración asignada —</option>
+                {bandConfigs.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {savingBand && <Loader2 size={16} className="animate-spin text-yellow-400 self-center" />}
+            </div>
+            {/* Preview de la config seleccionada */}
+            {(() => {
+              const cfg = bandConfigs.find(c => c.id === Number(event.band_config_id));
+              if (!cfg || !cfg.slots?.length) return null;
+              return (
+                <div className="mt-3 space-y-1">
+                  {cfg.slots.filter(s => s.instrument).map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 px-2 py-1.5 rounded-lg bg-white/5">
+                      {s.avatarUrl
+                        ? <img src={s.avatarUrl} alt="" className="w-6 h-6 rounded-full object-cover" />
+                        : <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center text-[10px] font-bold text-white/50">{s.userName?.[0]?.toUpperCase() ?? '?'}</div>
+                      }
+                      <span className="text-xs font-semibold text-white flex-1 truncate">{s.userName}</span>
+                      <span className="text-xs text-yellow-300/80">{s.instrument}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        ) : (
+          // Vista no-admin: mostrar la config asignada
+          (() => {
+            const cfg = bandConfigs.find(c => c.id === Number(event.band_config_id));
+            if (!cfg || !cfg.slots?.filter(s => s.instrument).length) return null;
+            return (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-3 flex items-center gap-1.5">
+                  <Users size={12} /> Banda · {cfg.name}
+                </p>
+                <div className="space-y-1">
+                  {cfg.slots.filter(s => s.instrument).map((s, i) => (
+                    <div key={i} className="flex items-center gap-3 px-2 py-1.5 rounded-lg bg-white/5">
+                      {s.avatarUrl
+                        ? <img src={s.avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover" />
+                        : <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs font-bold text-white/50">{s.userName?.[0]?.toUpperCase() ?? '?'}</div>
+                      }
+                      <span className="text-sm font-semibold text-white flex-1 truncate">{s.userName}</span>
+                      <span className="text-xs font-medium text-yellow-300/80">{s.instrument}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()
+        )}
 
         {/* Lista de canciones */}
         <div>
