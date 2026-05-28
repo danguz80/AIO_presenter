@@ -262,11 +262,46 @@ router.get('/google/callback', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, sync_direction, drive_folder_id, organization_id FROM sync_users WHERE id = $1',
+      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, sync_direction, drive_folder_id, organization_id, instruments FROM sync_users WHERE id = $1',
       [req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** PATCH /auth/me — actualizar perfil del usuario (instrumentos, etc.) */
+router.patch('/me', requireAuth, async (req, res) => {
+  try {
+    const { instruments } = req.body;
+    const { rows } = await pool.query(
+      `UPDATE sync_users
+         SET instruments = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, email, display_name, avatar_url, is_admin, organization_id, instruments`,
+      [instruments || [], req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** GET /auth/org/members — todos los miembros de la org actual */
+router.get('/org/members', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.display_name, u.avatar_url, u.email, u.instruments, uo.role
+         FROM user_organizations uo
+         JOIN sync_users u ON u.id = uo.user_id
+        WHERE uo.organization_id = $1
+        ORDER BY u.display_name ASC`,
+      [req.user.orgId]
+    );
+    res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

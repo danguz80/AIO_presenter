@@ -19,6 +19,8 @@ const eventTemplatesRouter  = require('./routes/eventTemplates');
 const playsRouter           = require('./routes/plays');
 const authRouter   = require('./routes/auth');
 const syncRouter   = require('./routes/sync');
+const bandConfigsRouter  = require('./routes/bandConfigs');
+const blockedDatesRouter = require('./routes/blockedDates');
 const ndi          = require('./ndi/ndiSender');
 
 const app    = express();
@@ -232,6 +234,30 @@ async function saveOrgSetting(orgId, key, value) {
     // Migraciones sync con Google Drive
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_file_id  TEXT`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);
+    // ─── Cancionero: instrumentos, configuraciones de banda, fechas bloqueadas ─
+    await pool.query(`ALTER TABLE sync_users ADD COLUMN IF NOT EXISTS instruments TEXT[] DEFAULT '{}'`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS band_configs (
+        id              SERIAL PRIMARY KEY,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        name            VARCHAR(100) NOT NULL,
+        slots           JSONB DEFAULT '[]',
+        position        INTEGER DEFAULT 0,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_blocked_dates (
+        id              SERIAL PRIMARY KEY,
+        user_id         INTEGER REFERENCES sync_users(id) ON DELETE CASCADE,
+        organization_id INTEGER REFERENCES organizations(id),
+        date            DATE NOT NULL,
+        reason          TEXT,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (user_id, date)
+      )
+    `);
     const { rows } = await pool.query("SELECT key, value FROM app_settings");
     for (const row of rows) {
       const colonIdx = row.key.indexOf(':');
@@ -601,6 +627,8 @@ app.use('/api/event-templates', eventTemplatesRouter);
 app.use('/api/events',          playsRouter); // plays nested under /api/events/:id/plays
 app.use('/auth',      authRouter);
 app.use('/api/sync',  syncRouter);
+app.use('/api/band-configs',  bandConfigsRouter);
+app.use('/api/blocked-dates', blockedDatesRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

@@ -1,0 +1,541 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft, User, Users, Calendar,
+  ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  Check, Plus, Trash2, Save, Loader2, Lock, X,
+} from 'lucide-react';
+import CancioneroNavbar from './CancioneroNavbar';
+
+const API = import.meta.env.VITE_API_URL || '';
+function authHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}`,
+  };
+}
+
+const INSTRUMENTS = [
+  'Voz (soprano)', 'Voz (alto)', 'Voz (tenor)', 'Voz (barítono)',
+  'Coros', 'Guitarra eléctrica', 'Guitarra acústica',
+  'Bajo eléctrico', 'Batería', 'Teclado', 'Piano',
+  'Violín', 'Trompeta', 'Saxofón', 'Trombón',
+  'Percusión', 'Cajón', 'Ukulele', 'Otro',
+];
+
+const MONTHS_ES = [
+  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
+  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
+];
+const DAYS_ES = ['L','M','X','J','V','S','D'];
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function dateStr(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
+
+// ─── Mi Perfil ────────────────────────────────────────────────────────────────
+function ProfileSection({ user, onSaved }) {
+  const [instruments, setInstruments] = useState(user?.instruments || []);
+  const [saving, setSaving]           = useState(false);
+  const [saved, setSaved]             = useState(false);
+
+  useEffect(() => { setInstruments(user?.instruments || []); }, [user]);
+
+  const toggle = (inst) =>
+    setInstruments(prev =>
+      prev.includes(inst) ? prev.filter(i => i !== inst) : [...prev, inst]
+    );
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/auth/me`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ instruments }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        onSaved?.(updated);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2500);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Avatar + datos básicos */}
+      <div className="flex items-center gap-4">
+        {user?.avatar_url
+          ? <img src={user.avatar_url} alt="" className="w-20 h-20 rounded-full border-2 border-yellow-400/30 object-cover flex-shrink-0" />
+          : (
+            <div className="w-20 h-20 rounded-full bg-yellow-500/15 border-2 border-yellow-400/25 flex items-center justify-center flex-shrink-0">
+              <User size={32} className="text-yellow-400/50" />
+            </div>
+          )
+        }
+        <div className="min-w-0">
+          <p className="text-base font-bold text-white truncate">{user?.display_name || '—'}</p>
+          <p className="text-sm text-white/40 truncate">{user?.email || ''}</p>
+          {user?.is_admin && (
+            <span className="inline-block mt-1 text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 font-semibold uppercase tracking-wider">
+              Admin
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Selector de instrumentos */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-3">
+          Instrumentos y roles
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {INSTRUMENTS.map(inst => {
+            const active = instruments.includes(inst);
+            return (
+              <button
+                key={inst}
+                onClick={() => toggle(inst)}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border ${
+                  active
+                    ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-300'
+                    : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70 hover:border-white/25'
+                }`}
+              >
+                {active && <Check size={10} />}
+                {inst}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <button
+        onClick={save}
+        disabled={saving}
+        className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 border ${
+          saved
+            ? 'bg-green-500/15 border-green-400/35 text-green-300'
+            : 'bg-yellow-500/15 border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25'
+        }`}
+      >
+        {saving
+          ? <Loader2 size={14} className="animate-spin" />
+          : saved
+            ? <><Check size={14} /> Guardado</>
+            : <><Save size={14} /> Guardar perfil</>
+        }
+      </button>
+    </div>
+  );
+}
+
+// ─── Banda ────────────────────────────────────────────────────────────────────
+function BandSection({ members }) {
+  const [configs, setConfigs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId]   = useState(null);
+  const [saving, setSaving]   = useState(false);
+
+  useEffect(() => {
+    fetch(`${API}/api/band-configs`, { headers: authHeaders() })
+      .then(r => r.json())
+      .then(data => { setConfigs(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const addConfig = async () => {
+    const count = configs.length;
+    const name  = count === 0 ? 'Configuración normal' : `Configuración ${count + 1}`;
+    const slots = members.map(m => ({
+      userId:     m.id,
+      userName:   m.display_name,
+      avatarUrl:  m.avatar_url,
+      instrument: (m.instruments || [])[0] || '',
+    }));
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/api/band-configs`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ name, slots }),
+      });
+      if (res.ok) {
+        const newCfg = await res.json();
+        setConfigs(prev => [...prev, newCfg]);
+        setOpenId(newCfg.id);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteConfig = async (id) => {
+    await fetch(`${API}/api/band-configs/${id}`, { method: 'DELETE', headers: authHeaders() });
+    setConfigs(prev => prev.filter(c => c.id !== id));
+    if (openId === id) setOpenId(null);
+  };
+
+  const updateSlot = (configId, userId, instrument) =>
+    setConfigs(prev => prev.map(c => {
+      if (c.id !== configId) return c;
+      return { ...c, slots: c.slots.map(s => s.userId === userId ? { ...s, instrument } : s) };
+    }));
+
+  const updateName = (configId, name) =>
+    setConfigs(prev => prev.map(c => c.id === configId ? { ...c, name } : c));
+
+  const saveConfig = async (config) => {
+    setSaving(true);
+    try {
+      await fetch(`${API}/api/band-configs/${config.id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ name: config.name, slots: config.slots }),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-yellow-400" /></div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {configs.length === 0 && (
+        <p className="text-sm text-white/25 text-center py-3">Aún no hay configuraciones. Crea la primera.</p>
+      )}
+
+      {configs.map((config, idx) => (
+        <div key={config.id} className="border border-white/10 rounded-xl overflow-hidden">
+          {/* Header de la config */}
+          <div
+            className="flex items-center gap-2 px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors"
+            onClick={() => setOpenId(openId === config.id ? null : config.id)}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white">{config.name}</p>
+              <p className="text-xs text-white/30">{(config.slots || []).length} músicos</p>
+            </div>
+            {idx > 0 && (
+              <button
+                onClick={e => { e.stopPropagation(); deleteConfig(config.id); }}
+                className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/25 hover:text-red-400 transition-colors"
+                title="Eliminar"
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+            {openId === config.id
+              ? <ChevronUp size={16} className="text-white/35 flex-shrink-0" />
+              : <ChevronDown size={16} className="text-white/35 flex-shrink-0" />
+            }
+          </div>
+
+          {openId === config.id && (
+            <div className="px-4 pb-4 pt-3 border-t border-white/10 space-y-4">
+              {/* Nombre editable */}
+              <input
+                value={config.name}
+                onChange={e => updateName(config.id, e.target.value)}
+                className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-yellow-400/50"
+                placeholder="Nombre de la configuración"
+              />
+
+              {/* Slots de músicos */}
+              <div className="space-y-2.5">
+                {(config.slots || []).map(slot => (
+                  <div key={slot.userId} className="flex items-center gap-3">
+                    {slot.avatarUrl
+                      ? <img src={slot.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                      : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                          <User size={14} className="text-white/35" />
+                        </div>
+                    }
+                    <p className="text-xs font-medium text-white/70 flex-1 min-w-0 truncate">{slot.userName}</p>
+                    <select
+                      value={slot.instrument || ''}
+                      onChange={e => updateSlot(config.id, slot.userId, e.target.value)}
+                      className="text-xs bg-white/10 border border-white/10 rounded-lg px-2 py-1.5 text-white/70 min-w-0"
+                      style={{ maxWidth: '9rem' }}
+                    >
+                      <option value="">— Sin instrumento —</option>
+                      {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => saveConfig(config)}
+                disabled={saving}
+                className="w-full py-2 rounded-xl text-xs font-semibold bg-yellow-500/15 border border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25 transition-colors flex items-center justify-center gap-1.5"
+              >
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <><Save size={12} /> Guardar configuración</>}
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+
+      <button
+        onClick={addConfig}
+        disabled={saving}
+        className="w-full py-3 rounded-xl text-sm font-semibold border-2 border-dashed border-white/15 text-white/35 hover:text-white/65 hover:border-white/25 transition-colors flex items-center justify-center gap-2"
+      >
+        {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+        {configs.length === 0 ? 'Crear Configuración normal' : 'Agregar nueva configuración'}
+      </button>
+    </div>
+  );
+}
+
+// ─── Mi Calendario ────────────────────────────────────────────────────────────
+function CalendarSection({ myUserId }) {
+  const today = new Date();
+  const [year, setYear]     = useState(today.getFullYear());
+  const [month, setMonth]   = useState(today.getMonth());
+  const [blocked, setBlocked] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+
+  const fetchBlocked = useCallback(async () => {
+    setLoading(true);
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const start   = `${year}-${pad(month + 1)}-01`;
+    const end     = `${year}-${pad(month + 1)}-${pad(lastDay)}`;
+    try {
+      const res  = await fetch(`${API}/api/blocked-dates?start=${start}&end=${end}`, { headers: authHeaders() });
+      const data = await res.json();
+      setBlocked(Array.isArray(data) ? data : []);
+    } catch {}
+    setLoading(false);
+  }, [year, month]);
+
+  useEffect(() => { fetchBlocked(); }, [fetchBlocked]);
+
+  const toggleDate = async (key) => {
+    const mine = blocked.find(b => b.date?.slice(0, 10) === key && b.user_id === myUserId);
+    if (mine) {
+      await fetch(`${API}/api/blocked-dates/${mine.id}`, { method: 'DELETE', headers: authHeaders() });
+      setBlocked(prev => prev.filter(b => b.id !== mine.id));
+    } else {
+      const res = await fetch(`${API}/api/blocked-dates`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ date: key }),
+      });
+      if (res.ok) {
+        const entry = await res.json();
+        setBlocked(prev => [...prev, { ...entry, user_id: myUserId }]);
+      }
+    }
+  };
+
+  const prevMonth = () => {
+    if (month === 0) { setMonth(11); setYear(y => y - 1); }
+    else setMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (month === 11) { setMonth(0); setYear(y => y + 1); }
+    else setMonth(m => m + 1);
+  };
+
+  // Grilla del mes (Lunes primero)
+  const firstDow    = new Date(year, month, 1).getDay(); // 0=Dom
+  const startOffset = (firstDow + 6) % 7;               // 0=Lun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div className="space-y-4">
+      {/* Navegación de mes */}
+      <div className="flex items-center justify-between">
+        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+          <ChevronLeft size={16} className="text-white/60" />
+        </button>
+        <p className="text-sm font-semibold text-white">{MONTHS_ES[month]} {year}</p>
+        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-white/10 transition-colors">
+          <ChevronRight size={16} className="text-white/60" />
+        </button>
+      </div>
+
+      {/* Cabecera de días */}
+      <div className="grid grid-cols-7 gap-1">
+        {DAYS_ES.map(d => (
+          <div key={d} className="text-center text-[10px] font-semibold text-white/30 py-1">{d}</div>
+        ))}
+
+        {/* Celdas de días */}
+        {cells.map((day, i) => {
+          if (!day) return <div key={`e${i}`} />;
+          const key        = dateStr(year, month, day);
+          const myBlock    = blocked.find(b => b.date?.slice(0, 10) === key && b.user_id === myUserId);
+          const othersBlk  = blocked.filter(b => b.date?.slice(0, 10) === key && b.user_id !== myUserId);
+          const isToday    = key === todayStr;
+
+          return (
+            <button
+              key={key}
+              onClick={() => toggleDate(key)}
+              className={`relative aspect-square rounded-lg text-xs font-medium transition-colors flex items-center justify-center ${
+                myBlock
+                  ? 'bg-red-500/25 border border-red-400/50 text-red-300'
+                  : isToday
+                    ? 'bg-yellow-500/20 border border-yellow-400/40 text-yellow-300'
+                    : 'hover:bg-white/10 text-white/60'
+              }`}
+            >
+              {day}
+              {othersBlk.length > 0 && (
+                <span className="absolute bottom-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-orange-400" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Leyenda */}
+      <div className="flex flex-wrap items-center gap-4 text-[11px] text-white/35">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded bg-red-500/40 border border-red-400/50" />
+          No disponible (yo)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-orange-400" />
+          No disponible (otros)
+        </span>
+        <span className="flex items-center gap-1.5 text-yellow-400/50">
+          Toca para bloquear/desbloquear
+        </span>
+      </div>
+
+      {/* Lista de fechas bloqueadas este mes */}
+      {loading && <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-white/30" /></div>}
+      {!loading && blocked.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold uppercase tracking-widest text-white/25 mb-2">Este mes</p>
+          {blocked.map(b => (
+            <div key={b.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5">
+              <Lock size={12} className={b.user_id === myUserId ? 'text-red-400 flex-shrink-0' : 'text-orange-400 flex-shrink-0'} />
+              <span className="flex-1 text-xs text-white/65">
+                {new Date(b.date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'short' })}
+              </span>
+              <span className="text-xs text-white/30 truncate max-w-[5rem]">{b.display_name}</span>
+              {b.user_id === myUserId && (
+                <button
+                  onClick={() => toggleDate(b.date?.slice(0, 10))}
+                  className="p-0.5 hover:text-red-400 text-white/20 transition-colors"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Tarjeta acordeón ─────────────────────────────────────────────────────────
+function SectionCard({ icon: Icon, title, subtitle, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="border border-white/10 rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 px-4 py-4 hover:bg-white/5 transition-colors text-left"
+      >
+        <div className="w-9 h-9 rounded-xl bg-yellow-500/15 border border-yellow-400/20 flex items-center justify-center flex-shrink-0">
+          <Icon size={18} className="text-yellow-300" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white">{title}</p>
+          {subtitle && <p className="text-xs text-white/35 truncate">{subtitle}</p>}
+        </div>
+        {open
+          ? <ChevronUp size={16} className="text-white/30 flex-shrink-0" />
+          : <ChevronDown size={16} className="text-white/30 flex-shrink-0" />
+        }
+      </button>
+
+      {open && (
+        <div className="px-4 pb-5 pt-2 border-t border-white/10">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Página principal ─────────────────────────────────────────────────────────
+export default function CancioneroSettings() {
+  const navigate = useNavigate();
+  const [user, setUser]       = useState(null);
+  const [members, setMembers] = useState([]);
+
+  useEffect(() => {
+    const h = authHeaders();
+    Promise.all([
+      fetch(`${API}/auth/me`,          { headers: h }).then(r => r.json()),
+      fetch(`${API}/auth/org/members`, { headers: h }).then(r => r.json()),
+    ]).then(([u, m]) => {
+      if (u?.id) setUser(u);
+      setMembers(Array.isArray(m) ? m : []);
+    }).catch(() => {});
+  }, []);
+
+  return (
+    <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className="flex-shrink-0 bg-[#0f1a2e]/95 backdrop-blur-sm border-b border-white/10 px-4 py-3 flex items-center gap-3">
+        <button onClick={() => navigate('/cancionero')} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+          <ArrowLeft size={20} className="text-white/70" />
+        </button>
+        <h1 className="text-base font-bold flex-1">Configuraciones</h1>
+      </header>
+
+      {/* Contenido scrollable */}
+      <div className="flex-1 overflow-y-auto px-4 py-5 space-y-3 max-w-2xl mx-auto w-full">
+        <SectionCard
+          icon={User}
+          title="Mi Perfil"
+          subtitle={user?.display_name || 'Cargando...'}
+          defaultOpen
+        >
+          {user
+            ? <ProfileSection user={user} onSaved={setUser} />
+            : <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-yellow-400" /></div>
+          }
+        </SectionCard>
+
+        <SectionCard
+          icon={Users}
+          title="Banda"
+          subtitle="Configura los músicos por servicio"
+        >
+          <BandSection members={members} />
+        </SectionCard>
+
+        <SectionCard
+          icon={Calendar}
+          title="Mi Calendario"
+          subtitle="Bloquea fechas en que no puedes asistir"
+        >
+          <CalendarSection myUserId={user?.id} />
+        </SectionCard>
+      </div>
+
+      <CancioneroNavbar />
+    </div>
+  );
+}
