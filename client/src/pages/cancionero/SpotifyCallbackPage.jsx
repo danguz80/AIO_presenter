@@ -79,7 +79,11 @@ export default function SpotifyCallbackPage() {
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: playlistName, public: true, description: 'Generado con AIO Presenter' }),
         });
-        if (!createRes.ok) throw new Error('Error creando playlist');
+        if (!createRes.ok) {
+          const errBody = await createRes.json().catch(() => ({}));
+          const reason = errBody?.error?.message ?? errBody?.error ?? createRes.status;
+          throw new Error(`Error creando playlist (${createRes.status}): ${reason}`);
+        }
         const playlist = await createRes.json();
 
         // 4. Extraer track URIs desde los links guardados
