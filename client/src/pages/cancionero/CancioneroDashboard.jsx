@@ -22,7 +22,11 @@ function futureStr(days = 60) {
   d.setDate(d.getDate() + days);
   return d.toISOString().split('T')[0];
 }
-function toDateStr(d) { return String(d).slice(0, 10); }
+function toDateStr(d) {
+  if (!d) return '';
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  return String(d).slice(0, 10);
+}
 function formatDate(dateStr) {
   const d = new Date(toDateStr(dateStr) + 'T12:00:00');
   return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -109,8 +113,22 @@ export default function CancioneroDashboard() {
         try { return Boolean(JSON.parse(atob(token.split('.')[1])).isAdmin); } catch { return false; }
       })();
       const evList = Array.isArray(evs) ? evs : [];
-      const visible = isAdmin ? evList : evList.filter(e => e.is_published);
-      setEvents(visible.filter(e => e.date >= todayStr()).slice(0, 5));
+      const today = todayStr();
+      const visible = evList
+        .filter(e => {
+          const d = e.date instanceof Date
+            ? e.date.toISOString().slice(0, 10)
+            : String(e.date).slice(0, 10);
+          const published = isAdmin ? true : Boolean(e.is_published);
+          return published && d >= today;
+        })
+        .sort((a, b) => {
+          const da = a.date instanceof Date ? a.date.toISOString().slice(0, 10) : String(a.date).slice(0, 10);
+          const db = b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10);
+          return da.localeCompare(db);
+        })
+        .slice(0, 5);
+      setEvents(visible);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
