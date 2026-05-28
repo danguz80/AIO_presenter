@@ -81,33 +81,58 @@ export default function SpotifyCallbackPage() {
         if (!createRes.ok) throw new Error('Error creando playlist');
         const playlist = await createRes.json();
 
-        // 4. Buscar canciones y agregar URIs
-        setMessage('Buscando canciones en Spotify…');
+        // 4. Extraer track URIs desde los links guardados
+        setMessage('Procesando canciones…');
+
+        // Helper: convierte URL de Spotify en URI
+        // https://open.spotify.com/track/TRACK_ID?... → spotify:track:TRACK_ID
+        const urlToUri = (url) => {
+          if (!url) return null;
+          try {
+            const u = new URL(url);
+            // Acepta: open.spotify.com/track/ID  o  spotify:track:ID directamente
+            if (u.hostname === 'open.spotify.com') {
+              const parts = u.pathname.split('/').filter(Boolean);
+              // partes: ['track', 'TRACK_ID'] o ['intl-XX', 'track', 'TRACK_ID']
+              const trackIdx = parts.indexOf('track');
+              if (trackIdx !== -1 && parts[trackIdx + 1]) {
+                return `spotify:track:${parts[trackIdx + 1]}`;
+              }
+            }
+          } catch { /* URL malformada */ }
+          // Si ya es un URI spotify:track:...
+          if (url.startsWith('spotify:track:')) return url;
+          return null;
+        };
+
         const uris = [];
+        const skipped = [];
         for (const song of songs) {
-          const q = encodeURIComponent(`${song.title} ${song.author || ''}`.trim());
-          const searchRes = await fetch(
-            `https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          if (searchRes.ok) {
-            const searchData = await searchRes.json();
-            const track = searchData.tracks?.items?.[0];
-            if (track) uris.push(track.uri);
+          const uri = urlToUri(song.link);
+          if (uri) {
+            uris.push(uri);
+          } else {
+            skipped.push(song.title);
           }
         }
 
         if (uris.length) {
           setMessage('Agregando canciones a la playlist…');
-          await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uris }),
-          });
+          // Spotify acepta máx 100 URIs por llamada
+          for (let i = 0; i < uris.length; i += 100) {
+            await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
+            });
+          }
         }
 
+        const skipMsg = skipped.length
+          ? ` (${skipped.length} sin link: ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '…' : ''})`
+          : '';
         setPlaylistUrl(playlist.external_urls?.spotify || `https://open.spotify.com/playlist/${playlist.id}`);
-        setMessage(`¡Playlist creada con ${uris.length} de ${songs.length} canciones!`);
+        setMessage(`¡Playlist creada con ${uris.length} de ${songs.length} canciones!${skipMsg}`);
         setStatus('success');
       } catch (err) {
         setStatus('error');

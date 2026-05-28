@@ -55,7 +55,8 @@ async function getEvents(req, res) {
           'title', s.title,
           'author', s.author,
           'song_key', s.song_key,
-          'tags', s.tags
+          'tags', s.tags,
+          'link', s.link
         ) ORDER BY es.position
       ) FILTER (WHERE es.id IS NOT NULL),
       '[]'
@@ -98,7 +99,8 @@ async function getEvents(req, res) {
                                  'separator_color', es.separator_color,
                                  'media_name', es.media_name, 'media_type', es.media_type,
                                  'title', s.title, 'author', s.author,
-                                 'song_key', s.song_key, 'tags', s.tags)
+                                 'song_key', s.song_key, 'tags', s.tags,
+                                 'link', s.link)
                ORDER BY es.position
              ) FILTER (WHERE es.id IS NOT NULL),
              '[]'
@@ -160,7 +162,8 @@ async function getEventById(req, res) {
               'item_type', es.item_type, 'separator_label', es.separator_label,
               'separator_color', es.separator_color,
               'media_name', es.media_name, 'media_type', es.media_type,
-              'song_key', s.song_key, 'tags', s.tags
+              'song_key', s.song_key, 'tags', s.tags,
+              'link', s.link
             ) ORDER BY es.position
           ) FILTER (WHERE es.id IS NOT NULL),
           '[]'

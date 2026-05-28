@@ -669,6 +669,17 @@ export default function CancioneroEventDetail() {
       return;
     }
 
+    // Advertir si alguna canción no tiene link de Spotify
+    const songItems = allItems.filter(i => i.item_type !== 'separator' && i.song_id);
+    const withoutLink = songItems.filter(i => !i.link);
+    if (withoutLink.length > 0) {
+      const names = withoutLink.map(i => i.title).join(', ');
+      const ok = window.confirm(
+        `${withoutLink.length} canción${withoutLink.length > 1 ? 'es' : ''} no ${withoutLink.length > 1 ? 'tienen' : 'tiene'} link de Spotify y no se agregarán a la playlist:\n\n${names}\n\n¿Continuar de todas formas?`
+      );
+      if (!ok) return;
+    }
+
     // Nombre de la playlist: DD-MM-AAAA - Título
     const rawDate = occurrenceDate || event.date;
     const d = new Date(String(rawDate).slice(0, 10) + 'T12:00:00');
@@ -701,7 +712,7 @@ export default function CancioneroEventDetail() {
     localStorage.setItem('spotify_state', state);
     localStorage.setItem('spotify_playlist_songs', JSON.stringify(
       allItems.filter(i => i.item_type !== 'separator' && i.song_id).map(i => ({
-        title: i.title, author: i.author,
+        title: i.title, author: i.author, link: i.link || null,
       }))
     ));
 
