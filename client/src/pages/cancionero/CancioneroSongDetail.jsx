@@ -122,6 +122,7 @@ export default function CancioneroSongDetail() {
   const rafRef         = useRef(null);
   const lastTs         = useRef(null);
   const scrollSpeedRef = useRef(scrollSpeed); // siempre actualizado, sin reiniciar el loop
+  const accumRef       = useRef(0);           // acumulador de píxeles fraccionarios
 
   // Mantener el ref sincronizado sin tocar el loop
   useEffect(() => { scrollSpeedRef.current = scrollSpeed; }, [scrollSpeed]);
@@ -145,32 +146,44 @@ export default function CancioneroSongDetail() {
       lastTs.current = null;
       return;
     }
-    // Resetear timestamp para que el primer frame no tenga dt acumulado
+    // Resetear acumulador y timestamp al iniciar
     lastTs.current = null;
+    accumRef.current = 0;
 
     const step = (ts) => {
       if (lastTs.current !== null && scrollRef.current) {
-        // Cap de 50 ms: evita saltos bruscos al volver de segundo plano/pestañas
-        const dt        = Math.min(ts - lastTs.current, 50);
-        const pxPerSec  = scrollSpeedRef.current * 12 + 3; // speed 1=15px/s … speed 10=123px/s
-        scrollRef.current.scrollTop += pxPerSec * dt / 1000;
+        // Cap de 50 ms: evita saltos al volver de segundo plano
+        const dt       = Math.min(ts - lastTs.current, 50);
+        // Escala lineal: speed 1 = 10px/s … speed 10 = 55px/s
+        const pxPerSec = scrollSpeedRef.current * 5 + 5;
+
+        // Acumular píxeles fraccionarios y aplicar solo la parte entera
+        // Esto elimina el efecto "entrecortado" a velocidades bajas donde
+        // el incremento por frame es < 1px y el navegador redondea scrollTop
+        accumRef.current += pxPerSec * dt / 1000;
+        const intPx = Math.floor(accumRef.current);
+        if (intPx >= 1) {
+          scrollRef.current.scrollTop += intPx;
+          accumRef.current -= intPx;
+        }
 
         // Detener al llegar al fondo
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
         if (scrollTop + clientHeight >= scrollHeight - 2) {
           setScrolling(false);
-          return; // no pedir nuevo frame
+          return;
         }
       }
-      lastTs.current  = ts;
+      lastTs.current = ts;
       rafRef.current  = requestAnimationFrame(step);
     };
 
     rafRef.current = requestAnimationFrame(step);
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      lastTs.current = null;
+      rafRef.current   = null;
+      lastTs.current   = null;
+      accumRef.current = 0;
     };
   }, [scrolling]); // scrollSpeed se lee a través del ref, sin reiniciar el loop
 
