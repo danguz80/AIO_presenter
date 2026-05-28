@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X } from 'lucide-react';
+import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X, Plus } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
+import SongFormModal from '../../components/Library/SongFormModal';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -10,16 +11,20 @@ function authHeaders() {
 
 export default function CancioneroSongs() {
   const navigate = useNavigate();
-  const [songs, setSongs]     = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery]     = useState('');
+  const [songs, setSongs]       = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [query, setQuery]       = useState('');
+  const [newSongOpen, setNewSongOpen] = useState(false);
 
-  useEffect(() => {
+  const loadSongs = () => {
+    setLoading(true);
     fetch(`${API}/api/songs`, { headers: authHeaders() })
       .then(r => r.json())
       .then(data => { setSongs(Array.isArray(data) ? data : data.songs ?? []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { loadSongs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = songs.filter(s => {
     const q = query.toLowerCase();
@@ -36,6 +41,13 @@ export default function CancioneroSongs() {
           </button>
           <h1 className="text-base font-bold flex-1">Canciones</h1>
           <span className="text-xs text-white/30">{songs.length} total</span>
+          <button
+            onClick={() => setNewSongOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/35 border border-yellow-400/30 text-yellow-300 text-xs font-semibold transition-colors"
+            title="Nueva canción"
+          >
+            <Plus size={14} /> Nueva
+          </button>
         </div>
         {/* Search */}
         <div className="px-4 pb-3">
@@ -98,6 +110,17 @@ export default function CancioneroSongs() {
         )}
       </div>
       <CancioneroNavbar />
+
+      {newSongOpen && (
+        <SongFormModal
+          onClose={() => setNewSongOpen(false)}
+          onSaved={(saved) => {
+            setNewSongOpen(false);
+            loadSongs();
+            if (saved?.id) navigate(`/cancionero/canciones/${saved.id}`);
+          }}
+        />
+      )}
     </div>
   );
 }
