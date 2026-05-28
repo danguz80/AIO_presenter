@@ -714,8 +714,12 @@ export default function CancioneroEventDetail() {
 
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
-    // Usar el origen real del navegador — funciona tanto en local como en producción
-    const redirectUri = `${window.location.origin}/spotify-callback`;
+    // Local: Spotify solo acepta 127.0.0.1 (no localhost) → reemplazar
+    // Producción: usar el origen real
+    const origin = window.location.hostname === 'localhost'
+      ? window.location.origin.replace('localhost', '127.0.0.1')
+      : window.location.origin;
+    const redirectUri = `${origin}/spotify-callback`;
     const scope = 'playlist-modify-public playlist-modify-private';
 
     // Codificar todo lo necesario en el state para no depender de localStorage
