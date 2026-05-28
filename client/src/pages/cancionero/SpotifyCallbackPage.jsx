@@ -71,6 +71,7 @@ export default function SpotifyCallbackPage() {
         }
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
+        const grantedScopes = tokenData.scope ?? '(sin scopes)';
 
         // 2. Obtener user ID del usuario autenticado
         setMessage('Obteniendo perfil de Spotify…');
@@ -79,9 +80,13 @@ export default function SpotifyCallbackPage() {
         });
         if (!meRes.ok) {
           const errMe = await meRes.json().catch(() => ({}));
-          const detail = JSON.stringify(errMe);
-          console.error('[Spotify /v1/me]', meRes.status, detail);
-          throw new Error(`Error obteniendo perfil (${meRes.status}): ${errMe?.error?.message ?? errMe?.error?.reason ?? detail}`);
+          const rawDetail = JSON.stringify(errMe);
+          throw new Error(
+            `[DEBUG] Status: ${meRes.status}\n` +
+            `Scopes concedidos: ${grantedScopes}\n` +
+            `Client ID usado: ${clientId}\n` +
+            `Respuesta Spotify: ${rawDetail}`
+          );
         }
         const meData = await meRes.json();
         const spotifyUserId = meData.id;
