@@ -374,10 +374,12 @@ function BandSection({ members, org, isAdmin }) {
 // ─── Mi Calendario ────────────────────────────────────────────────────────────
 function CalendarSection({ myUserId }) {
   const today = new Date();
-  const [year, setYear]     = useState(today.getFullYear());
-  const [month, setMonth]   = useState(today.getMonth());
-  const [blocked, setBlocked] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [year, setYear]           = useState(today.getFullYear());
+  const [month, setMonth]         = useState(today.getMonth());
+  const [blocked, setBlocked]     = useState([]);       // estado local (con cambios pendientes)
+  const [savedBlocked, setSavedBlocked] = useState([]); // estado en BD
+  const [loading, setLoading]     = useState(true);
+  const [saving, setSaving]       = useState(false);
 
   const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 
@@ -389,30 +391,56 @@ function CalendarSection({ myUserId }) {
     try {
       const res  = await fetch(`${API}/api/blocked-dates?start=${start}&end=${end}`, { headers: authHeaders() });
       const data = await res.json();
-      setBlocked(Array.isArray(data) ? data : []);
+      const arr  = Array.isArray(data) ? data : [];
+      setBlocked(arr);
+      setSavedBlocked(arr);
     } catch {}
     setLoading(false);
   }, [year, month]);
 
   useEffect(() => { fetchBlocked(); }, [fetchBlocked]);
 
-  const toggleDate = async (key) => {
+  // Toggle solo en estado local — no hace llamadas API
+  const toggleDate = (key) => {
     const mine = blocked.find(b => b.date?.slice(0, 10) === key && b.user_id === myUserId);
     if (mine) {
-      await fetch(`${API}/api/blocked-dates/${mine.id}`, { method: 'DELETE', headers: authHeaders() });
       setBlocked(prev => prev.filter(b => b.id !== mine.id));
     } else {
-      const res = await fetch(`${API}/api/blocked-dates`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ date: key }),
-      });
-      if (res.ok) {
-        const entry = await res.json();
-        setBlocked(prev => [...prev, { ...entry, user_id: myUserId }]);
-      }
+      setBlocked(prev => [...prev, { id: `pending-${key}`, user_id: myUserId, date: key, display_name: 'Tú' }]);
     }
   };
+
+  // Guardar: diff entre local y BD → POST/DELETE en paralelo
+  const saveBlockedDates = async () => {
+    setSaving(true);
+    const savedMine = savedBlocked.filter(b => b.user_id === myUserId);
+    const localMine = blocked.filter(b => b.user_id === myUserId);
+    const savedKeys = new Set(savedMine.map(b => b.date?.slice(0, 10)));
+    const localKeys = new Set(localMine.map(b => b.date?.slice(0, 10)));
+    const toAdd    = [...localKeys].filter(k => !savedKeys.has(k));
+    const toDelete = savedMine.filter(b => !localKeys.has(b.date?.slice(0, 10)));
+    try {
+      await Promise.all([
+        ...toAdd.map(key =>
+          fetch(`${API}/api/blocked-dates`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify({ date: key }),
+          })
+        ),
+        ...toDelete.map(b =>
+          fetch(`${API}/api/blocked-dates/${b.id}`, { method: 'DELETE', headers: authHeaders() })
+        ),
+      ]);
+      await fetchBlocked(); // recarga desde BD
+    } catch {}
+    setSaving(false);
+  };
+
+  // ¿Hay cambios sin guardar (solo propios)?
+  const myLocalDates = blocked.filter(b => b.user_id === myUserId).map(b => b.date?.slice(0, 10)).sort().join(',');
+  const mySavedDates = savedBlocked.filter(b => b.user_id === myUserId).map(b => b.date?.slice(0, 10)).sort().join(',');
+  const isDirty = myLocalDates !== mySavedDates;
 
   const prevMonth = () => {
     if (month === 0) { setMonth(11); setYear(y => y - 1); }
@@ -457,17 +485,25 @@ function CalendarSection({ myUserId }) {
           const myBlock    = blocked.find(b => b.date?.slice(0, 10) === key && b.user_id === myUserId);
           const othersBlk  = blocked.filter(b => b.date?.slice(0, 10) === key && b.user_id !== myUserId);
           const isToday    = key === todayStr;
+          // Estado pendiente: en local pero no en BD, o en BD pero no en local
+          const inSaved = savedBlocked.some(b => b.date?.slice(0, 10) === key && b.user_id === myUserId);
+          const isPendingAdd    = !!myBlock && !inSaved;
+          const isPendingRemove = !myBlock && inSaved;
 
           return (
             <button
               key={key}
               onClick={() => toggleDate(key)}
               className={`relative aspect-square rounded-lg text-xs font-medium transition-colors flex items-center justify-center ${
-                myBlock
-                  ? 'bg-red-500/25 border border-red-400/50 text-red-300'
-                  : isToday
-                    ? 'bg-yellow-500/20 border border-yellow-400/40 text-yellow-300'
-                    : 'hover:bg-white/10 text-white/60'
+                isPendingAdd
+                  ? 'bg-red-500/25 border border-dashed border-red-400/70 text-red-300'
+                  : myBlock
+                    ? 'bg-red-500/25 border border-red-400/50 text-red-300'
+                    : isPendingRemove
+                      ? 'bg-white/5 border border-dashed border-red-400/40 text-white/40 line-through'
+                      : isToday
+                        ? 'bg-yellow-500/20 border border-yellow-400/40 text-yellow-300'
+                        : 'hover:bg-white/10 text-white/60'
               }`}
             >
               {day}
@@ -499,24 +535,51 @@ function CalendarSection({ myUserId }) {
       {!loading && blocked.length > 0 && (
         <div className="space-y-1.5">
           <p className="text-xs font-semibold uppercase tracking-widest text-white/25 mb-2">Este mes</p>
-          {blocked.map(b => (
-            <div key={b.id} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-white/5">
-              <Lock size={12} className={b.user_id === myUserId ? 'text-red-400 flex-shrink-0' : 'text-orange-400 flex-shrink-0'} />
-              <span className="flex-1 text-xs text-white/65">
-                {new Date(b.date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'short' })}
-              </span>
-              <span className="text-xs text-white/30 truncate max-w-[5rem]">{b.display_name}</span>
-              {b.user_id === myUserId && (
-                <button
-                  onClick={() => toggleDate(b.date?.slice(0, 10))}
-                  className="p-0.5 hover:text-red-400 text-white/20 transition-colors"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-          ))}
+          {blocked.map(b => {
+            const dateKey = b.date?.slice(0, 10);
+            const isPending = String(b.id).startsWith('pending-');
+            return (
+              <div
+                key={b.id}
+                className={`flex items-center gap-2.5 px-3 py-2 rounded-lg ${
+                  isPending ? 'bg-amber-500/10 border border-dashed border-amber-400/30' : 'bg-white/5'
+                }`}
+              >
+                <Lock size={12} className={b.user_id === myUserId ? 'text-red-400 flex-shrink-0' : 'text-orange-400 flex-shrink-0'} />
+                <span className="flex-1 text-xs text-white/65">
+                  {(() => {
+                    if (!dateKey) return '—';
+                    const d = new Date(dateKey + 'T12:00:00');
+                    if (isNaN(d)) return dateKey;
+                    return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'short' });
+                  })()}
+                  {isPending && <span className="ml-1 text-amber-400/70 text-[10px]">(sin guardar)</span>}
+                </span>
+                <span className="text-xs text-white/30 truncate max-w-[5rem]">{b.display_name || 'Tú'}</span>
+                {b.user_id === myUserId && (
+                  <button
+                    onClick={() => toggleDate(dateKey)}
+                    className="p-0.5 hover:text-red-400 text-white/20 transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {/* Botón Guardar — visible cuando hay cambios pendientes */}
+      {isDirty && (
+        <button
+          onClick={saveBlockedDates}
+          disabled={saving}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-yellow-400/40 bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-300 font-semibold text-sm transition-colors disabled:opacity-60"
+        >
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          {saving ? 'Guardando...' : 'Guardar cambios'}
+        </button>
       )}
     </div>
   );

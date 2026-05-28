@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Music2, CalendarDays, Settings2, Bell,
-  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor, X, Check,
+  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor, X, Check, Users,
 } from 'lucide-react';
 import { io as socketIo } from 'socket.io-client';
 import CancioneroNavbar from './CancioneroNavbar';
@@ -72,6 +72,7 @@ export default function CancioneroDashboard() {
   const [org, setOrg]     = useState(null);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [bandConfigs, setBandConfigs] = useState([]);
   const isAdmin = getIsAdmin();
 
   // Notificaciones
@@ -82,12 +83,14 @@ export default function CancioneroDashboard() {
 
   const unreadCount = notifs.filter(n => !n.is_read).length;
 
-  const loadNotifs = useCallback(async () => {
+  const loadNotifs = useCallback(async (autoOpen = false) => {
     try {
       const res = await fetch(`${API}/api/notifications`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
-        setNotifs(Array.isArray(data) ? data : []);
+        const arr = Array.isArray(data) ? data : [];
+        setNotifs(arr);
+        if (autoOpen && arr.some(n => !n.is_read)) setNotifsOpen(true);
       }
     } catch {}
     setNotifsLoaded(true);
@@ -114,9 +117,12 @@ export default function CancioneroDashboard() {
       fetch(`${API}/auth/org`, { headers: authHeaders() }).then(r => r.json()),
       fetch(`${API}/api/events?start=${todayStr()}&end=${futureStr(60)}`, { headers: authHeaders() })
         .then(r => r.json()).catch(() => []),
-    ]).then(([me, orgData, evs]) => {
+      fetch(`${API}/api/band-configs`, { headers: authHeaders() })
+        .then(r => r.json()).catch(() => []),
+    ]).then(([me, orgData, evs, configs]) => {
       setUser(me);
       setOrg(orgData);
+      setBandConfigs(Array.isArray(configs) ? configs : []);
       const evList = Array.isArray(evs) ? evs : [];
       const today = todayStr();
       const visible = evList
@@ -154,9 +160,15 @@ export default function CancioneroDashboard() {
         metadata: { event_id: data.eventId, date: data.date },
         created_at: new Date().toISOString(),
       }, ...prev]);
+      // Auto-expandir panel de notificaciones
+      setNotifsOpen(true);
+      setNotifsLoaded(true);
     });
     return () => socket.disconnect();
   }, []);
+
+  // Auto-cargar notificaciones al montar (auto-abre si hay no leídas)
+  useEffect(() => { loadNotifs(true); }, [loadNotifs]);
 
   const logout = () => {
     localStorage.removeItem('aio_sync_token');
@@ -229,7 +241,7 @@ export default function CancioneroDashboard() {
                 key={item.id}
                 onClick={() => {
                   if (isNotif) {
-                    if (!notifsLoaded) loadNotifs();
+                    if (!notifsLoaded) loadNotifs(false);
                     setNotifsOpen(o => !o);
                   } else if (item.route) {
                     navigate(item.route);
@@ -342,6 +354,47 @@ export default function CancioneroDashboard() {
           </div>
         </section>
       )}
+
+      {/* ── Banner: asignaciones de banda ───────────────────────────── */}
+      {(() => {
+        if (!user?.id || isAdmin) return null;
+        const myAssignments = events
+          .filter(ev => ev.band_config_id)
+          .flatMap(ev => {
+            const cfg = bandConfigs.find(c => c.id === Number(ev.band_config_id));
+            if (!cfg) return [];
+            const slot = (cfg.slots || []).find(s => s.userId === user.id);
+            if (!slot?.instrument) return [];
+            return [{ ev, cfg, instrument: slot.instrument }];
+          });
+        if (!myAssignments.length) return null;
+        return (
+          <section className="px-5 pb-4">
+            <div className="space-y-2">
+              {myAssignments.map(({ ev, cfg, instrument }) => (
+                <button
+                  key={`${ev.id}-${ev.date}`}
+                  onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } })}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 hover:bg-yellow-500/20 text-left transition-colors"
+                >
+                  <div className="p-2 rounded-lg bg-yellow-500/20 border border-yellow-400/30 shrink-0">
+                    <Users size={14} className="text-yellow-300" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-yellow-300 truncate">
+                      Estás asignado como {instrument}
+                    </p>
+                    <p className="text-[11px] text-white/50 mt-0.5 truncate">
+                      {ev.title} · {formatDate(ev.date)}
+                    </p>
+                  </div>
+                  <ChevronRight size={14} className="text-yellow-400/50 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      })()}
 
       {/* ── Próximos eventos ─────────────────────────────────────────── */}
       <section className="px-5 pb-10">
