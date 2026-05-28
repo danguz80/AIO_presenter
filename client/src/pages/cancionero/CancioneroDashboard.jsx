@@ -128,7 +128,8 @@ export default function CancioneroDashboard() {
       setBandConfigs(Array.isArray(configs) ? configs : []);
       // Guardar solo mis propias fechas bloqueadas (filtramos después de tener me.id)
       const blockedArr = Array.isArray(blocked) ? blocked : [];
-      setMyBlockedDates(blockedArr.filter(b => b.user_id === me?.id).map(b => b.date?.slice(0, 10)));
+      const myId = Number(me?.id);
+      setMyBlockedDates(blockedArr.filter(b => Number(b.user_id) === myId).map(b => b.date?.slice(0, 10)));
       const evList = Array.isArray(evs) ? evs : [];
       const today = todayStr();
       const visible = evList
@@ -363,13 +364,14 @@ export default function CancioneroDashboard() {
 
       {/* ── Banner: asignaciones de banda ───────────────────────────── */}
       {(() => {
-        if (!user?.id || isAdmin) return null;
+        if (!user?.id) return null;
+        const myId = Number(user.id);
         const myAssignments = events
           .filter(ev => ev.band_config_id)
           .flatMap(ev => {
             const cfg = bandConfigs.find(c => c.id === Number(ev.band_config_id));
             if (!cfg) return [];
-            const slot = (cfg.slots || []).find(s => s.userId === user.id);
+            const slot = (cfg.slots || []).find(s => Number(s.userId) === myId);
             if (!slot?.instrument) return [];
             const evDate = toDateStr(ev.date);
             const hasConflict = myBlockedDates.includes(evDate);
