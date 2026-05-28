@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Music2, CalendarDays, Settings2, Bell,
-  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor, X, Check, Users,
+  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor, X, Check, Users, AlertTriangle,
 } from 'lucide-react';
 import { io as socketIo } from 'socket.io-client';
 import CancioneroNavbar from './CancioneroNavbar';
@@ -73,6 +73,7 @@ export default function CancioneroDashboard() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [bandConfigs, setBandConfigs] = useState([]);
+  const [myBlockedDates, setMyBlockedDates] = useState([]); // fechas que el usuario bloqueó
   const isAdmin = getIsAdmin();
 
   // Notificaciones
@@ -119,10 +120,15 @@ export default function CancioneroDashboard() {
         .then(r => r.json()).catch(() => []),
       fetch(`${API}/api/band-configs`, { headers: authHeaders() })
         .then(r => r.json()).catch(() => []),
-    ]).then(([me, orgData, evs, configs]) => {
+      fetch(`${API}/api/blocked-dates?start=${todayStr()}&end=${futureStr(60)}`, { headers: authHeaders() })
+        .then(r => r.json()).catch(() => []),
+    ]).then(([me, orgData, evs, configs, blocked]) => {
       setUser(me);
       setOrg(orgData);
       setBandConfigs(Array.isArray(configs) ? configs : []);
+      // Guardar solo mis propias fechas bloqueadas (filtramos después de tener me.id)
+      const blockedArr = Array.isArray(blocked) ? blocked : [];
+      setMyBlockedDates(blockedArr.filter(b => b.user_id === me?.id).map(b => b.date?.slice(0, 10)));
       const evList = Array.isArray(evs) ? evs : [];
       const today = todayStr();
       const visible = evList
@@ -365,30 +371,60 @@ export default function CancioneroDashboard() {
             if (!cfg) return [];
             const slot = (cfg.slots || []).find(s => s.userId === user.id);
             if (!slot?.instrument) return [];
-            return [{ ev, cfg, instrument: slot.instrument }];
+            const evDate = toDateStr(ev.date);
+            const hasConflict = myBlockedDates.includes(evDate);
+            return [{ ev, cfg, instrument: slot.instrument, hasConflict }];
           });
         if (!myAssignments.length) return null;
         return (
           <section className="px-5 pb-4">
             <div className="space-y-2">
-              {myAssignments.map(({ ev, cfg, instrument }) => (
+              {myAssignments.map(({ ev, cfg, instrument, hasConflict }) => (
                 <button
                   key={`${ev.id}-${ev.date}`}
                   onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } })}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 hover:bg-yellow-500/20 text-left transition-colors"
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-colors ${
+                    hasConflict
+                      ? 'border-red-500/60 bg-red-500/15 hover:bg-red-500/25 animate-pulse'
+                      : 'border-yellow-500/40 bg-yellow-500/10 hover:bg-yellow-500/20'
+                  }`}
                 >
-                  <div className="p-2 rounded-lg bg-yellow-500/20 border border-yellow-400/30 shrink-0">
-                    <Users size={14} className="text-yellow-300" />
+                  <div className={`p-2 rounded-lg border shrink-0 ${
+                    hasConflict
+                      ? 'bg-red-500/20 border-red-400/40'
+                      : 'bg-yellow-500/20 border-yellow-400/30'
+                  }`}>
+                    {hasConflict
+                      ? <AlertTriangle size={14} className="text-red-300" />
+                      : <Users size={14} className="text-yellow-300" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold text-yellow-300 truncate">
-                      Estás asignado como {instrument}
-                    </p>
-                    <p className="text-[11px] text-white/50 mt-0.5 truncate">
-                      {ev.title} · {formatDate(ev.date)}
-                    </p>
+                    {hasConflict ? (
+                      <>
+                        <p className="text-xs font-extrabold text-red-300 truncate uppercase tracking-wide">
+                          ⚠ Conflicto urgente
+                        </p>
+                        <p className="text-[11px] text-red-200/70 mt-0.5 truncate">
+                          Estás bloqueado ese día pero asignado como {instrument} en {ev.title}
+                        </p>
+                        <p className="text-[10px] text-red-400/60 mt-0.5">
+                          {formatDate(ev.date)} · Actualiza la asignación de banda
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-bold text-yellow-300 truncate">
+                          Estás asignado como {instrument}
+                        </p>
+                        <p className="text-[11px] text-white/50 mt-0.5 truncate">
+                          {ev.title} · {formatDate(ev.date)}
+                        </p>
+                      </>
+                    )}
                   </div>
-                  <ChevronRight size={14} className="text-yellow-400/50 shrink-0" />
+                  <ChevronRight size={14} className={`shrink-0 ${
+                    hasConflict ? 'text-red-400/50' : 'text-yellow-400/50'
+                  }`} />
                 </button>
               ))}
             </div>
