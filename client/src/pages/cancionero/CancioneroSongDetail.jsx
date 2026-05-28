@@ -116,11 +116,15 @@ export default function CancioneroSongDetail() {
   const chordsColor = '#facc15';
 
   // Auto-scroll
-  const [scrolling, setScrolling]   = useState(false);
+  const [scrolling, setScrolling]     = useState(false);
   const [scrollSpeed, setScrollSpeed] = useState(2.0); // 1.0–10.0 en pasos de 0.1
-  const scrollRef = useRef(null);
-  const rafRef    = useRef(null);
-  const lastTs    = useRef(null);
+  const scrollRef      = useRef(null);
+  const rafRef         = useRef(null);
+  const lastTs         = useRef(null);
+  const scrollSpeedRef = useRef(scrollSpeed); // siempre actualizado, sin reiniciar el loop
+
+  // Mantener el ref sincronizado sin tocar el loop
+  useEffect(() => { scrollSpeedRef.current = scrollSpeed; }, [scrollSpeed]);
 
   useEffect(() => {
     fetch(`${API}/api/songs/${id}`, { headers: authHeaders() })
@@ -133,32 +137,42 @@ export default function CancioneroSongDetail() {
       .catch(() => setLoading(false));
   }, [id]);
 
-  // Auto-scroll loop
+  // Auto-scroll loop — solo depende de `scrolling`, no de scrollSpeed
   useEffect(() => {
     if (!scrolling) {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
       lastTs.current = null;
       return;
     }
+    // Resetear timestamp para que el primer frame no tenga dt acumulado
+    lastTs.current = null;
+
     const step = (ts) => {
       if (lastTs.current !== null && scrollRef.current) {
-        const dt = ts - lastTs.current;
-        const pxPerSec = scrollSpeed * 12 + 3; // speed 1=15px/s … speed 10=123px/s
+        // Cap de 50 ms: evita saltos bruscos al volver de segundo plano/pestañas
+        const dt        = Math.min(ts - lastTs.current, 50);
+        const pxPerSec  = scrollSpeedRef.current * 12 + 3; // speed 1=15px/s … speed 10=123px/s
         scrollRef.current.scrollTop += pxPerSec * dt / 1000;
+
         // Detener al llegar al fondo
         const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
         if (scrollTop + clientHeight >= scrollHeight - 2) {
           setScrolling(false);
-          lastTs.current = null;
-          return;
+          return; // no pedir nuevo frame
         }
       }
-      lastTs.current = ts;
-      rafRef.current = requestAnimationFrame(step);
+      lastTs.current  = ts;
+      rafRef.current  = requestAnimationFrame(step);
     };
+
     rafRef.current = requestAnimationFrame(step);
-    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
-  }, [scrolling, scrollSpeed]);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      lastTs.current = null;
+    };
+  }, [scrolling]); // scrollSpeed se lee a través del ref, sin reiniciar el loop
 
   if (loading) {
     return (
