@@ -20,7 +20,7 @@ const INSTRUMENTS = [
   'Coros', 'Guitarra eléctrica', 'Guitarra acústica',
   'Bajo eléctrico', 'Batería', 'Teclado', 'Piano',
   'Violín', 'Trompeta', 'Saxofón', 'Trombón',
-  'Percusión', 'Cajón', 'Ukulele', 'Otro',
+  'Percusión', 'Cajón', 'Ukulele', 'Mandolina', 'Otro',
 ];
 
 const MONTHS_ES = [
@@ -265,7 +265,18 @@ function BandSection({ members }) {
                       style={{ maxWidth: '9rem' }}
                     >
                       <option value="">— Sin instrumento —</option>
-                      {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+                      {/* Mostrar solo los instrumentos configurados en el perfil del músico */}
+                      {(() => {
+                        const member = members.find(m => m.id === slot.userId);
+                        const opts   = (member?.instruments?.length)
+                          ? member.instruments
+                          : INSTRUMENTS;
+                        // Si el valor actual no está en la lista, incluirlo igual
+                        const list = (slot.instrument && !opts.includes(slot.instrument))
+                          ? [slot.instrument, ...opts]
+                          : opts;
+                        return list.map(i => <option key={i} value={i}>{i}</option>);
+                      })()}
                     </select>
                   </div>
                 ))}

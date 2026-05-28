@@ -42,7 +42,7 @@ function daysUntil(dateStr) {
 const NAV_ITEMS = [
   { id: 'canciones',      icon: Music2,       label: 'Canciones',      route: '/cancionero/canciones',      color: 'yellow' },
   { id: 'eventos',        icon: CalendarDays, label: 'Eventos',        route: '/cancionero/eventos',        color: 'blue'   },
-  { id: 'configuracion',  icon: Settings2,    label: 'Configuración',  route: null,                         color: 'slate'  },
+  { id: 'configuracion',  icon: Settings2,    label: 'Configuración',  route: '/cancionero/configuracion',  color: 'slate'  },
   { id: 'notificaciones', icon: Bell,         label: 'Notificaciones', route: null,                         color: 'slate'  },
 ];
 
