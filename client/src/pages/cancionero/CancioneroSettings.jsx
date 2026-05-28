@@ -35,10 +35,15 @@ function dateStr(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
 // ─── Mi Perfil ────────────────────────────────────────────────────────────────
 function ProfileSection({ user, onSaved }) {
   const [instruments, setInstruments] = useState(user?.instruments || []);
-  const [saving, setSaving]           = useState(false);
-  const [saved, setSaved]             = useState(false);
+  const [savedInstruments, setSavedInstruments] = useState(user?.instruments || []);
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => { setInstruments(user?.instruments || []); }, [user]);
+  useEffect(() => {
+    setInstruments(user?.instruments || []);
+    setSavedInstruments(user?.instruments || []);
+  }, [user]);
+
+  const isDirty = JSON.stringify([...instruments].sort()) !== JSON.stringify([...savedInstruments].sort());
 
   const toggle = (inst) =>
     setInstruments(prev =>
@@ -56,8 +61,7 @@ function ProfileSection({ user, onSaved }) {
       if (res.ok) {
         const updated = await res.json();
         onSaved?.(updated);
-        setSaved(true);
-        setTimeout(() => setSaved(false), 2500);
+        setSavedInstruments(updated.instruments || instruments);
       }
     } finally {
       setSaving(false);
@@ -115,17 +119,17 @@ function ProfileSection({ user, onSaved }) {
 
       <button
         onClick={save}
-        disabled={saving}
+        disabled={saving || !isDirty}
         className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 border ${
-          saved
-            ? 'bg-green-500/15 border-green-400/35 text-green-300'
+          !isDirty
+            ? 'bg-green-500/15 border-green-400/35 text-green-300 cursor-default'
             : 'bg-yellow-500/15 border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25'
         }`}
       >
         {saving
           ? <Loader2 size={14} className="animate-spin" />
-          : saved
-            ? <><Check size={14} /> Guardado</>
+          : !isDirty
+            ? <><Check size={14} /> Perfil guardado</>
             : <><Save size={14} /> Guardar perfil</>
         }
       </button>
