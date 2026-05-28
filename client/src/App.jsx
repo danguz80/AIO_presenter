@@ -19,6 +19,7 @@ import CancioneroSongDetail    from './pages/cancionero/CancioneroSongDetail';
 import CancioneroEvents        from './pages/cancionero/CancioneroEvents';
 import CancioneroEventDetail   from './pages/cancionero/CancioneroEventDetail';
 import CancioneroSettings      from './pages/cancionero/CancioneroSettings';
+import SpotifyCallbackPage     from './pages/cancionero/SpotifyCallbackPage';
 
 // Intercepta sync_token / sync_error de la URL (redirect post-OAuth) y redirige a /app
 function OAuthCallbackHandler() {
@@ -143,6 +144,8 @@ export default function App() {
         <Route path="/cancionero/eventos"            element={<RequireAuth><CancioneroEvents /></RequireAuth>} />
         <Route path="/cancionero/eventos/:id"        element={<RequireAuth><CancioneroEventDetail /></RequireAuth>} />
         <Route path="/cancionero/configuracion"         element={<RequireAuth><CancioneroSettings /></RequireAuth>} />
+        {/* Spotify OAuth callback */}
+        <Route path="/spotify-callback" element={<RequireAuth><SpotifyCallbackPage /></RequireAuth>} />
         {/* Páginas de display — abiertas en pantallas secundarias, sin auth */}
         <Route path="/output"  element={<OutputPage />} />
         <Route path="/stage"   element={<StagePage />} />

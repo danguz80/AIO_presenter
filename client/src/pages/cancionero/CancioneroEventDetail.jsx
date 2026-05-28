@@ -3,8 +3,154 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, Clock, Music2, Pencil, Trash2,
   ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus, Send, Check, Users, LayoutTemplate,
+  FileText, ListMusic,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
+
+// ─── Abreviaciones de sección ─────────────────────────────────────────────────
+const SECTION_ABBR = {
+  'intro':    'I',  'intro 1': 'I1', 'intro 2': 'I2',
+  'verso':    'V',  'verso 1': 'V1', 'verso 2': 'V2', 'verso 3': 'V3',
+  'estrofa':  'E',  'estrofa 1': 'E1', 'estrofa 2': 'E2',
+  'pre-coro': 'PC', 'pre coro': 'PC',
+  'coro':     'C',  'coro 2': 'C2',
+  'puente':   'Pb', 'bridge': 'Pb',
+  'outro':    'O',  'final': 'F', 'tag': 'T', 'ending': 'F',
+};
+function abbr(label) {
+  if (!label) return '';
+  const key = label.toLowerCase().trim();
+  return SECTION_ABBR[key] ?? label;
+}
+
+// ─── Generación de PDF ────────────────────────────────────────────────────────
+async function generateSetlistPDF(event, allItems, occurrenceDate) {
+  const { jsPDF } = await import('jspdf');
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const pageW = 210;
+  const marginL = 15;
+  const marginR = 15;
+  const contentW = pageW - marginL - marginR;
+  let y = 20;
+
+  const checkPage = (needed = 8) => {
+    if (y + needed > 280) { doc.addPage(); y = 20; }
+  };
+
+  // ─── Encabezado ───────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(20, 20, 60);
+  doc.text(event.title || 'Setlist', marginL, y);
+  y += 7;
+
+  const dateStr = (() => {
+    const raw = occurrenceDate || event.date;
+    const d = new Date(String(raw).slice(0, 10) + 'T12:00:00');
+    return isNaN(d) ? '' : d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  })();
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(90, 90, 120);
+  doc.text(dateStr, marginL, y);
+  y += 2;
+  doc.setDrawColor(200, 200, 220);
+  doc.setLineWidth(0.4);
+  doc.line(marginL, y + 3, pageW - marginR, y + 3);
+  y += 9;
+
+  // ─── Ítems ────────────────────────────────────────────────────────────────
+  let songNumber = 0;
+  for (const item of allItems) {
+    checkPage(22);
+
+    if (item.item_type === 'separator') {
+      // Separador
+      doc.setDrawColor(180, 180, 200);
+      doc.setLineWidth(0.3);
+      doc.line(marginL, y, pageW - marginR, y);
+      y += 4;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.setTextColor(130, 100, 160);
+      doc.text((item.separator_label || 'Separador').toUpperCase(), marginL, y);
+      y += 6;
+      doc.setDrawColor(180, 180, 200);
+      doc.line(marginL, y, pageW - marginR, y);
+      y += 6;
+    } else {
+      // Canción
+      songNumber++;
+      const songKey = item.song_key || '—';
+      const bpm = item.bpm ? `${item.bpm} BPM` : '';
+      const timeSig = item.time_sig || '';
+      const metaParts = [songKey, bpm, timeSig].filter(Boolean);
+
+      // Número + Título
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(20, 20, 60);
+      doc.text(`${songNumber}.`, marginL, y);
+      doc.text(item.title || '(sin título)', marginL + 8, y);
+
+      // Metadatos a la derecha
+      if (metaParts.length) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 140);
+        doc.text(metaParts.join(' · '), pageW - marginR, y, { align: 'right' });
+      }
+      y += 5;
+
+      // Autor
+      if (item.author) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8.5);
+        doc.setTextColor(120, 120, 150);
+        doc.text(item.author, marginL + 8, y);
+        y += 4.5;
+      }
+
+      // Estructura: buscar slides de la canción (ya cargados en pdfSongData)
+      if (item._structure?.length) {
+        const structureStr = item._structure.map(abbr).join(' - ');
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(100, 140, 100);
+        doc.text(structureStr, marginL + 8, y);
+        y += 5;
+      }
+
+      y += 2;
+    }
+  }
+
+  // Footer
+  checkPage(10);
+  y += 4;
+  doc.setDrawColor(200, 200, 220);
+  doc.setLineWidth(0.3);
+  doc.line(marginL, y, pageW - marginR, y);
+  y += 5;
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7.5);
+  doc.setTextColor(170, 170, 190);
+  doc.text('Generado con AIO Presenter', marginL, y);
+
+  // Nombre de archivo: fecha-titulo
+  const fileDateStr = (() => {
+    const raw = occurrenceDate || event.date;
+    const d = new Date(String(raw).slice(0, 10) + 'T12:00:00');
+    if (isNaN(d)) return 'setlist';
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  })();
+  doc.save(`setlist_${fileDateStr}.pdf`);
+}
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -393,6 +539,8 @@ export default function CancioneroEventDetail() {
   const [confirmDel,   setConfirmDel]  = useState(false);
   const [deleting,     setDeleting]    = useState(false);
   const [publishing,   setPublishing]  = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [spotifyLoading, setSpotifyLoading] = useState(false);
   const [bandConfigs,  setBandConfigs] = useState([]);
   const [savingBand,   setSavingBand]  = useState(false);
 
@@ -490,6 +638,86 @@ export default function CancioneroEventDetail() {
 
   const allItems = (event.songs ?? []).sort((a, b) => a.position - b.position);
 
+  const handleGeneratePDF = async () => {
+    setGeneratingPdf(true);
+    try {
+      // Enriquecer canciones con bpm, time_sig y structure desde la API
+      const enriched = await Promise.all(
+        allItems.map(async (item) => {
+          if (item.item_type === 'separator' || !item.song_id) return item;
+          try {
+            const res = await fetch(`${API}/api/songs/${item.song_id}`, { headers: authHeaders() });
+            if (!res.ok) return item;
+            const data = await res.json();
+            const structure = (data.slides ?? [])
+              .map(sl => sl.label)
+              .filter(Boolean)
+              .filter((v, i, a) => a.indexOf(v) === i); // unique ordered labels
+            return { ...item, bpm: data.bpm, time_sig: data.time_sig, _structure: structure };
+          } catch { return item; }
+        })
+      );
+      await generateSetlistPDF(event, enriched, occurrenceDate);
+    } finally { setGeneratingPdf(false); }
+  };
+
+  // ─── Spotify PKCE ────────────────────────────────────────────────────────────
+  const handleCreateSpotifyPlaylist = async () => {
+    const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+    if (!clientId) {
+      alert('Configura VITE_SPOTIFY_CLIENT_ID en client/.env para usar la integración con Spotify.');
+      return;
+    }
+
+    // Nombre de la playlist: DD-MM-AAAA - Título
+    const rawDate = occurrenceDate || event.date;
+    const d = new Date(String(rawDate).slice(0, 10) + 'T12:00:00');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const playlistName = `${dd}-${mm}-${yyyy} - ${event.title}`;
+
+    // PKCE helpers
+    const generateCodeVerifier = (len = 64) => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+      const arr = new Uint8Array(len);
+      crypto.getRandomValues(arr);
+      return Array.from(arr, b => chars[b % chars.length]).join('');
+    };
+    const generateCodeChallenge = async (verifier) => {
+      const enc = new TextEncoder().encode(verifier);
+      const hash = await crypto.subtle.digest('SHA-256', enc);
+      return btoa(String.fromCharCode(...new Uint8Array(hash)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    };
+
+    const verifier = generateCodeVerifier();
+    const challenge = await generateCodeChallenge(verifier);
+    const redirectUri = `${window.location.origin}/spotify-callback`;
+    const state = `${id}:::${encodeURIComponent(playlistName)}`;
+    const scope = 'playlist-modify-public playlist-modify-private';
+
+    localStorage.setItem('spotify_verifier', verifier);
+    localStorage.setItem('spotify_state', state);
+    localStorage.setItem('spotify_playlist_songs', JSON.stringify(
+      allItems.filter(i => i.item_type !== 'separator' && i.song_id).map(i => ({
+        title: i.title, author: i.author,
+      }))
+    ));
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      scope,
+      redirect_uri: redirectUri,
+      state,
+      code_challenge_method: 'S256',
+      code_challenge: challenge,
+    });
+    setSpotifyLoading(true);
+    window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+  };
+
   const songList = songs.map(s => ({ id: s.song_id, title: s.title ?? '' }));
 
   const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -512,12 +740,13 @@ export default function CancioneroEventDetail() {
             <h1 className="text-base font-bold truncate">{event.title}</h1>
             <p className="text-xs text-white/40 capitalize">{formatDate(event.date)}</p>
           </div>
-          {isAdmin && !event?.is_published && (
+          {isAdmin && (
             <button
               onClick={async () => {
                 setPublishing(true);
                 try {
-                  const res = await fetch(`${API}/api/events/${id}/publish`, {
+                  const endpoint = event?.is_published ? 'unpublish' : 'publish';
+                  const res = await fetch(`${API}/api/events/${id}/${endpoint}`, {
                     method: 'POST',
                     headers: authHeaders(),
                   });
@@ -528,17 +757,21 @@ export default function CancioneroEventDetail() {
                 } finally { setPublishing(false); }
               }}
               disabled={publishing}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/35 border border-green-400/30 text-green-300 text-xs font-semibold transition-colors disabled:opacity-50"
-              title="Publicar evento"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors disabled:opacity-50 ${
+                event?.is_published
+                  ? 'bg-green-500/20 hover:bg-red-500/20 border-green-400/30 hover:border-red-400/30 text-green-300 hover:text-red-300'
+                  : 'bg-green-500/15 hover:bg-green-500/30 border-green-400/20 text-green-300'
+              }`}
+              title={event?.is_published ? 'Despublicar evento' : 'Publicar evento'}
             >
-              {publishing ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-              Publicar
+              {publishing
+                ? <Loader2 size={13} className="animate-spin" />
+                : event?.is_published
+                  ? <Check size={13} />
+                  : <Send size={13} />
+              }
+              {event?.is_published ? 'Publicado' : 'Publicar'}
             </button>
-          )}
-          {event?.is_published && (
-            <span className="flex items-center gap-1 text-xs font-semibold text-green-400/80 px-2">
-              <Check size={12} /> Publicado
-            </span>
           )}
           <button
             onClick={() => { setEditOpen(true); setConfirmDel(false); }}
@@ -678,9 +911,33 @@ export default function CancioneroEventDetail() {
 
         {/* Lista de canciones / setlist completo */}
         <div>
-          <p className="text-xs text-white/30 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <Music2 size={12} /> {songs.length} {songs.length === 1 ? 'canción' : 'canciones'}
-          </p>
+          <div className="flex items-center gap-2 mb-3">
+            <p className="text-xs text-white/30 uppercase tracking-wider flex items-center gap-1.5 flex-1">
+              <Music2 size={12} /> {songs.length} {songs.length === 1 ? 'canción' : 'canciones'}
+            </p>
+            {allItems.length > 0 && (
+              <>
+                <button
+                  onClick={handleGeneratePDF}
+                  disabled={generatingPdf}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-white/50 hover:text-white/80 transition-colors disabled:opacity-50"
+                  title="Exportar setlist como PDF"
+                >
+                  {generatingPdf ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                  PDF
+                </button>
+                <button
+                  onClick={handleCreateSpotifyPlaylist}
+                  disabled={spotifyLoading}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#1DB954]/10 hover:bg-[#1DB954]/20 border border-[#1DB954]/30 text-xs text-[#1DB954] hover:text-[#1ed760] transition-colors disabled:opacity-50"
+                  title="Crear playlist en Spotify"
+                >
+                  {spotifyLoading ? <Loader2 size={12} className="animate-spin" /> : <ListMusic size={12} />}
+                  Spotify
+                </button>
+              </>
+            )}
+          </div>
           {allItems.length === 0 ? (
             <p className="text-white/20 text-sm text-center py-8">Sin canciones asignadas</p>
           ) : (

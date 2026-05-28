@@ -401,4 +401,24 @@ async function publishEvent(req, res) {
   }
 }
 
-module.exports = { getEvents, getEventById, createEvent, updateEvent, deleteEvent, publishEvent };
+// POST /api/events/:id/unpublish — despublicar evento
+async function unpublishEvent(req, res) {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins pueden despublicar eventos' });
+  const { id } = req.params;
+  const orgId = req.user.orgId;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE events
+          SET is_published = false, published_at = NULL
+        WHERE id = $1 AND organization_id = $2
+        RETURNING id, is_published`,
+      [id, orgId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Evento no encontrado' });
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { getEvents, getEventById, createEvent, updateEvent, deleteEvent, publishEvent, unpublishEvent };

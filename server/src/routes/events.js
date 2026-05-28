@@ -8,6 +8,7 @@ const {
   updateEvent,
   deleteEvent,
   publishEvent,
+  unpublishEvent,
 } = require('../controllers/eventsController');
 
 // Lectura: auth opcional (fallback a primera org si no hay token)
@@ -18,6 +19,7 @@ router.post('/',               requireAuth,  createEvent);
 router.put('/:id',             requireAuth,  updateEvent);
 router.delete('/:id',          requireAuth,  deleteEvent);
 router.post('/:id/publish',    requireAuth,  publishEvent);
+router.post('/:id/unpublish',  requireAuth,  unpublishEvent);
 
 // PATCH /api/events/:id/band-config — asignar configuración de banda (admin)
 router.patch('/:id/band-config', requireAuth, async (req, res) => {

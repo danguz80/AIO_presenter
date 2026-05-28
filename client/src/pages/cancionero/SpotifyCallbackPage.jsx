@@ -1,0 +1,151 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Loader2, Check, X } from 'lucide-react';
+
+export default function SpotifyCallbackPage() {
+  const navigate = useNavigate();
+  const [status, setStatus] = useState('loading'); // loading | success | error
+  const [message, setMessage] = useState('Conectando con Spotify…');
+  const [playlistUrl, setPlaylistUrl] = useState(null);
+
+  useEffect(() => {
+    const run = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const code  = params.get('code');
+      const state = params.get('state');
+      const error = params.get('error');
+
+      if (error) {
+        setStatus('error');
+        setMessage(`Spotify rechazó la autorización: ${error}`);
+        return;
+      }
+      if (!code) {
+        setStatus('error');
+        setMessage('No se recibió código de autorización de Spotify.');
+        return;
+      }
+
+      const verifier  = localStorage.getItem('spotify_verifier');
+      const savedState = localStorage.getItem('spotify_state');
+      const songsRaw  = localStorage.getItem('spotify_playlist_songs');
+
+      localStorage.removeItem('spotify_verifier');
+      localStorage.removeItem('spotify_state');
+      localStorage.removeItem('spotify_playlist_songs');
+
+      if (state !== savedState) {
+        setStatus('error');
+        setMessage('State de Spotify no coincide. Posible ataque CSRF.');
+        return;
+      }
+
+      const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+      const redirectUri = `${window.location.origin}/spotify-callback`;
+      const playlistName = decodeURIComponent((savedState || ':::').split(':::')[1] ?? 'Setlist');
+      const songs = JSON.parse(songsRaw || '[]');
+
+      try {
+        // 1. Intercambiar código por access_token
+        setMessage('Obteniendo token de Spotify…');
+        const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+            client_id: clientId,
+            code_verifier: verifier,
+          }),
+        });
+        if (!tokenRes.ok) throw new Error('Error obteniendo token');
+        const tokenData = await tokenRes.json();
+        const accessToken = tokenData.access_token;
+
+        // 2. Obtener ID del usuario
+        setMessage('Obteniendo perfil de Spotify…');
+        const profileRes = await fetch('https://api.spotify.com/v1/me', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        if (!profileRes.ok) throw new Error('Error obteniendo perfil');
+        const profile = await profileRes.json();
+
+        // 3. Crear playlist
+        setMessage(`Creando playlist "${playlistName}"…`);
+        const createRes = await fetch(`https://api.spotify.com/v1/users/${profile.id}/playlists`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: playlistName, public: true, description: 'Generado con AIO Presenter' }),
+        });
+        if (!createRes.ok) throw new Error('Error creando playlist');
+        const playlist = await createRes.json();
+
+        // 4. Buscar canciones y agregar URIs
+        setMessage('Buscando canciones en Spotify…');
+        const uris = [];
+        for (const song of songs) {
+          const q = encodeURIComponent(`${song.title} ${song.author || ''}`.trim());
+          const searchRes = await fetch(
+            `https://api.spotify.com/v1/search?q=${q}&type=track&limit=1`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          if (searchRes.ok) {
+            const searchData = await searchRes.json();
+            const track = searchData.tracks?.items?.[0];
+            if (track) uris.push(track.uri);
+          }
+        }
+
+        if (uris.length) {
+          setMessage('Agregando canciones a la playlist…');
+          await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uris }),
+          });
+        }
+
+        setPlaylistUrl(playlist.external_urls?.spotify || `https://open.spotify.com/playlist/${playlist.id}`);
+        setMessage(`¡Playlist creada con ${uris.length} de ${songs.length} canciones!`);
+        setStatus('success');
+      } catch (err) {
+        setStatus('error');
+        setMessage(err.message || 'Error desconocido al conectar con Spotify.');
+      }
+    };
+
+    run();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="min-h-screen bg-[#0f1a2e] flex items-center justify-center p-6">
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-8 max-w-sm w-full text-center space-y-4">
+        <div className="flex justify-center">
+          {status === 'loading' && <Loader2 size={40} className="text-[#1DB954] animate-spin" />}
+          {status === 'success' && <Check size={40} className="text-[#1DB954]" />}
+          {status === 'error' && <X size={40} className="text-red-400" />}
+        </div>
+        <p className={`text-sm font-medium ${status === 'error' ? 'text-red-300' : status === 'success' ? 'text-green-300' : 'text-white/70'}`}>
+          {message}
+        </p>
+        {status === 'success' && playlistUrl && (
+          <a
+            href={playlistUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="block w-full py-2.5 rounded-xl bg-[#1DB954] text-black font-semibold text-sm hover:bg-[#1ed760] transition-colors"
+          >
+            Abrir en Spotify
+          </a>
+        )}
+        <button
+          onClick={() => navigate(-1)}
+          className="block w-full py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white/60 text-sm transition-colors"
+        >
+          Volver
+        </button>
+      </div>
+    </div>
+  );
+}
