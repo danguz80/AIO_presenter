@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Music2, CalendarDays, Settings2, Bell,
-  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor
+  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor, X, Check,
 } from 'lucide-react';
+import { io as socketIo } from 'socket.io-client';
 import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -42,14 +43,15 @@ function daysUntil(dateStr) {
 const NAV_ITEMS = [
   { id: 'canciones',      icon: Music2,       label: 'Canciones',      route: '/cancionero/canciones',      color: 'yellow' },
   { id: 'eventos',        icon: CalendarDays, label: 'Eventos',        route: '/cancionero/eventos',        color: 'blue'   },
-  { id: 'configuracion',  icon: Settings2,    label: 'Configuración',  route: '/cancionero/configuracion',  color: 'slate'  },
-  { id: 'notificaciones', icon: Bell,         label: 'Notificaciones', route: null,                         color: 'slate'  },
+  { id: 'configuracion',  icon: Settings2,    label: 'Configuración',  route: '/cancionero/configuracion',  color: 'slate2' },
+  { id: 'notificaciones', icon: Bell,         label: 'Notificaciones', route: 'notif-panel',                color: 'orange' },
 ];
 
 const COLOR_MAP = {
-  yellow: { card: 'border-yellow-500/30 bg-yellow-500/10 hover:border-yellow-400/60 hover:bg-yellow-500/20', icon: 'bg-yellow-500/20 border-yellow-400/30', text: 'text-yellow-300', badge: '' },
-  blue:   { card: 'border-blue-500/30 bg-blue-500/10 hover:border-blue-400/60 hover:bg-blue-500/20',         icon: 'bg-blue-500/20 border-blue-400/30',     text: 'text-blue-300',   badge: '' },
-  slate:  { card: 'border-white/10 bg-white/5 opacity-50 cursor-not-allowed',                                icon: 'bg-white/10 border-white/10',           text: 'text-white/40',   badge: 'Pronto' },
+  yellow:  { card: 'border-yellow-500/30 bg-yellow-500/10 hover:border-yellow-400/60 hover:bg-yellow-500/20', icon: 'bg-yellow-500/20 border-yellow-400/30', text: 'text-yellow-300', badge: '' },
+  blue:    { card: 'border-blue-500/30 bg-blue-500/10 hover:border-blue-400/60 hover:bg-blue-500/20',         icon: 'bg-blue-500/20 border-blue-400/30',     text: 'text-blue-300',   badge: '' },
+  slate2:  { card: 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10',                     icon: 'bg-white/10 border-white/10',           text: 'text-white/60',   badge: '' },
+  orange:  { card: 'border-orange-500/30 bg-orange-500/10 hover:border-orange-400/60 hover:bg-orange-500/20', icon: 'bg-orange-500/20 border-orange-400/30', text: 'text-orange-300', badge: '' },
 };
 
 export default function CancioneroDashboard() {
@@ -58,6 +60,40 @@ export default function CancioneroDashboard() {
   const [org, setOrg]     = useState(null);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Notificaciones
+  const [notifs,       setNotifs]       = useState([]);
+  const [notifsOpen,   setNotifsOpen]   = useState(false);
+  const [notifsLoaded, setNotifsLoaded] = useState(false);
+  const [markingRead,  setMarkingRead]  = useState(false);
+
+  const unreadCount = notifs.filter(n => !n.is_read).length;
+
+  const loadNotifs = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/api/notifications`, { headers: authHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifs(Array.isArray(data) ? data : []);
+      }
+    } catch {}
+    setNotifsLoaded(true);
+  }, []);
+
+  const markAllRead = async () => {
+    setMarkingRead(true);
+    try {
+      await fetch(`${API}/api/notifications/read-all`, { method: 'PATCH', headers: authHeaders() });
+      setNotifs(prev => prev.map(n => ({ ...n, is_read: true })));
+    } finally { setMarkingRead(false); }
+  };
+
+  const markOneRead = async (id) => {
+    try {
+      await fetch(`${API}/api/notifications/${id}/read`, { method: 'PATCH', headers: authHeaders() });
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch {}
+  };
 
   useEffect(() => {
     Promise.all([
@@ -68,9 +104,35 @@ export default function CancioneroDashboard() {
     ]).then(([me, orgData, evs]) => {
       setUser(me);
       setOrg(orgData);
-      setEvents(Array.isArray(evs) ? evs.filter(e => e.date >= todayStr()).slice(0, 5) : []);
+      const token = localStorage.getItem('aio_sync_token');
+      const isAdmin = (() => {
+        try { return Boolean(JSON.parse(atob(token.split('.')[1])).isAdmin); } catch { return false; }
+      })();
+      const evList = Array.isArray(evs) ? evs : [];
+      const visible = isAdmin ? evList : evList.filter(e => e.is_published);
+      setEvents(visible.filter(e => e.date >= todayStr()).slice(0, 5));
       setLoading(false);
     }).catch(() => setLoading(false));
+  }, []);
+
+  // Socket — escuchar nuevas notificaciones
+  useEffect(() => {
+    const orgId = localStorage.getItem('aio_org_id');
+    if (!orgId) return;
+    const socket = socketIo(API || window.location.origin, { transports: ['websocket'] });
+    socket.on('connect', () => socket.emit('join', { orgId }));
+    socket.on('notification:new', (data) => {
+      setNotifs(prev => [{
+        id: Date.now(), // temporal hasta recargar
+        type: data.type,
+        title: data.title,
+        body: null,
+        is_read: false,
+        metadata: { event_id: data.eventId, date: data.date },
+        created_at: new Date().toISOString(),
+      }, ...prev]);
+    });
+    return () => socket.disconnect();
   }, []);
 
   const logout = () => {
@@ -138,11 +200,18 @@ export default function CancioneroDashboard() {
           {NAV_ITEMS.map(item => {
             const c = COLOR_MAP[item.color];
             const Icon = item.icon;
+            const isNotif = item.id === 'notificaciones';
             return (
               <button
                 key={item.id}
-                onClick={() => item.route && navigate(item.route)}
-                disabled={!item.route}
+                onClick={() => {
+                  if (isNotif) {
+                    if (!notifsLoaded) loadNotifs();
+                    setNotifsOpen(o => !o);
+                  } else if (item.route) {
+                    navigate(item.route);
+                  }
+                }}
                 className={`group relative flex flex-col gap-3 p-5 rounded-2xl border-2 text-left transition-all duration-200 active:scale-[0.97] ${c.card}`}
               >
                 {c.badge && (
@@ -150,22 +219,82 @@ export default function CancioneroDashboard() {
                     {c.badge}
                   </span>
                 )}
+                {isNotif && unreadCount > 0 && (
+                  <span className="absolute top-2.5 right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-[10px] font-bold text-white flex items-center justify-center">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
                 <div className={`inline-flex p-3 rounded-xl border ${c.icon}`}>
                   <Icon size={22} className={c.text} />
                 </div>
                 <div>
                   <p className="font-bold text-white text-sm">{item.label}</p>
-                  {item.route && (
-                    <p className={`text-xs mt-0.5 flex items-center gap-0.5 ${c.text} opacity-70`}>
-                      Abrir <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
-                    </p>
-                  )}
+                  <p className={`text-xs mt-0.5 flex items-center gap-0.5 ${c.text} opacity-70`}>
+                    {isNotif ? (unreadCount > 0 ? `${unreadCount} nuevas` : 'Sin nuevas') : 'Abrir'}
+                    <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                  </p>
                 </div>
               </button>
             );
           })}
         </div>
       </section>
+
+      {/* ── Panel de notificaciones ─────────────────────────────────── */}
+      {notifsOpen && (
+        <section className="px-5 pb-6">
+          <div className="rounded-2xl border border-white/10 bg-white/5 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Bell size={14} className="text-orange-300" />
+                <span className="text-sm font-semibold">Notificaciones</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={markAllRead}
+                    disabled={markingRead}
+                    className="text-xs text-white/40 hover:text-white/70 transition-colors flex items-center gap-1"
+                  >
+                    {markingRead ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+                    Marcar leídas
+                  </button>
+                )}
+                <button onClick={() => setNotifsOpen(false)} className="text-white/30 hover:text-white/60 transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+
+            {!notifsLoaded ? (
+              <div className="flex justify-center py-6">
+                <Loader2 size={18} className="text-orange-300 animate-spin" />
+              </div>
+            ) : notifs.length === 0 ? (
+              <p className="text-center text-white/25 text-sm py-8">No hay notificaciones</p>
+            ) : (
+              <div className="max-h-64 overflow-y-auto divide-y divide-white/5">
+                {notifs.map(n => (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      markOneRead(n.id);
+                      if (n.metadata?.event_id) navigate(`/cancionero/eventos/${n.metadata.event_id}`);
+                    }}
+                    className={`w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-white/5 transition-colors ${n.is_read ? 'opacity-50' : ''}`}
+                  >
+                    <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.is_read ? 'bg-transparent' : 'bg-orange-400'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-white truncate">{n.title}</p>
+                      {n.body && <p className="text-xs text-white/40 mt-0.5 truncate">{n.body}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── Próximos eventos ─────────────────────────────────────────── */}
       <section className="px-5 pb-10">

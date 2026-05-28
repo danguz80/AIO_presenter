@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, Clock, Music2, Pencil, Trash2,
-  ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus,
+  ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus, Send, Check,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -270,6 +270,16 @@ export default function CancioneroEventDetail() {
   const [editOpen,    setEditOpen]    = useState(false);
   const [confirmDel,  setConfirmDel]  = useState(false);
   const [deleting,    setDeleting]    = useState(false);
+  const [publishing,  setPublishing]  = useState(false);
+
+  const isAdmin = (() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return Boolean(payload.isAdmin);
+    } catch { return false; }
+  })();
 
   const loadEvent = () => {
     setLoading(true);
@@ -348,6 +358,34 @@ export default function CancioneroEventDetail() {
             <h1 className="text-base font-bold truncate">{event.title}</h1>
             <p className="text-xs text-white/40 capitalize">{formatDate(event.date)}</p>
           </div>
+          {isAdmin && !event?.is_published && (
+            <button
+              onClick={async () => {
+                setPublishing(true);
+                try {
+                  const res = await fetch(`${API}/api/events/${id}/publish`, {
+                    method: 'POST',
+                    headers: authHeaders(),
+                  });
+                  if (res.ok) {
+                    const updated = await res.json();
+                    setEvent(prev => ({ ...prev, ...updated }));
+                  }
+                } finally { setPublishing(false); }
+              }}
+              disabled={publishing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/35 border border-green-400/30 text-green-300 text-xs font-semibold transition-colors disabled:opacity-50"
+              title="Publicar evento"
+            >
+              {publishing ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              Publicar
+            </button>
+          )}
+          {event?.is_published && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-green-400/80 px-2">
+              <Check size={12} /> Publicado
+            </span>
+          )}
           <button
             onClick={() => { setEditOpen(true); setConfirmDel(false); }}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
@@ -382,6 +420,13 @@ export default function CancioneroEventDetail() {
       <div className="flex-1 overflow-y-auto px-4 py-5 max-w-2xl mx-auto w-full space-y-5">
 
         {/* Info del evento */}
+        {isAdmin && !event?.is_published && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-400/25">
+            <span className="text-amber-300 text-xs font-semibold">Borrador</span>
+            <span className="text-xs text-amber-300/60">— Este evento no es visible para los demás miembros aún.</span>
+          </div>
+        )}
+
         <div className={`rounded-2xl border-2 p-4 space-y-2 ${
           isPast ? 'border-white/5 bg-white/[0.03]' : 'border-white/10 bg-white/5'
         }`}>

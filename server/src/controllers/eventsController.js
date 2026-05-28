@@ -324,4 +324,81 @@ async function deleteEvent(req, res) {
   }
 }
 
-module.exports = { getEvents, getEventById, createEvent, updateEvent, deleteEvent };
+// POST /api/events/:id/publish — publicar evento y crear notificaciones
+async function publishEvent(req, res) {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins pueden publicar eventos' });
+  const { id } = req.params;
+  const orgId  = req.user.orgId;
+  try {
+    // Marcar como publicado
+    const { rows } = await pool.query(
+      `UPDATE events
+          SET is_published = true, published_at = NOW()
+        WHERE id = $1 AND organization_id = $2
+        RETURNING id, title, date, is_published, published_at`,
+      [id, orgId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Evento no encontrado' });
+    const event = rows[0];
+
+    // Obtener todos los miembros de la org
+    const { rows: members } = await pool.query(
+      `SELECT u.id, u.instruments
+         FROM user_organizations uo
+         JOIN sync_users u ON u.id = uo.user_id
+        WHERE uo.organization_id = $1`,
+      [orgId]
+    );
+
+    // Obtener la primera configuración de banda activa (si existe)
+    const { rows: bandSlots } = await pool.query(
+      `SELECT slots FROM band_configs WHERE organization_id = $1 ORDER BY position ASC LIMIT 1`,
+      [orgId]
+    );
+    const slotsMap = {};
+    if (bandSlots.length > 0 && Array.isArray(bandSlots[0].slots)) {
+      for (const slot of bandSlots[0].slots) {
+        if (slot.userId) slotsMap[slot.userId] = slot.instrument || '';
+      }
+    }
+
+    // Fecha formateada
+    const dateObj = new Date(String(event.date).slice(0, 10) + 'T12:00:00');
+    const dateFormatted = dateObj.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    // Crear notificación para cada miembro
+    for (const member of members) {
+      const instrument = slotsMap[member.id] || (member.instruments?.[0] ?? '');
+      const body = instrument
+        ? `Tu instrumento asignado: ${instrument} · ${dateFormatted}`
+        : dateFormatted;
+      await pool.query(
+        `INSERT INTO notifications (user_id, organization_id, type, title, body, metadata)
+         VALUES ($1, $2, 'event_published', $3, $4, $5)`,
+        [
+          member.id, orgId,
+          `Nuevo evento: ${event.title}`,
+          body,
+          JSON.stringify({ event_id: event.id, date: String(event.date).slice(0, 10), instrument }),
+        ]
+      );
+    }
+
+    // Emitir via socket a todos los de la org
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`org:${orgId}`).emit('notification:new', {
+        type:  'event_published',
+        title: `Nuevo evento: ${event.title}`,
+        date:  String(event.date).slice(0, 10),
+        eventId: event.id,
+      });
+    }
+
+    res.json(event);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { getEvents, getEventById, createEvent, updateEvent, deleteEvent, publishEvent };

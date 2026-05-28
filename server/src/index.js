@@ -21,6 +21,7 @@ const authRouter   = require('./routes/auth');
 const syncRouter   = require('./routes/sync');
 const bandConfigsRouter  = require('./routes/bandConfigs');
 const blockedDatesRouter = require('./routes/blockedDates');
+const notificationsRouter = require('./routes/notifications');
 const ndi          = require('./ndi/ndiSender');
 
 const app    = express();
@@ -37,6 +38,9 @@ app.use(cors({ origin: allowedOrigins, credentials: true }));
 const io = new Server(server, {
   cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
 });
+
+// Exponer io globalmente para controladores (publish event → notificaciones)
+app.set('io', io);
 
 // ─── Estado por organización ─────────────────────────────────────────────────
 const orgStates = new Map(); // orgId → state object
@@ -256,6 +260,25 @@ async function saveOrgSetting(orgId, key, value) {
         reason          TEXT,
         created_at      TIMESTAMPTZ DEFAULT NOW(),
         UNIQUE (user_id, date)
+      )
+    `);
+    // ─── Nombre de banda por organización ─────────────────────────────────
+    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS band_name VARCHAR(100)`);
+    // ─── Publicación de eventos ────────────────────────────────────────────
+    await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ`);
+    // ─── Notificaciones in-app ─────────────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id              SERIAL PRIMARY KEY,
+        user_id         INTEGER REFERENCES sync_users(id) ON DELETE CASCADE,
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        type            VARCHAR(50) NOT NULL DEFAULT 'event_published',
+        title           TEXT NOT NULL,
+        body            TEXT,
+        metadata        JSONB DEFAULT '{}',
+        is_read         BOOLEAN DEFAULT false,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
       )
     `);
     const { rows } = await pool.query("SELECT key, value FROM app_settings");
@@ -629,6 +652,7 @@ app.use('/auth',      authRouter);
 app.use('/api/sync',  syncRouter);
 app.use('/api/band-configs',  bandConfigsRouter);
 app.use('/api/blocked-dates', blockedDatesRouter);
+app.use('/api/notifications', notificationsRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

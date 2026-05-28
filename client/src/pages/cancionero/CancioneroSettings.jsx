@@ -138,11 +138,33 @@ function ProfileSection({ user, onSaved }) {
 }
 
 // ─── Banda ────────────────────────────────────────────────────────────────────
-function BandSection({ members }) {
-  const [configs, setConfigs] = useState([]);
-  const [loading, setLoading] = useState(true);
+function BandSection({ members, org, isAdmin }) {
+  const [bandName, setBandName]   = useState(org?.band_name || '');
+  const [savedBandName, setSavedBandName] = useState(org?.band_name || '');
+  const [savingName, setSavingName] = useState(false);
+  const [configs, setConfigs]     = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [openId, setOpenId]   = useState(null);
   const [saving, setSaving]   = useState(false);
+
+  useEffect(() => {
+    setBandName(org?.band_name || '');
+    setSavedBandName(org?.band_name || '');
+  }, [org]);
+
+  const isBandNameDirty = bandName !== savedBandName;
+
+  const saveBandName = async () => {
+    setSavingName(true);
+    try {
+      const res = await fetch(`${API}/auth/org`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ band_name: bandName }),
+      });
+      if (res.ok) setSavedBandName(bandName);
+    } finally { setSavingName(false); }
+  };
 
   useEffect(() => {
     fetch(`${API}/api/band-configs`, { headers: authHeaders() })
@@ -210,7 +232,46 @@ function BandSection({ members }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Nombre de la banda (solo admin) */}
+      {isAdmin && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-2">Nombre de la banda</p>
+          <div className="flex gap-2">
+            <input
+              value={bandName}
+              onChange={e => setBandName(e.target.value)}
+              placeholder="Ej: Alabanza Central"
+              className="flex-1 bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-yellow-400/50"
+            />
+            <button
+              onClick={saveBandName}
+              disabled={savingName || !isBandNameDirty}
+              className={`px-3 py-2 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 ${
+                !isBandNameDirty
+                  ? 'bg-green-500/15 border-green-400/35 text-green-300 cursor-default'
+                  : 'bg-yellow-500/15 border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25'
+              }`}
+            >
+              {savingName
+                ? <Loader2 size={12} className="animate-spin" />
+                : !isBandNameDirty ? <Check size={12} /> : <Save size={12} />
+              }
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isAdmin && (org?.band_name) && (
+        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+          <p className="text-xs text-white/40 mb-0.5">Nombre de la banda</p>
+          <p className="text-sm font-semibold text-white">{org.band_name}</p>
+        </div>
+      )}
+
+      {/* Separador */}
+      <div className="border-t border-white/10 pt-1" />
+
       {configs.length === 0 && (
         <p className="text-sm text-white/25 text-center py-3">Aún no hay configuraciones. Crea la primera.</p>
       )}
@@ -563,6 +624,7 @@ export default function CancioneroSettings() {
   const [user, setUser]       = useState(null);
   const [members, setMembers] = useState([]);
   const [orgs, setOrgs]       = useState([]);
+  const [org, setOrg]         = useState(null);
 
   useEffect(() => {
     const h = authHeaders();
@@ -570,10 +632,12 @@ export default function CancioneroSettings() {
       fetch(`${API}/auth/me`,          { headers: h }).then(r => r.json()),
       fetch(`${API}/auth/org/members`, { headers: h }).then(r => r.json()),
       fetch(`${API}/auth/my-orgs`,     { headers: h }).then(r => r.json()),
-    ]).then(([u, m, o]) => {
+      fetch(`${API}/auth/org`,         { headers: h }).then(r => r.json()),
+    ]).then(([u, m, o, orgData]) => {
       if (u?.id) setUser(u);
       setMembers(Array.isArray(m) ? m : []);
       setOrgs(Array.isArray(o) ? o : []);
+      if (orgData?.id) setOrg(orgData);
     }).catch(() => {});
   }, []);
 
@@ -604,9 +668,9 @@ export default function CancioneroSettings() {
         <SectionCard
           icon={Users}
           title="Banda"
-          subtitle="Configura los músicos por servicio"
+          subtitle={org?.band_name || 'Configura los músicos por servicio'}
         >
-          <BandSection members={members} />
+          <BandSection members={members} org={org} isAdmin={user?.is_admin} />
         </SectionCard>
 
         <SectionCard

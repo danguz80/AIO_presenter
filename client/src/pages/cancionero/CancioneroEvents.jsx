@@ -41,7 +41,16 @@ export default function CancioneroEvents() {
   const [pastEvents,  setPastEvents]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [expanded,    setExpanded]    = useState({});
-  const [pastOpen,    setPastOpen]    = useState(false); // sección pasados colapsada por defecto
+  const [pastOpen,    setPastOpen]    = useState(false);
+
+  const isAdmin = (() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return Boolean(payload.isAdmin);
+    } catch { return false; }
+  })();
 
   useEffect(() => {
     // Cargar próximos y pasados en paralelo
@@ -52,11 +61,14 @@ export default function CancioneroEvents() {
       const upList   = Array.isArray(upcoming) ? upcoming : [];
       const pastList = Array.isArray(past)     ? past     : [];
       upList.sort((a, b) => a.date.localeCompare(b.date));
-      pastList.sort((a, b) => b.date.localeCompare(a.date)); // más recientes primero
-      setEvents(upList);
-      setPastEvents(pastList);
-      if (upList.length > 0) {
-        setExpanded({ [`${upList[0].id}-${upList[0].date}`]: true });
+      pastList.sort((a, b) => b.date.localeCompare(a.date));
+      // No-admins solo ven eventos publicados
+      const visibleUp   = isAdmin ? upList   : upList.filter(e => e.is_published);
+      const visiblePast = isAdmin ? pastList : pastList.filter(e => e.is_published);
+      setEvents(visibleUp);
+      setPastEvents(visiblePast);
+      if (visibleUp.length > 0) {
+        setExpanded({ [`${visibleUp[0].id}-${visibleUp[0].date}`]: true });
       }
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -120,6 +132,11 @@ export default function CancioneroEvents() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className={`font-bold text-sm ${isPast ? 'text-white/60' : 'text-white'}`}>{ev.title}</p>
+              {isAdmin && !ev.is_published && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/30 text-amber-300">
+                  Borrador
+                </span>
+              )}
               {/* Botón ir al dashboard del evento */}
               <button
                 type="button"
