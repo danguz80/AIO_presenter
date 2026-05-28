@@ -286,7 +286,18 @@ export default function CancioneroDashboard() {
                     <div className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${n.is_read ? 'bg-transparent' : 'bg-orange-400'}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-white truncate">{n.title}</p>
-                      {n.body && <p className="text-xs text-white/40 mt-0.5 truncate">{n.body}</p>}
+                      <p className="text-xs text-white/40 mt-0.5 truncate">
+                        {(() => {
+                          // Limpiar body viejo que pueda tener "Invalid Date"
+                          const cleanBody = n.body ? n.body.replace(/·?\s*Invalid Date/g, '').trim() : '';
+                          // Formatear fecha desde metadata (siempre YYYY-MM-DD)
+                          const dateLabel = n.metadata?.date
+                            ? new Date(n.metadata.date + 'T12:00:00').toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short' })
+                            : '';
+                          if (cleanBody && dateLabel) return `${cleanBody} · ${dateLabel}`;
+                          return cleanBody || dateLabel || '';
+                        })()}
+                      </p>
                     </div>
                   </button>
                 ))}

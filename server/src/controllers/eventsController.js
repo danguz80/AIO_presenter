@@ -362,19 +362,16 @@ async function publishEvent(req, res) {
       }
     }
 
-    // Fecha formateada
+    // Calcular dateStr de forma robusta
     const dateStr = event.date instanceof Date
       ? event.date.toISOString().slice(0, 10)
       : String(event.date).slice(0, 10);
-    const dateObj = new Date(dateStr + 'T12:00:00');
-    const dateFormatted = dateObj.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
 
     // Crear notificación para cada miembro
+    // body solo incluye instrumento; la fecha se muestra en el frontend desde metadata.date
     for (const member of members) {
       const instrument = slotsMap[member.id] || (member.instruments?.[0] ?? '');
-      const body = instrument
-        ? `Tu instrumento asignado: ${instrument} · ${dateFormatted}`
-        : dateFormatted;
+      const body = instrument ? `Tu instrumento: ${instrument}` : null;
       await pool.query(
         `INSERT INTO notifications (user_id, organization_id, type, title, body, metadata)
          VALUES ($1, $2, 'event_published', $3, $4, $5)`,
