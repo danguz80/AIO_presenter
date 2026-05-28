@@ -720,7 +720,7 @@ export default function CancioneroEventDetail() {
       ? window.location.origin.replace('localhost', '127.0.0.1')
       : window.location.origin;
     const redirectUri = `${origin}/spotify-callback`;
-    const scope = 'playlist-modify-public playlist-modify-private';
+    const scope = 'playlist-modify-public playlist-modify-private user-read-private';
 
     // Codificar todo lo necesario en el state para no depender de localStorage
     // (localhost y 127.0.0.1 tienen localStorage separado — esto lo evita)
