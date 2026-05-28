@@ -102,4 +102,21 @@ export default defineConfig({
       // Socket.io se conecta directamente al backend via window.location.hostname:3001
     },
   },
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Librerías React core
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // Socket.io cliente
+          'vendor-socket': ['socket.io-client'],
+          // Iconos
+          'vendor-icons': ['lucide-react'],
+          // Utilidades QR
+          'vendor-misc': ['axios', 'qrcode.react'],
+        },
+      },
+    },
+  },
 });
