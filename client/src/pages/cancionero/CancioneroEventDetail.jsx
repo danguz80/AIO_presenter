@@ -4,6 +4,7 @@ import {
   ArrowLeft, CalendarDays, Clock, Music2, Pencil, Trash2,
   ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus,
 } from 'lucide-react';
+import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -333,7 +334,7 @@ export default function CancioneroEventDetail() {
   const isPast = diffDays < 0;
 
   return (
-    <div className="min-h-screen bg-[#0f1a2e] text-white flex flex-col">
+    <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[#0f1a2e]/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-3">
@@ -378,7 +379,7 @@ export default function CancioneroEventDetail() {
       </header>
 
       {/* Cuerpo */}
-      <div className="flex-1 px-4 py-5 max-w-2xl mx-auto w-full space-y-5">
+      <div className="flex-1 overflow-y-auto px-4 py-5 max-w-2xl mx-auto w-full space-y-5">
 
         {/* Info del evento */}
         <div className={`rounded-2xl border-2 p-4 space-y-2 ${
@@ -441,6 +442,8 @@ export default function CancioneroEventDetail() {
           )}
         </div>
       </div>
+
+      <CancioneroNavbar />
 
       {/* Modal de edición */}
       {editOpen && (

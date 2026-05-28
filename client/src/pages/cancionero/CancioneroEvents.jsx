@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History } from 'lucide-react';
+import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -205,7 +206,7 @@ export default function CancioneroEvents() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f1a2e] text-white flex flex-col">
+    <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[#0f1a2e]/95 backdrop-blur-sm border-b border-white/10 px-4 py-3 flex items-center gap-3">
         <button onClick={() => navigate('/cancionero')} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
@@ -216,7 +217,7 @@ export default function CancioneroEvents() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 px-4 py-5">
+      <div className="flex-1 overflow-y-auto px-4 py-5">
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 size={32} className="text-yellow-400 animate-spin" />
@@ -263,6 +264,7 @@ export default function CancioneroEvents() {
           </>
         )}
       </div>
+      <CancioneroNavbar />
     </div>
   );
 }

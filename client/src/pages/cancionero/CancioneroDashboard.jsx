@@ -4,6 +4,7 @@ import {
   Music2, CalendarDays, Settings2, Bell,
   LogOut, ChevronRight, Loader2, Building2, Clock, Monitor
 } from 'lucide-react';
+import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -87,7 +88,7 @@ export default function CancioneroDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f1a2e] text-white">
+    <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-10 bg-[#0f1a2e]/95 backdrop-blur-sm border-b border-white/10 px-5 py-3 flex items-center gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -122,6 +123,7 @@ export default function CancioneroDashboard() {
       </header>
 
       {/* ── Hero greeting ────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
       <section className="px-5 pt-8 pb-6">
         <p className="text-white/40 text-sm mb-1">Bienvenido,</p>
         <h1 className="text-2xl font-extrabold text-white leading-tight">
@@ -232,6 +234,8 @@ export default function CancioneroDashboard() {
           </div>
         )}
       </section>
+      </div>{/* end scroll */}
+      <CancioneroNavbar />
     </div>
   );
 }

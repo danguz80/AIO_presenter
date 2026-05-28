@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X } from 'lucide-react';
+import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -26,7 +27,7 @@ export default function CancioneroSongs() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0f1a2e] text-white flex flex-col">
+    <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-10 bg-[#0f1a2e]/95 backdrop-blur-sm border-b border-white/10">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -96,6 +97,7 @@ export default function CancioneroSongs() {
           </ul>
         )}
       </div>
+      <CancioneroNavbar />
     </div>
   );
 }

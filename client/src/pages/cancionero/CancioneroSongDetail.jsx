@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { stripChords, parseChordLine, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import SongFormModal from '../../components/Library/SongFormModal';
+import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -414,8 +415,6 @@ export default function CancioneroSongDetail() {
       )}
 
       {/* ── Modal edición ───────────────────────────────────────────── */}
-
-      {/* ── Modal edición ───────────────────────────────────────────── */}
       {editOpen && song && (
         <SongFormModal
           song={song}
@@ -429,6 +428,7 @@ export default function CancioneroSongDetail() {
           onDeleted={() => navigate('/cancionero/canciones')}
         />
       )}
+      <CancioneroNavbar />
     </div>
   );
 }
