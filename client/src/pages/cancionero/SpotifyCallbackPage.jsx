@@ -79,7 +79,9 @@ export default function SpotifyCallbackPage() {
         });
         if (!meRes.ok) {
           const errMe = await meRes.json().catch(() => ({}));
-          throw new Error(`Error obteniendo perfil (${meRes.status}): ${errMe?.error?.message ?? meRes.status}`);
+          const detail = JSON.stringify(errMe);
+          console.error('[Spotify /v1/me]', meRes.status, detail);
+          throw new Error(`Error obteniendo perfil (${meRes.status}): ${errMe?.error?.message ?? errMe?.error?.reason ?? detail}`);
         }
         const meData = await meRes.json();
         const spotifyUserId = meData.id;
