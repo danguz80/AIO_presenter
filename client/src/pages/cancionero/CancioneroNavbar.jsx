@@ -1,11 +1,12 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, CalendarDays, Monitor, Settings2 } from 'lucide-react';
+import { Home, Music2, ListChecks, CalendarDays, Monitor } from 'lucide-react';
 
 const NAV = [
-  { label: 'Inicio',      icon: Home,         route: '/cancionero'          },
-  { label: 'Calendario',  icon: CalendarDays, route: '/cancionero/eventos'  },
-  { label: 'Presenter',   icon: Monitor,      route: '/app'                 },
-  { label: 'Config',      icon: Settings2,    route: null                   }, // próximamente
+  { label: 'Inicio',     icon: Home,         route: '/cancionero'           },
+  { label: 'Canciones',  icon: Music2,       route: '/cancionero/canciones' },
+  { label: 'Eventos',    icon: ListChecks,   route: '/cancionero/eventos'   },
+  { label: 'Calendario', icon: CalendarDays, route: '/calendar'             },
+  { label: 'Presenter',  icon: Monitor,      route: '/app'                  },
 ];
 
 export default function CancioneroNavbar() {
