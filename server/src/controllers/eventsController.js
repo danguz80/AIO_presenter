@@ -363,7 +363,10 @@ async function publishEvent(req, res) {
     }
 
     // Fecha formateada
-    const dateObj = new Date(String(event.date).slice(0, 10) + 'T12:00:00');
+    const dateStr = event.date instanceof Date
+      ? event.date.toISOString().slice(0, 10)
+      : String(event.date).slice(0, 10);
+    const dateObj = new Date(dateStr + 'T12:00:00');
     const dateFormatted = dateObj.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
 
     // Crear notificación para cada miembro
@@ -379,7 +382,7 @@ async function publishEvent(req, res) {
           member.id, orgId,
           `Nuevo evento: ${event.title}`,
           body,
-          JSON.stringify({ event_id: event.id, date: String(event.date).slice(0, 10), instrument }),
+          JSON.stringify({ event_id: event.id, date: dateStr, instrument }),
         ]
       );
     }
@@ -390,7 +393,7 @@ async function publishEvent(req, res) {
       io.to(`org:${orgId}`).emit('notification:new', {
         type:  'event_published',
         title: `Nuevo evento: ${event.title}`,
-        date:  String(event.date).slice(0, 10),
+        date:  dateStr,
         eventId: event.id,
       });
     }
