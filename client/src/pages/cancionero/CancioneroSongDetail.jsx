@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, Loader2, Pencil
@@ -112,9 +112,13 @@ export default function CancioneroSongDetail() {
 
   // Opciones de visualización
   const [showChords, setShowChords] = useState(true);
-  // Tamaño de letra base según viewport: sm=18, md=22, lg=26
-  const baseFontSize = window.innerWidth >= 1024 ? 26 : window.innerWidth >= 768 ? 22 : 18;
-  const [fontSize, setFontSize]     = useState(baseFontSize);
+  // Font-size inicial: 18px móvil / 22px tablet / 26px desktop
+  // useLayoutEffect garantiza que window.innerWidth ya tiene el viewport real
+  const [fontSize, setFontSize] = useState(18);
+  useLayoutEffect(() => {
+    const w = window.innerWidth;
+    setFontSize(w >= 1024 ? 26 : w >= 768 ? 22 : 18);
+  }, []); // solo al montar — los botones ± siguen funcionando desde ahí
   const chordsColor = '#facc15';
 
   // Auto-scroll
