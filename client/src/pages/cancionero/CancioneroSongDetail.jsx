@@ -371,8 +371,22 @@ export default function CancioneroSongDetail() {
             </div>
           ))
         )}
+        {/* A continuación: próxima canción del evento */}
+        {nextSong && (
+          <div className="mt-8 border-t border-white/10 pt-6 pb-2">
+            <p className="text-[10px] uppercase tracking-widest text-white/30 mb-1">A continuación...</p>
+            <button
+              onClick={() => goTo(nextSong)}
+              className="text-left group"
+            >
+              <p className="text-base font-semibold text-white/50 group-hover:text-white/80 transition-colors">
+                {nextSong.title}
+              </p>
+            </button>
+          </div>
+        )}
         {/* Espacio final para scroll */}
-        <div className="h-32" />
+        <div className="h-16" />
       </div>
 
       {/* ── Modal edición ───────────────────────────────────────────── */}
