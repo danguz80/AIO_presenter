@@ -112,7 +112,9 @@ export default function CancioneroSongDetail() {
 
   // Opciones de visualización
   const [showChords, setShowChords] = useState(true);
-  const [fontSize, setFontSize]     = useState(18); // px
+  // Tamaño de letra base según viewport: sm=18, md=22, lg=26
+  const baseFontSize = window.innerWidth >= 1024 ? 26 : window.innerWidth >= 768 ? 22 : 18;
+  const [fontSize, setFontSize]     = useState(baseFontSize);
   const chordsColor = '#facc15';
 
   // Auto-scroll
@@ -126,6 +128,20 @@ export default function CancioneroSongDetail() {
 
   // Mantener el ref sincronizado sin tocar el loop
   useEffect(() => { scrollSpeedRef.current = scrollSpeed; }, [scrollSpeed]);
+
+  // Barra espaciadora → toggle scroll (solo cuando el modal de edición está cerrado)
+  useEffect(() => {
+    const onKey = (e) => {
+      if (editOpen) return;                      // no interferir con el modal
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        setScrolling(v => !v);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editOpen]);
 
   useEffect(() => {
     fetch(`${API}/api/songs/${id}`, { headers: authHeaders() })
@@ -267,7 +283,7 @@ export default function CancioneroSongDetail() {
       </header>
 
       {/* ── Content ─────────────────────────────────────────────────── */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-6">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-8 lg:px-16 py-5 space-y-6">
         {slides.length === 0 ? (
           <p className="text-white/30 text-sm text-center py-8">Esta canción no tiene secciones.</p>
         ) : (
@@ -275,7 +291,8 @@ export default function CancioneroSongDetail() {
             <div key={slide.id}>
               {/* Label de sección */}
               {slide.label && (
-                <p className="text-[11px] font-bold uppercase tracking-widest mb-2" style={{ color: sectionColor(slide.label) }}>
+                <p className="font-bold uppercase tracking-widest mb-2"
+                  style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}>
                   {slide.label}
                 </p>
               )}
