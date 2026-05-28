@@ -360,11 +360,16 @@ export default function CancioneroDashboard() {
             {events.map(ev => {
               const badge = daysUntil(ev.date);
               const isToday = badge === 'Hoy';
+              const isDraft = isAdmin && !ev.is_published;
               return (
                 <button
                   key={`${ev.id}-${ev.date}`}
-                  onClick={() => navigate('/cancionero/eventos')}
-                  className="group flex items-start gap-4 p-4 rounded-2xl border-2 border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10 text-left transition-all duration-200 active:scale-[0.98]"
+                  onClick={() => navigate(`/cancionero/eventos/${ev.id}`)}
+                  className={`group flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 active:scale-[0.98] ${
+                    isDraft
+                      ? 'border-amber-400/25 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10'
+                      : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                  }`}
                 >
                   {/* Date badge */}
                   <div className={`flex-shrink-0 flex flex-col items-center justify-center w-11 h-11 rounded-xl border ${
@@ -379,7 +384,14 @@ export default function CancioneroDashboard() {
                   </div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-white text-sm truncate">{ev.title}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-white text-sm truncate">{ev.title}</p>
+                      {isDraft && (
+                        <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/30 text-amber-300 uppercase tracking-wide">
+                          Borrador
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2 mt-1 text-xs text-white/40">
                       <span className={`font-medium ${isToday ? 'text-yellow-400' : 'text-blue-300'}`}>{badge}</span>
                       {ev.time && (
