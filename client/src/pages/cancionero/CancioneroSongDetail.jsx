@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
-  ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Pencil
+  ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Pencil,
+  LayoutList, X, Trash2, Save,
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { stripChords, parseChordLine, isCommentLine, extractInlineComment, transposeContent, transposeKey } from '../../utils/chordUtils';
@@ -12,6 +13,237 @@ const API = import.meta.env.VITE_API_URL || '';
 const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
+}
+
+// ─── Abreviaciones de sección ──────────────────────────────────────────────────
+const SECTION_ABBR = {
+  'intro': 'I', 'intro 1': 'I1', 'intro 2': 'I2',
+  'verso': 'V', 'verso 1': 'V1', 'verso 2': 'V2', 'verso 3': 'V3',
+  'estrofa': 'E', 'estrofa 1': 'E1', 'estrofa 2': 'E2',
+  'pre-coro': 'PC', 'pre coro': 'PC', 'precoro': 'PC',
+  'coro': 'C', 'coro 2': 'C2', 'chorus': 'C',
+  'puente': 'Pb', 'bridge': 'Pb',
+  'outro': 'O', 'final': 'F', 'tag': 'T', 'ending': 'F',
+  'instrumental': 'Inst', 'interludio': 'Int',
+};
+function labelAbbr(label) {
+  if (!label) return '';
+  return SECTION_ABBR[label.toLowerCase().trim()] ?? label;
+}
+
+// ─── Colores por sección ────────────────────────────────────────────────────────
+const SECTION_COLORS = {
+  'Intro': '#60a5fa', 'Verse': '#34d399', 'Verso': '#34d399', 'Estrofa': '#34d399',
+  'Pre-Coro': '#f59e0b', 'Coro': '#f87171', 'Chorus': '#f87171',
+  'Puente': '#a78bfa', 'Bridge': '#a78bfa', 'Final': '#94a3b8',
+  'Outro': '#94a3b8', 'Instrumental': '#22d3ee', 'Interludio': '#22d3ee', 'Tag': '#fb923c',
+};
+function labelColor(label) {
+  return SECTION_COLORS[label] ?? '#6b7280';
+}
+
+// ─── Modal de Estructura ─────────────────────────────────────────────────────────
+function EstructuraModal({ song, slides, onClose, onSaved }) {
+  // Etiquetas únicas presentes en los slides (en orden de aparición)
+  const availableLabels = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    for (const s of slides) {
+      const lbl = s.label?.trim();
+      if (lbl && !seen.has(lbl)) { seen.add(lbl); result.push(lbl); }
+    }
+    return result;
+  }, [slides]);
+
+  // Estructura actual guardada (o vacía si no hay)
+  const [structure, setStructure] = useState(
+    () => Array.isArray(song?.structure) && song.structure.length > 0
+      ? [...song.structure]
+      : []
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved,  setSaved]  = useState(false);
+
+  // ── Drag & Drop ──────────────────────────────────────────────────────────────
+  const dragItem = useRef(null);       // índice en structure siendo arrastrado
+  const dragOver = useRef(null);       // índice en structure sobre el que se pasa
+
+  const handleDragStartStructure = (idx) => { dragItem.current = idx; };
+  const handleDragOverStructure  = (e, idx) => { e.preventDefault(); dragOver.current = idx; };
+  const handleDropStructure      = () => {
+    if (dragItem.current === null || dragOver.current === null) return;
+    const arr = [...structure];
+    const [moved] = arr.splice(dragItem.current, 1);
+    arr.splice(dragOver.current, 0, moved);
+    setStructure(arr);
+    dragItem.current = null;
+    dragOver.current = null;
+  };
+
+  // Añadir etiqueta desde la paleta
+  const addLabel = (lbl) => setStructure(prev => [...prev, lbl]);
+
+  // Eliminar ítem de la estructura
+  const removeItem = (idx) => setStructure(prev => prev.filter((_, i) => i !== idx));
+
+  // Limpiar todo
+  const clearAll = () => setStructure([]);
+
+  // Guardar
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API}/api/songs/${song.id}/structure`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ structure }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onSaved?.(data.structure);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 1800);
+      }
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-lg bg-[#0f1a2e] border border-white/10 rounded-2xl flex flex-col overflow-hidden shadow-2xl"
+        style={{ maxHeight: '90vh' }}>
+
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+          <LayoutList size={18} className="text-purple-300/80" />
+          <div className="flex-1 min-w-0">
+            <h2 className="text-sm font-bold text-white">Estructura</h2>
+            <p className="text-xs text-white/40 truncate">{song.title}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+            <X size={16} className="text-white/50" />
+          </button>
+        </div>
+
+        <div className="flex flex-col gap-0 flex-1 overflow-hidden">
+          {/* Paleta de etiquetas disponibles */}
+          <div className="px-5 py-4 border-b border-white/10">
+            <p className="text-[10px] uppercase tracking-widest text-white/30 mb-3">
+              Secciones disponibles — toca para agregar
+            </p>
+            {availableLabels.length === 0 ? (
+              <p className="text-xs text-white/20 italic">Esta canción no tiene secciones etiquetadas.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {availableLabels.map(lbl => (
+                  <button
+                    key={lbl}
+                    onClick={() => addLabel(lbl)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors hover:scale-105 active:scale-95"
+                    style={{
+                      borderColor: labelColor(lbl) + '60',
+                      backgroundColor: labelColor(lbl) + '18',
+                      color: labelColor(lbl),
+                    }}
+                  >
+                    <span className="text-[10px] opacity-60">{labelAbbr(lbl)}</span>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Zona de construcción */}
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[10px] uppercase tracking-widest text-white/30">
+                Estructura — arrastra para reordenar
+              </p>
+              {structure.length > 0 && (
+                <button onClick={clearAll} className="text-[10px] text-white/25 hover:text-red-400 transition-colors flex items-center gap-1">
+                  <Trash2 size={10} /> Limpiar
+                </button>
+              )}
+            </div>
+
+            {structure.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-white/10 rounded-xl gap-2">
+                <p className="text-xs text-white/25">Agrega secciones desde arriba</p>
+                <p className="text-[10px] text-white/15">Ej: Intro · Verso · Pre-Coro · Coro · Puente · Coro</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                {structure.map((lbl, idx) => (
+                  <div
+                    key={idx}
+                    draggable
+                    onDragStart={() => handleDragStartStructure(idx)}
+                    onDragOver={e => handleDragOverStructure(e, idx)}
+                    onDrop={handleDropStructure}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-grab active:cursor-grabbing select-none transition-colors hover:bg-white/5"
+                    style={{ borderColor: labelColor(lbl) + '40', backgroundColor: labelColor(lbl) + '0d' }}
+                  >
+                    {/* Drag handle */}
+                    <span className="text-white/20 text-[10px] font-mono w-5 text-center shrink-0">⠿</span>
+                    {/* Número */}
+                    <span className="text-white/25 text-[10px] w-4 shrink-0">{idx + 1}</span>
+                    {/* Abreviación */}
+                    <span className="text-[10px] font-bold shrink-0 w-8 text-right" style={{ color: labelColor(lbl) }}>
+                      {labelAbbr(lbl)}
+                    </span>
+                    {/* Label */}
+                    <span className="flex-1 text-xs font-semibold text-white">{lbl}</span>
+                    {/* Eliminar */}
+                    <button
+                      onClick={() => removeItem(idx)}
+                      className="p-1 rounded hover:bg-red-500/20 transition-colors"
+                    >
+                      <X size={12} className="text-white/30 hover:text-red-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Vista previa abreviada */}
+            {structure.length > 0 && (
+              <div className="mt-4 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10">
+                <p className="text-[10px] text-white/25 uppercase tracking-widest mb-1.5">Vista previa</p>
+                <p className="text-xs font-mono text-white/60 leading-relaxed">
+                  {structure.map(labelAbbr).join(' · ')}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-white/10 flex items-center justify-between gap-3">
+          <p className="text-xs text-white/30">{structure.length} sección{structure.length !== 1 ? 'es' : ''}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 text-xs font-semibold transition-colors"
+            >
+              Cerrar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors disabled:opacity-50 ${
+                saved
+                  ? 'bg-green-500/25 border border-green-400/40 text-green-300'
+                  : 'bg-purple-500/25 hover:bg-purple-500/40 border border-purple-400/40 text-purple-200'
+              }`}
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+              {saved ? '¡Guardado!' : 'Guardar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Renderiza contenido en formato ChordPro: acordes encima de la letra.
@@ -146,6 +378,7 @@ export default function CancioneroSongDetail() {
   const [slides, setSlides]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+  const [estructuraOpen, setEstructuraOpen] = useState(false);
 
   // Transposición global (todos en la org) y capo personal
   const [keyOffset, setKeyOffset]   = useState(0);
@@ -471,6 +704,18 @@ export default function CancioneroSongDetail() {
               <Plus size={13} className="text-blue-300/70" />
             </button>
           </div>
+
+          {/* ── Estructura ── */}
+          <button
+            onClick={() => setEstructuraOpen(true)}
+            className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-purple-500/10 border-purple-400/25 text-purple-300 hover:bg-purple-500/20"
+            title="Ver / editar estructura de la canción"
+          >
+            <LayoutList size={13} />
+            {song?.structure?.length > 0
+              ? song.structure.map(labelAbbr).join('·')
+              : 'Estructura'}
+          </button>
         </div>
       </header>
 
@@ -525,6 +770,14 @@ export default function CancioneroSongDetail() {
             }
           }}
           onDeleted={() => navigate('/cancionero/canciones')}
+        />
+      )}
+      {estructuraOpen && song && (
+        <EstructuraModal
+          song={song}
+          slides={slides}
+          onClose={() => setEstructuraOpen(false)}
+          onSaved={(newStructure) => setSong(prev => ({ ...prev, structure: newStructure }))}
         />
       )}
       <CancioneroNavbar />

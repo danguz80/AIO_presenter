@@ -16,7 +16,7 @@ const getAllSongs = async (req, res) => {
 
     let query = `
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.language, s.tags,
-             s.song_key, s.bpm, s.time_sig, s.link, s.created_at
+             s.song_key, s.bpm, s.time_sig, s.link, s.structure, s.created_at
       FROM songs s
       WHERE s.organization_id = $1
     `;
@@ -232,4 +232,25 @@ const bulkTag = async (req, res) => {
   }
 };
 
-module.exports = { getAllSongs, getSongById, createSong, updateSong, deleteSong, getAllTags, bulkTag };
+module.exports = { getAllSongs, getSongById, createSong, updateSong, deleteSong, getAllTags, bulkTag, updateStructure };
+
+// PATCH /api/songs/:id/structure
+async function updateStructure(req, res) {
+  const { id } = req.params;
+  const orgId = req.user.orgId;
+  const { structure } = req.body;
+  if (!Array.isArray(structure)) return res.status(400).json({ error: 'structure debe ser un array' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE songs SET structure = $1, updated_at = NOW()
+         WHERE id = $2 AND organization_id = $3
+         RETURNING id, structure`,
+      [structure, id, orgId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Canción no encontrada' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[Songs] updateStructure:', err.message);
+    res.status(500).json({ error: 'Error al guardar estructura' });
+  }
+}

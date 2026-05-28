@@ -9,6 +9,7 @@ const {
   deleteSong,
   getAllTags,
   bulkTag,
+  updateStructure,
 } = require('../controllers/songsController');
 
 // Lectura: auth opcional — escritura: requiere JWT
@@ -17,7 +18,8 @@ router.patch('/bulk-tag', requireAuth,  bulkTag);
 router.get('/',           optionalAuth, getAllSongs);
 router.get('/:id',        optionalAuth, getSongById);
 router.post('/',          requireAuth,  createSong);
-router.put('/:id',        requireAuth,  updateSong);
-router.delete('/:id',     requireAuth,  deleteSong);
+router.put('/:id',          requireAuth,  updateSong);
+router.patch('/:id/structure', requireAuth, updateStructure);
+router.delete('/:id',       requireAuth,  deleteSong);
 
 module.exports = router;
