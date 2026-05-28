@@ -716,7 +716,7 @@ export default function CancioneroEventDetail() {
     const challenge = await generateCodeChallenge(verifier);
     // Usar 127.0.0.1 — única URI que Spotify acepta en modo desarrollo
     const redirectUri = `http://127.0.0.1:5173/spotify-callback`;
-    const scope = 'playlist-modify-public playlist-modify-private user-read-private';
+    const scope = 'playlist-modify-public playlist-modify-private';
 
     // Codificar todo lo necesario en el state para no depender de localStorage
     // (localhost y 127.0.0.1 tienen localStorage separado — esto lo evita)
