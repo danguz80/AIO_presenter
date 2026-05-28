@@ -200,7 +200,6 @@ export function transposeKey(key, steps) {
   if (!key || steps === 0) return key;
   return transposeChord(key, steps);
 }
-}
 
 // ─── Generador de acordes por tonalidad ──────────────────────────────────────
 const _SEMI = {
