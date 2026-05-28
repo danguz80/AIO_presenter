@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, Clock, Music2, Pencil, Trash2,
   ChevronUp, ChevronDown, X, RefreshCw, Loader2, Music, Plus, Send, Check, Users, LayoutTemplate,
@@ -20,9 +20,12 @@ function norm(str) {
 }
 
 // ─── Modal de edición de evento ──────────────────────────────────────────────
-function EventEditModal({ event, onClose, onSaved }) {
+function EventEditModal({ event, occurrenceDate, onClose, onSaved }) {
   const [title,       setTitle]       = useState(event?.title || '');
-  const [date,        setDate]        = useState(event?.date ? String(event.date).slice(0, 10) : '');
+  // Para recurrentes mostramos la fecha de la ocurrencia (solo lectura en el campo)
+  const [date,        setDate]        = useState(
+    occurrenceDate || (event?.date ? String(event.date).slice(0, 10) : '')
+  );
   const [time,        setTime]        = useState(event?.time ? String(event.time).slice(0, 5) : '');
   const [description, setDescription] = useState(event?.description || '');
   const [isRecurring, setIsRecurring] = useState(event?.is_recurring || false);
@@ -106,6 +109,7 @@ function EventEditModal({ event, onClose, onSaved }) {
         separator_color: p.separator_color || null,
         position: i,
       })),
+      ...(occurrenceDate ? { occurrence_date: occurrenceDate } : {}),
     };
     try {
       const res = await fetch(`${API}/api/events/${event.id}`, {
@@ -154,10 +158,15 @@ function EventEditModal({ event, onClose, onSaved }) {
               <label className="text-xs text-zinc-400 mb-1 block">Fecha *</label>
               <input
                 type="date"
-                className="w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
+                className={`w-full bg-surface-700 border border-surface-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent ${occurrenceDate ? 'opacity-60 cursor-not-allowed' : ''}`}
                 value={date}
-                onChange={e => setDate(e.target.value)}
+                onChange={e => { if (!occurrenceDate) setDate(e.target.value); }}
+                readOnly={!!occurrenceDate}
+                title={occurrenceDate ? 'Fecha fija para esta ocurrencia' : undefined}
               />
+              {occurrenceDate && (
+                <p className="text-[10px] text-zinc-500 mt-0.5">Ocurrencia específica — fecha no editable</p>
+              )}
             </div>
             <div>
               <label className="text-xs text-zinc-400 mb-1 block">Hora</label>
@@ -375,6 +384,8 @@ function EventEditModal({ event, onClose, onSaved }) {
 export default function CancioneroEventDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const occurrenceDate = location.state?.occurrence_date ?? null;
 
   const [event,        setEvent]       = useState(null);
   const [loading,      setLoading]     = useState(true);
@@ -405,7 +416,15 @@ export default function CancioneroEventDetail() {
       .then(r => r.json())
       .then(data => {
         const list = Array.isArray(data) ? data : [];
-        const ev = list.find(e => String(e.id) === String(id));
+        // Para recurrentes buscar por id + occurrence_date; si no hay, el primero que coincida
+        let ev;
+        if (occurrenceDate) {
+          ev = list.find(e =>
+            String(e.id) === String(id) &&
+            toDateStr(e.occurrence_date ?? e.date) === toDateStr(occurrenceDate)
+          );
+        }
+        if (!ev) ev = list.find(e => String(e.id) === String(id));
         setEvent(ev ?? null);
         setLoading(false);
       })
@@ -468,6 +487,8 @@ export default function CancioneroEventDetail() {
   const songs = (event.songs ?? [])
     .filter(s => s.item_type !== 'separator' && s.song_id)
     .sort((a, b) => a.position - b.position);
+
+  const allItems = (event.songs ?? []).sort((a, b) => a.position - b.position);
 
   const songList = songs.map(s => ({ id: s.song_id, title: s.title ?? '' }));
 
@@ -655,34 +676,50 @@ export default function CancioneroEventDetail() {
           })()
         )}
 
-        {/* Lista de canciones */}
+        {/* Lista de canciones / setlist completo */}
         <div>
           <p className="text-xs text-white/30 uppercase tracking-wider mb-3 flex items-center gap-1.5">
             <Music2 size={12} /> {songs.length} {songs.length === 1 ? 'canción' : 'canciones'}
           </p>
-          {songs.length === 0 ? (
+          {allItems.length === 0 ? (
             <p className="text-white/20 text-sm text-center py-8">Sin canciones asignadas</p>
           ) : (
             <div className="space-y-2">
-              {songs.map((s, idx) => (
-                <button
-                  key={s.song_id}
-                  onClick={() => navigate(`/cancionero/canciones/${s.song_id}`, {
-                    state: { songList, eventTitle: event.title, eventId: event.id },
-                  })}
-                  className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-3 transition-colors text-left"
-                >
-                  <span className="text-white/20 text-xs w-5 text-right shrink-0">{idx + 1}</span>
-                  <Music2 size={14} className="text-yellow-400/60 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate">{s.title ?? '—'}</p>
-                    {s.author && <p className="text-xs text-white/30 truncate">{s.author}</p>}
-                  </div>
-                  {s.song_key && (
-                    <span className="text-xs font-mono text-yellow-400/60 shrink-0">{s.song_key}</span>
-                  )}
-                </button>
-              ))}
+              {allItems.map((s, idx) => {
+                if (s.item_type === 'separator') {
+                  return (
+                    <div
+                      key={s.id ?? `sep-${idx}`}
+                      className="px-3 py-1.5 rounded-lg border-l-2"
+                      style={{ borderColor: s.separator_color || '#6366f1', background: `${s.separator_color || '#6366f1'}15` }}
+                    >
+                      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: s.separator_color || '#a5b4fc' }}>
+                        {s.separator_label || 'Separador'}
+                      </span>
+                    </div>
+                  );
+                }
+                const songIdx = songs.findIndex(sq => sq.song_id === s.song_id);
+                return (
+                  <button
+                    key={s.song_id}
+                    onClick={() => navigate(`/cancionero/canciones/${s.song_id}`, {
+                      state: { songList, eventTitle: event.title, eventId: event.id },
+                    })}
+                    className="w-full flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-3 transition-colors text-left"
+                  >
+                    <span className="text-white/20 text-xs w-5 text-right shrink-0">{songIdx + 1}</span>
+                    <Music2 size={14} className="text-yellow-400/60 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{s.title ?? '—'}</p>
+                      {s.author && <p className="text-xs text-white/30 truncate">{s.author}</p>}
+                    </div>
+                    {s.song_key && (
+                      <span className="text-xs font-mono text-yellow-400/60 shrink-0">{s.song_key}</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -694,6 +731,7 @@ export default function CancioneroEventDetail() {
       {editOpen && (
         <EventEditModal
           event={event}
+          occurrenceDate={event.is_recurring ? toDateStr(event.occurrence_date ?? event.date) : null}
           onClose={() => setEditOpen(false)}
           onSaved={() => { setEditOpen(false); loadEvent(); }}
         />

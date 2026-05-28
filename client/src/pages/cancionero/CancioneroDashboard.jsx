@@ -369,7 +369,7 @@ export default function CancioneroDashboard() {
               return (
                 <button
                   key={`${ev.id}-${ev.date}`}
-                  onClick={() => navigate(`/cancionero/eventos/${ev.id}`)}
+                  onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } })}
                   className={`group flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 active:scale-[0.98] ${
                     isDraft
                       ? 'border-amber-400/25 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10'

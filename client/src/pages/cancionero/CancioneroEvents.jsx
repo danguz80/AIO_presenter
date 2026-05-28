@@ -140,7 +140,7 @@ export default function CancioneroEvents() {
               {/* Botón ir al dashboard del evento */}
               <button
                 type="button"
-                onClick={e => { e.stopPropagation(); navigate(`/cancionero/eventos/${ev.id}`); }}
+                onClick={e => { e.stopPropagation(); navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } }); }}
                 className="shrink-0 text-[10px] border border-white/10 hover:border-blue-400/40 text-white/25 hover:text-blue-300 px-1.5 py-0.5 rounded transition-colors"
                 title="Ver dashboard del evento"
               >
