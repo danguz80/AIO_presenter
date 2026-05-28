@@ -29,17 +29,18 @@ export default function SpotifyCallbackPage() {
         return;
       }
 
-      // Decodificar todo desde el state (no usamos localStorage para evitar
-      // el problema de orígenes distintos entre localhost y 127.0.0.1)
+      // Decodificar todo desde el state (base64 URL-safe → JSON)
       let verifier, clientId, redirectUri, playlistName, songs;
       try {
-        const payload = JSON.parse(atob(state));
+        // Revertir base64 URL-safe a base64 estándar antes de atob
+        const b64 = state.replace(/-/g, '+').replace(/_/g, '/');
+        const payload = JSON.parse(decodeURIComponent(escape(atob(b64))));
         verifier     = payload.verifier;
         clientId     = payload.clientId;
         redirectUri  = payload.redirectUri;
         playlistName = payload.playlistName ?? 'Setlist';
         songs        = Array.isArray(payload.songs) ? payload.songs : [];
-      } catch {
+      } catch (e) {
         setStatus('error');
         setMessage('No se pudo leer los datos del flujo de autorización.');
         return;
@@ -64,7 +65,10 @@ export default function SpotifyCallbackPage() {
             code_verifier: verifier,
           }),
         });
-        if (!tokenRes.ok) throw new Error('Error obteniendo token');
+        if (!tokenRes.ok) {
+          const errData = await tokenRes.json().catch(() => ({}));
+          throw new Error(`Error obteniendo token: ${errData.error} — ${errData.error_description ?? tokenRes.status}`);
+        }
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
 

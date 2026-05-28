@@ -723,9 +723,11 @@ export default function CancioneroEventDetail() {
     const songs = allItems
       .filter(i => i.item_type !== 'separator' && i.song_id)
       .map(i => ({ title: i.title, author: i.author, link: i.link || null }));
-    const statePayload = btoa(JSON.stringify({
+    // Base64 URL-safe: btoa produce '+' y '/' que se corrompen en URLs
+    const statePayload = btoa(unescape(encodeURIComponent(JSON.stringify({
       eventId: id, playlistName, verifier, clientId, redirectUri, songs,
-    }));
+    }))))
+      .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 
     const params = new URLSearchParams({
       response_type: 'code',
