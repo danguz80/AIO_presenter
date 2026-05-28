@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History, AlertTriangle, Users } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -42,6 +42,8 @@ export default function CancioneroEvents() {
   const [loading,     setLoading]     = useState(true);
   const [expanded,    setExpanded]    = useState({});
   const [pastOpen,    setPastOpen]    = useState(false);
+  const [bandConfigs,     setBandConfigs]     = useState([]);
+  const [myBlockedDates,  setMyBlockedDates]  = useState([]); // YYYY-MM-DD[]
 
   const isAdmin = (() => {
     try {
@@ -52,12 +54,22 @@ export default function CancioneroEvents() {
     } catch { return false; }
   })();
 
+  const myUserId = (() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return null;
+      return Number(JSON.parse(atob(token.split('.')[1])).userId);
+    } catch { return null; }
+  })();
+
   useEffect(() => {
-    // Cargar próximos y pasados en paralelo
+    // Cargar próximos, pasados, band-configs y fechas bloqueadas en paralelo
     Promise.all([
       fetch(`${API}/api/events?start=${todayStr()}&end=${futureStr(90)}`, { headers: authHeaders() }).then(r => r.json()),
       fetch(`${API}/api/events?start=${pastStr(180)}&end=${pastStr(1)}`,  { headers: authHeaders() }).then(r => r.json()),
-    ]).then(([upcoming, past]) => {
+      fetch(`${API}/api/band-configs`, { headers: authHeaders() }).then(r => r.json()).catch(() => []),
+      fetch(`${API}/api/blocked-dates?start=${todayStr()}&end=${futureStr(90)}`, { headers: authHeaders() }).then(r => r.json()).catch(() => []),
+    ]).then(([upcoming, past, configs, blocked]) => {
       const upList   = Array.isArray(upcoming) ? upcoming : [];
       const pastList = Array.isArray(past)     ? past     : [];
       upList.sort((a, b) => a.date.localeCompare(b.date));
@@ -67,6 +79,11 @@ export default function CancioneroEvents() {
       const visiblePast = isAdmin ? pastList : pastList.filter(e => e.is_published);
       setEvents(visibleUp);
       setPastEvents(visiblePast);
+      setBandConfigs(Array.isArray(configs) ? configs : []);
+      if (myUserId) {
+        const blockedArr = Array.isArray(blocked) ? blocked : [];
+        setMyBlockedDates(blockedArr.filter(b => Number(b.user_id) === myUserId).map(b => b.date?.slice(0, 10)));
+      }
       if (visibleUp.length > 0) {
         setExpanded({ [`${visibleUp[0].id}-${visibleUp[0].date}`]: true });
       }
@@ -83,6 +100,13 @@ export default function CancioneroEvents() {
     const songs = (ev.songs ?? []).filter(s => s.item_type !== 'separator' && s.song_id);
     const items = (ev.songs ?? []).sort((a, b) => a.position - b.position);
 
+    // Detectar conflicto: asignado en banda + fecha bloqueada
+    const evDate = toDateStr(ev.date);
+    const isBlocked = myBlockedDates.includes(evDate);
+    const cfg = ev.band_config_id ? bandConfigs.find(c => c.id === Number(ev.band_config_id)) : null;
+    const mySlot = cfg ? (cfg.slots || []).find(s => Number(s.userId) === myUserId) : null;
+    const hasConflict = !isPast && isBlocked && !!mySlot?.instrument;
+
     let badge, color;
     if (isPast) {
       badge = daysAgo(ev.date);
@@ -98,11 +122,13 @@ export default function CancioneroEvents() {
       <div
         key={key}
         className={`rounded-2xl border-2 overflow-hidden transition-all ${
-          isPast
-            ? 'border-white/5 bg-white/[0.03] opacity-80'
-            : isToday
-              ? 'border-yellow-400/30 bg-yellow-500/5'
-              : 'border-white/10 bg-white/5'
+          hasConflict
+            ? 'border-red-500/60 bg-red-500/10 animate-pulse'
+            : isPast
+              ? 'border-white/5 bg-white/[0.03] opacity-80'
+              : isToday
+                ? 'border-yellow-400/30 bg-yellow-500/5'
+                : 'border-white/10 bg-white/5'
         }`}
       >
         <button
@@ -111,27 +137,36 @@ export default function CancioneroEvents() {
         >
           {/* Date badge */}
           <div className={`flex-shrink-0 flex flex-col items-center justify-center w-12 h-12 rounded-xl border ${
-            isPast
-              ? 'bg-white/5 border-white/10'
-              : isToday
-                ? 'bg-yellow-500/20 border-yellow-400/30'
-                : 'bg-blue-500/10 border-blue-400/20'
+            hasConflict
+              ? 'bg-red-500/20 border-red-400/40'
+              : isPast
+                ? 'bg-white/5 border-white/10'
+                : isToday
+                  ? 'bg-yellow-500/20 border-yellow-400/30'
+                  : 'bg-blue-500/10 border-blue-400/20'
           }`}>
             <span className={`text-[10px] font-bold uppercase ${
-              isPast ? 'text-white/30' : isToday ? 'text-yellow-300' : 'text-blue-300'
+              hasConflict ? 'text-red-300' : isPast ? 'text-white/30' : isToday ? 'text-yellow-300' : 'text-blue-300'
             }`}>
               {new Date(toDateStr(ev.date) + 'T12:00:00').toLocaleDateString('es', { month: 'short' })}
             </span>
             <span className={`text-xl font-extrabold leading-none ${
-              isPast ? 'text-white/50' : isToday ? 'text-yellow-200' : 'text-white'
+              hasConflict ? 'text-red-200' : isPast ? 'text-white/50' : isToday ? 'text-yellow-200' : 'text-white'
             }`}>
               {new Date(toDateStr(ev.date) + 'T12:00:00').getDate()}
             </span>
           </div>
 
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className={`font-bold text-sm ${isPast ? 'text-white/60' : 'text-white'}`}>{ev.title}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className={`font-bold text-sm ${
+                hasConflict ? 'text-red-200' : isPast ? 'text-white/60' : 'text-white'
+              }`}>{ev.title}</p>
+              {hasConflict && (
+                <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-500/25 border border-red-400/40 text-red-300 uppercase tracking-wide">
+                  <AlertTriangle size={9} /> Conflicto
+                </span>
+              )}
               {isAdmin && !ev.is_published && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/30 text-amber-300">
                   Borrador
@@ -141,15 +176,26 @@ export default function CancioneroEvents() {
               <button
                 type="button"
                 onClick={e => { e.stopPropagation(); navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } }); }}
-                className="shrink-0 text-[10px] border border-white/10 hover:border-blue-400/40 text-white/25 hover:text-blue-300 px-1.5 py-0.5 rounded transition-colors"
+                className={`shrink-0 text-[10px] border px-1.5 py-0.5 rounded transition-colors ${
+                  hasConflict
+                    ? 'border-red-400/40 text-red-300/60 hover:text-red-200 hover:border-red-400/70'
+                    : 'border-white/10 hover:border-blue-400/40 text-white/25 hover:text-blue-300'
+                }`}
                 title="Ver dashboard del evento"
               >
                 Ver →
               </button>
             </div>
-            <p className="text-xs text-white/40 mt-0.5 capitalize">{formatDate(ev.date)}</p>
+            <p className={`text-xs mt-0.5 capitalize ${
+              hasConflict ? 'text-red-300/60' : 'text-white/40'
+            }`}>{formatDate(ev.date)}</p>
+            {hasConflict && (
+              <p className="text-[11px] text-red-300/80 mt-1 font-semibold">
+                ⚠ Estás bloqueado · asignado como {mySlot.instrument}
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-1 text-xs">
-              <span className={`font-semibold ${color}`}>{badge}</span>
+              <span className={`font-semibold ${hasConflict ? 'text-red-400' : color}`}>{badge}</span>
               {ev.time && (
                 <><span className="text-white/20">·</span>
                 <Clock size={11} className="text-white/30" />
