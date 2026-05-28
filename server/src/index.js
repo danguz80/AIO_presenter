@@ -264,12 +264,14 @@ async function saveOrgSetting(orgId, key, value) {
       )
     `);
     // ─── Nombre de banda por organización ─────────────────────────────────
-    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS band_name VARCHAR(100)`);
-    // ─── Publicación de eventos ────────────────────────────────────────────
+    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS band_name VARCHAR(100)`);    // ─── Spotify Client ID por organización ───────────────────────────
+    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS spotify_client_id TEXT`);    // ─── Publicación de eventos ────────────────────────────────────────────
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_published BOOLEAN DEFAULT false`);
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ`);
     // ─── Configuración de banda por evento ────────────────────────────────
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS band_config_id INTEGER REFERENCES band_configs(id) ON DELETE SET NULL`);
+    // ─── Estructuras múltiples por canción ────────────────────────────────
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS structures JSONB DEFAULT '[]'`);
     // ─── Notificaciones in-app ─────────────────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (

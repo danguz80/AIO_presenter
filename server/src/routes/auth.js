@@ -311,7 +311,7 @@ router.get('/org/members', requireAuth, async (req, res) => {
 router.get('/org', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, band_name, plan, trial_ends, created_at FROM organizations WHERE id = $1',
+      'SELECT id, name, band_name, spotify_client_id, plan, trial_ends, created_at FROM organizations WHERE id = $1',
       [req.user.orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Organización no encontrada' });
@@ -321,15 +321,18 @@ router.get('/org', requireAuth, async (req, res) => {
   }
 });
 
-/** PATCH /auth/org — actualizar nombre de banda (solo admin) */
+/** PATCH /auth/org — actualizar nombre de banda y/o Spotify Client ID (solo admin) */
 router.patch('/org', requireAuth, async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins pueden editar la organización' });
   try {
-    const { band_name } = req.body;
+    const { band_name, spotify_client_id } = req.body;
     const { rows } = await pool.query(
-      `UPDATE organizations SET band_name = $1 WHERE id = $2
-       RETURNING id, name, band_name`,
-      [band_name ?? null, req.user.orgId]
+      `UPDATE organizations
+          SET band_name = COALESCE($1, band_name),
+              spotify_client_id = $2
+        WHERE id = $3
+       RETURNING id, name, band_name, spotify_client_id`,
+      [band_name ?? null, spotify_client_id ?? null, req.user.orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Organización no encontrada' });
     res.json(rows[0]);

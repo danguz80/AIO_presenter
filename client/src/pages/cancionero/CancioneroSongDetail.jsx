@@ -50,8 +50,8 @@ function labelColor(label) {
   return baseKey ? SECTION_COLORS[baseKey] : '#6b7280';
 }
 
-// ─── Modal de Estructura ─────────────────────────────────────────────────────────
-function EstructuraModal({ song, slides, onClose, onSaved }) {
+// ─── Modal de Estructuras (múltiples) ────────────────────────────────────────
+function EstructuraModal({ song, slides, allStructures: propStructures, activeStructIdx: propActiveIdx, onClose, onSaved }) {
   // Etiquetas únicas presentes en los slides (en orden de aparición)
   const availableLabels = useMemo(() => {
     const seen = new Set();
@@ -63,23 +63,45 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
     return result;
   }, [slides]);
 
-  // Estructura interna: [{label, count}] — agrupa consecutivos al cargar
-  const [structure, setStructure] = useState(() => {
-    const flat = Array.isArray(song?.structure) && song.structure.length > 0 ? song.structure : [];
-    return flat.reduce((acc, lbl) => {
-      const last = acc[acc.length - 1];
-      if (last && last.label === lbl) { last.count += 1; return acc; }
-      acc.push({ label: lbl, count: 1 });
-      return acc;
-    }, []);
+  // Estado local: [{name, rows: [{label, count}]}]
+  const [localStructures, setLocalStructures] = useState(() => {
+    const source = propStructures.length > 0
+      ? propStructures
+      : (Array.isArray(song?.structure) && song.structure.length > 0
+          ? [{ name: 'Estructura 1', items: song.structure }]
+          : [{ name: 'Estructura 1', items: [] }]);
+    return source.map(s => ({
+      name: s.name,
+      rows: (s.items ?? []).reduce((acc, lbl) => {
+        const last = acc[acc.length - 1];
+        if (last && last.label === lbl) { last.count += 1; return acc; }
+        acc.push({ label: lbl, count: 1 });
+        return acc;
+      }, []),
+    }));
   });
+  const [localActiveIdx, setLocalActiveIdx] = useState(
+    () => Math.min(propActiveIdx, Math.max(0, propStructures.length - 1))
+  );
   const [saving, setSaving] = useState(false);
   const [saved,  setSaved]  = useState(false);
 
-  // Array plano expandido (para guardar y para preview)
+  // Atajos a las filas de la estructura activa
+  const activeRows = localStructures[localActiveIdx]?.rows ?? [];
+  const setActiveRows = (fn) =>
+    setLocalStructures(prev => {
+      const next = [...prev];
+      next[localActiveIdx] = {
+        ...next[localActiveIdx],
+        rows: typeof fn === 'function' ? fn(next[localActiveIdx].rows) : fn,
+      };
+      return next;
+    });
+
+  // Array plano expandido (para preview)
   const flatStructure = useMemo(
-    () => structure.flatMap(({ label, count }) => Array(count).fill(label)),
-    [structure]
+    () => activeRows.flatMap(({ label, count }) => Array(count).fill(label)),
+    [activeRows]
   );
   const totalSections = flatStructure.length;
 
@@ -87,49 +109,64 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
   const dragItem = useRef(null);
   const dragOver = useRef(null);
 
-  const handleDragStartStructure = (idx) => { dragItem.current = idx; };
-  const handleDragOverStructure  = (e, idx) => { e.preventDefault(); dragOver.current = idx; };
-  const handleDropStructure      = () => {
+  const handleDragStart = (idx) => { dragItem.current = idx; };
+  const handleDragOver  = (e, idx) => { e.preventDefault(); dragOver.current = idx; };
+  const handleDrop      = () => {
     if (dragItem.current === null || dragOver.current === null) return;
-    const arr = [...structure];
-    const [moved] = arr.splice(dragItem.current, 1);
-    arr.splice(dragOver.current, 0, moved);
-    setStructure(arr);
-    dragItem.current = null;
-    dragOver.current = null;
+    setActiveRows(prev => {
+      const arr = [...prev];
+      const [moved] = arr.splice(dragItem.current, 1);
+      arr.splice(dragOver.current, 0, moved);
+      dragItem.current = null;
+      dragOver.current = null;
+      return arr;
+    });
   };
 
-  // Añadir desde paleta — siempre crea nueva entrada con count=1
-  const addLabel = (lbl) => setStructure(prev => [...prev, { label: lbl, count: 1 }]);
-
-  // Incrementar/decrementar repeticiones (decrementar a 0 elimina la entrada)
+  const addLabel       = (lbl) => setActiveRows(prev => [...prev, { label: lbl, count: 1 }]);
   const incrementCount = (idx) =>
-    setStructure(prev => prev.map((item, i) => i === idx ? { ...item, count: item.count + 1 } : item));
+    setActiveRows(prev => prev.map((item, i) => i === idx ? { ...item, count: item.count + 1 } : item));
   const decrementCount = (idx) =>
-    setStructure(prev => {
+    setActiveRows(prev => {
       const item = prev[idx];
       if (item.count <= 1) return prev.filter((_, i) => i !== idx);
       return prev.map((it, i) => i === idx ? { ...it, count: it.count - 1 } : it);
     });
+  const removeItem = (idx) => setActiveRows(prev => prev.filter((_, i) => i !== idx));
+  const clearAll   = () => setActiveRows([]);
 
-  // Eliminar ítem completo
-  const removeItem = (idx) => setStructure(prev => prev.filter((_, i) => i !== idx));
+  // ── Agregar nueva estructura ──────────────────────────────────────────────────
+  const addStructure = () => {
+    const n = localStructures.length + 1;
+    setLocalStructures(prev => [...prev, { name: `Estructura ${n}`, rows: [] }]);
+    setLocalActiveIdx(localStructures.length); // el nuevo índice = length antes de agregar
+  };
 
-  // Limpiar todo
-  const clearAll = () => setStructure([]);
+  // ── Eliminar estructura (debe quedar al menos 1) ──────────────────────────────
+  const deleteStructure = (idx) => {
+    if (localStructures.length <= 1) return;
+    const next = localStructures.filter((_, i) => i !== idx);
+    setLocalStructures(next);
+    setLocalActiveIdx(prev => Math.min(prev, next.length - 1));
+  };
 
-  // Guardar (envía el flat array expandido)
+  // ── Guardar ───────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     setSaving(true);
     try {
+      const structuresFlat = localStructures.map(s => ({
+        name: s.name,
+        items: s.rows.flatMap(({ label, count }) => Array(count).fill(label)),
+      }));
+      const activeFlatItems = structuresFlat[localActiveIdx]?.items ?? [];
       const res = await fetch(`${API}/api/songs/${song.id}/structure`, {
         method: 'PATCH',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ structure: flatStructure }),
+        body: JSON.stringify({ structure: activeFlatItems, structures: structuresFlat }),
       });
       if (res.ok) {
         const data = await res.json();
-        onSaved?.(data.structure);
+        onSaved?.({ structure: data.structure, structures: structuresFlat, activeIdx: localActiveIdx });
         setSaved(true);
         setTimeout(() => setSaved(false), 1800);
       }
@@ -145,11 +182,44 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
           <LayoutList size={18} className="text-purple-300/80" />
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm font-bold text-white">Estructura</h2>
+            <h2 className="text-sm font-bold text-white">Estructuras</h2>
             <p className="text-xs text-white/40 truncate">{song.title}</p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
             <X size={16} className="text-white/50" />
+          </button>
+        </div>
+
+        {/* ── Tabs de estructuras ── */}
+        <div className="flex items-center gap-1 px-4 py-2 border-b border-white/10 overflow-x-auto no-scrollbar flex-shrink-0">
+          {localStructures.map((s, i) => (
+            <div key={i} className="flex items-center gap-0.5 flex-shrink-0">
+              <button
+                onClick={() => setLocalActiveIdx(i)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  i === localActiveIdx
+                    ? 'bg-purple-500/30 border border-purple-400/50 text-purple-200'
+                    : 'bg-white/5 border border-white/10 text-white/40 hover:text-white/70 hover:bg-white/10'
+                }`}
+              >
+                {s.name}
+              </button>
+              {localStructures.length > 1 && (
+                <button
+                  onClick={() => deleteStructure(i)}
+                  className="p-0.5 rounded hover:bg-red-500/20 transition-colors"
+                  title={`Eliminar ${s.name}`}
+                >
+                  <X size={10} className="text-white/20 hover:text-red-400" />
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            onClick={addStructure}
+            className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-white/20 text-white/30 hover:border-purple-400/50 hover:text-purple-300 hover:bg-purple-500/10 transition-colors ml-1"
+          >
+            <Plus size={11} /> Agregar nueva Estructura
           </button>
         </div>
 
@@ -186,74 +256,51 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
           <div className="flex-1 overflow-y-auto px-5 py-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] uppercase tracking-widest text-white/30">
-                Estructura — arrastra para reordenar · flechas para repetir
+                {localStructures[localActiveIdx]?.name} — arrastra para reordenar · flechas para repetir
               </p>
-              {structure.length > 0 && (
+              {activeRows.length > 0 && (
                 <button onClick={clearAll} className="text-[10px] text-white/25 hover:text-red-400 transition-colors flex items-center gap-1">
                   <Trash2 size={10} /> Limpiar
                 </button>
               )}
             </div>
 
-            {structure.length === 0 ? (
+            {activeRows.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 border-2 border-dashed border-white/10 rounded-xl gap-2">
                 <p className="text-xs text-white/25">Agrega secciones desde arriba</p>
                 <p className="text-[10px] text-white/15">Ej: Intro · Verso · Pre-Coro · Coro · Puente · Coro</p>
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                {structure.map(({ label, count }, idx) => (
+                {activeRows.map(({ label, count }, idx) => (
                   <div
                     key={idx}
                     draggable
-                    onDragStart={() => handleDragStartStructure(idx)}
-                    onDragOver={e => handleDragOverStructure(e, idx)}
-                    onDrop={handleDropStructure}
+                    onDragStart={() => handleDragStart(idx)}
+                    onDragOver={e => handleDragOver(e, idx)}
+                    onDrop={handleDrop}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-grab active:cursor-grabbing select-none transition-colors hover:bg-white/5"
                     style={{ borderColor: labelColor(label) + '40', backgroundColor: labelColor(label) + '0d' }}
                   >
-                    {/* Drag handle */}
                     <span className="text-white/20 text-[10px] font-mono w-5 text-center shrink-0">⠿</span>
-                    {/* Número */}
                     <span className="text-white/25 text-[10px] w-4 shrink-0">{idx + 1}</span>
-                    {/* Abreviación */}
                     <span className="text-[10px] font-bold shrink-0 w-8 text-right" style={{ color: labelColor(label) }}>
                       {labelAbbr(label)}
                     </span>
-                    {/* Label */}
                     <span className="flex-1 text-xs font-semibold text-white">{label}</span>
-                    {/* Flechas repetición — alineadas a la derecha, no inician drag */}
-                    <div
-                      className="flex items-center gap-0.5"
-                      onDragStart={e => e.stopPropagation()}
-                      draggable={false}
-                    >
-                      <button
-                        onClick={() => decrementCount(idx)}
-                        className="p-1 rounded-lg hover:bg-white/10 transition-colors"
-                        title="Menos repeticiones"
-                      >
+                    <div className="flex items-center gap-0.5" onDragStart={e => e.stopPropagation()} draggable={false}>
+                      <button onClick={() => decrementCount(idx)} className="p-1 rounded-lg hover:bg-white/10 transition-colors" title="Menos repeticiones">
                         <ChevronDown size={13} className="text-white/40" />
                       </button>
-                      <span
-                        className="text-[12px] font-mono font-bold min-w-[20px] text-center"
-                        style={{ color: count > 1 ? labelColor(label) : 'rgba(255,255,255,0.35)' }}
-                      >
+                      <span className="text-[12px] font-mono font-bold min-w-[20px] text-center"
+                        style={{ color: count > 1 ? labelColor(label) : 'rgba(255,255,255,0.35)' }}>
                         {count}
                       </span>
-                      <button
-                        onClick={() => incrementCount(idx)}
-                        className="p-1 rounded-lg hover:bg-white/10 transition-colors"
-                        title="Más repeticiones"
-                      >
+                      <button onClick={() => incrementCount(idx)} className="p-1 rounded-lg hover:bg-white/10 transition-colors" title="Más repeticiones">
                         <ChevronUp size={13} className="text-white/40" />
                       </button>
                     </div>
-                    {/* Eliminar */}
-                    <button
-                      onClick={() => removeItem(idx)}
-                      className="p-1 rounded hover:bg-red-500/20 transition-colors"
-                    >
+                    <button onClick={() => removeItem(idx)} className="p-1 rounded hover:bg-red-500/20 transition-colors">
                       <X size={12} className="text-white/30 hover:text-red-400" />
                     </button>
                   </div>
@@ -262,7 +309,7 @@ function EstructuraModal({ song, slides, onClose, onSaved }) {
             )}
 
             {/* Vista previa abreviada */}
-            {structure.length > 0 && (
+            {activeRows.length > 0 && (
               <div className="mt-4 px-3 py-2.5 rounded-xl bg-white/5 border border-white/10">
                 <p className="text-[10px] text-white/25 uppercase tracking-widest mb-1.5">Vista previa</p>
                 <p className="text-xs font-mono text-white/60 leading-relaxed">
@@ -440,6 +487,13 @@ export default function CancioneroSongDetail() {
   const [annotationsSaved, setAnnotationsSaved] = useState(true);
   const [toolbarOpen, setToolbarOpen] = useState(false);
 
+  // Múltiples estructuras
+  const [allStructures, setAllStructures]     = useState([]);
+  const [activeStructIdx, setActiveStructIdx] = useState(() => {
+    const s = localStorage.getItem(`aio_active_struct_${id}`);
+    return s ? parseInt(s, 10) : 0;
+  });
+
   // Transposición global (todos en la org) y capo personal
   const [keyOffset, setKeyOffset]   = useState(0);
   const [capoOffset, setCapoOffset] = useState(0);
@@ -448,9 +502,15 @@ export default function CancioneroSongDetail() {
   // displayOffset: lo que YO veo (keyOffset global - capo personal)
   const displayOffset = useMemo(() => keyOffset - capoOffset, [keyOffset, capoOffset]);
 
-  // Slides reordenados según la estructura guardada
+  // Items de la estructura activa (array plano de labels)
+  const activeStructItems = useMemo(() => {
+    const clampedIdx = Math.min(activeStructIdx, Math.max(0, allStructures.length - 1));
+    return allStructures[clampedIdx]?.items ?? [];
+  }, [allStructures, activeStructIdx]);
+
+  // Slides reordenados según la estructura activa
   const orderedSlides = useMemo(() => {
-    if (!song?.structure?.length || !slides.length) return slides;
+    if (!activeStructItems.length || !slides.length) return slides;
     const byLabel = {};
     for (const s of slides) {
       const lbl = s.label?.trim() ?? '';
@@ -458,12 +518,12 @@ export default function CancioneroSongDetail() {
       byLabel[lbl].push(s);
     }
     const result = [];
-    for (const lbl of song.structure) {
+    for (const lbl of activeStructItems) {
       const group = byLabel[lbl] ?? [];
       result.push(...group);
     }
     return result.length > 0 ? result : slides;
-  }, [slides, song?.structure]);
+  }, [slides, activeStructItems]);
 
 
   // Conectar socket y pedir offset actual al montar
@@ -573,10 +633,22 @@ export default function CancioneroSongDetail() {
       .then(s => {
         setSong(s);
         setSlides(Array.isArray(s.slides) ? s.slides : []);
+        // Inicializar estructuras múltiples
+        const structs = Array.isArray(s.structures) && s.structures.length > 0
+          ? s.structures
+          : (Array.isArray(s.structure) && s.structure.length > 0
+              ? [{ name: 'Estructura 1', items: s.structure }]
+              : []);
+        setAllStructures(structs);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, [id]);
+
+  // Persistir índice de estructura activa en localStorage
+  useEffect(() => {
+    localStorage.setItem(`aio_active_struct_${id}`, String(activeStructIdx));
+  }, [activeStructIdx, id]);
 
   // Cargar anotaciones personales
   useEffect(() => {
@@ -892,29 +964,52 @@ export default function CancioneroSongDetail() {
           </button>
         </div>
 
-        {/* ── Fila de abreviaciones de estructura ── */}
-        {song?.structure?.length > 0 && (() => {
-          const seen = {};
-          return (
-            <div className="flex flex-wrap gap-1 pt-0.5">
-              {song.structure.map((lbl, i) => {
-                if (seen[lbl] === undefined) seen[lbl] = 0;
-                const occ = seen[lbl]++;
-                return (
+        {/* ── Selector de estructura activa + badges de secciones ── */}
+        {allStructures.length > 0 && (
+          <div className="pt-0.5 flex flex-col gap-1">
+            {/* Pestañas de estructura (solo si hay más de una) */}
+            {allStructures.length > 1 && (
+              <div className="flex gap-1 flex-wrap">
+                {allStructures.map((s, i) => (
                   <button
                     key={i}
-                    onClick={() => scrollToSection(lbl, occ)}
-                    className="text-xs font-bold font-mono px-2 py-0.5 rounded-lg transition-opacity hover:opacity-80 active:opacity-60"
-                    style={{ color: labelColor(lbl), backgroundColor: labelColor(lbl) + '25', border: `1px solid ${labelColor(lbl)}35` }}
-                    title={`Ir a ${lbl}`}
+                    onClick={() => setActiveStructIdx(i)}
+                    className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors font-semibold ${
+                      i === activeStructIdx
+                        ? 'bg-purple-500/30 border-purple-400/50 text-purple-200'
+                        : 'bg-white/5 border-white/10 text-white/30 hover:text-white/60'
+                    }`}
                   >
-                    {labelAbbr(lbl)}
+                    {s.name}
                   </button>
-                );
-              })}
-            </div>
-          );
-        })()}
+                ))}
+              </div>
+            )}
+            {/* Badges de secciones de la estructura activa */}
+            {activeStructItems.length > 0 && (() => {
+              const seen = {};
+              return (
+                <div className="flex flex-wrap gap-1">
+                  {activeStructItems.map((lbl, i) => {
+                    if (seen[lbl] === undefined) seen[lbl] = 0;
+                    const occ = seen[lbl]++;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => scrollToSection(lbl, occ)}
+                        className="text-xs font-bold font-mono px-2 py-0.5 rounded-lg transition-opacity hover:opacity-80 active:opacity-60"
+                        style={{ color: labelColor(lbl), backgroundColor: labelColor(lbl) + '25', border: `1px solid ${labelColor(lbl)}35` }}
+                        title={`Ir a ${lbl}`}
+                      >
+                        {labelAbbr(lbl)}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </header>
 
       {/* ── Content ─────────────────────────────────────────────────── */}
@@ -1007,8 +1102,14 @@ export default function CancioneroSongDetail() {
         <EstructuraModal
           song={song}
           slides={slides}
+          allStructures={allStructures}
+          activeStructIdx={Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))}
           onClose={() => setEstructuraOpen(false)}
-          onSaved={(newStructure) => setSong(prev => ({ ...prev, structure: newStructure }))}
+          onSaved={({ structure, structures, activeIdx }) => {
+            setSong(prev => ({ ...prev, structure, structures }));
+            setAllStructures(structures);
+            setActiveStructIdx(activeIdx);
+          }}
         />
       )}
       <CancioneroNavbar />

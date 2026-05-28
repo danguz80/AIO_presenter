@@ -541,6 +541,7 @@ export default function CancioneroEventDetail() {
   const [publishing,   setPublishing]  = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [spotifyLoading, setSpotifyLoading] = useState(false);
+  const [orgSpotifyClientId, setOrgSpotifyClientId] = useState(null);
   const [bandConfigs,  setBandConfigs] = useState([]);
   const [savingBand,   setSavingBand]  = useState(false);
 
@@ -580,6 +581,14 @@ export default function CancioneroEventDetail() {
   };
 
   useEffect(() => { loadEvent(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cargar spotify_client_id de la org
+  useEffect(() => {
+    fetch(`${API}/auth/org`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.spotify_client_id) setOrgSpotifyClientId(data.spotify_client_id); })
+      .catch(() => {});
+  }, []);
 
   // Cargar configuraciones de banda
   useEffect(() => {
@@ -663,9 +672,10 @@ export default function CancioneroEventDetail() {
 
   // ─── Spotify PKCE ────────────────────────────────────────────────────────────
   const handleCreateSpotifyPlaylist = async () => {
-    const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
+    // Prioridad: Client ID de la org (BD) > variable de entorno (fallback dev)
+    const clientId = orgSpotifyClientId || import.meta.env.VITE_SPOTIFY_CLIENT_ID;
     if (!clientId) {
-      alert('Configura VITE_SPOTIFY_CLIENT_ID en client/.env para usar la integración con Spotify.');
+      alert('Configura el Spotify Client ID en Ajustes → Organización para usar la integración con Spotify.');
       return;
     }
 
@@ -704,24 +714,25 @@ export default function CancioneroEventDetail() {
 
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
-    const redirectUri = `${window.location.origin}/spotify-callback`;
-    const state = `${id}:::${encodeURIComponent(playlistName)}`;
-    const scope = 'playlist-modify-public playlist-modify-private';
+    // Usar 127.0.0.1 — única URI que Spotify acepta en modo desarrollo
+    const redirectUri = `http://127.0.0.1:5173/spotify-callback`;
+    const scope = 'playlist-modify-public playlist-modify-private user-read-private';
 
-    localStorage.setItem('spotify_verifier', verifier);
-    localStorage.setItem('spotify_state', state);
-    localStorage.setItem('spotify_playlist_songs', JSON.stringify(
-      allItems.filter(i => i.item_type !== 'separator' && i.song_id).map(i => ({
-        title: i.title, author: i.author, link: i.link || null,
-      }))
-    ));
+    // Codificar todo lo necesario en el state para no depender de localStorage
+    // (localhost y 127.0.0.1 tienen localStorage separado — esto lo evita)
+    const songs = allItems
+      .filter(i => i.item_type !== 'separator' && i.song_id)
+      .map(i => ({ title: i.title, author: i.author, link: i.link || null }));
+    const statePayload = btoa(JSON.stringify({
+      eventId: id, playlistName, verifier, clientId, redirectUri, songs,
+    }));
 
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: clientId,
       scope,
       redirect_uri: redirectUri,
-      state,
+      state: statePayload,
       code_challenge_method: 'S256',
       code_challenge: challenge,
     });

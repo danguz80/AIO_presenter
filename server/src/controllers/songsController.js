@@ -238,14 +238,15 @@ module.exports = { getAllSongs, getSongById, createSong, updateSong, deleteSong,
 async function updateStructure(req, res) {
   const { id } = req.params;
   const orgId = req.user.orgId;
-  const { structure } = req.body;
+  const { structure, structures } = req.body;
   if (!Array.isArray(structure)) return res.status(400).json({ error: 'structure debe ser un array' });
+  const structuresToSave = Array.isArray(structures) ? structures : [];
   try {
     const { rows } = await pool.query(
-      `UPDATE songs SET structure = $1, updated_at = NOW()
-         WHERE id = $2 AND organization_id = $3
-         RETURNING id, structure`,
-      [structure, id, orgId]
+      `UPDATE songs SET structure = $1, structures = $2, updated_at = NOW()
+         WHERE id = $3 AND organization_id = $4
+         RETURNING id, structure, structures`,
+      [structure, JSON.stringify(structuresToSave), id, orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Canción no encontrada' });
     res.json(rows[0]);

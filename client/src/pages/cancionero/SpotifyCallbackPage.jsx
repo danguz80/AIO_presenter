@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, Check, X } from 'lucide-react';
 
 export default function SpotifyCallbackPage() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState('loading'); // loading | success | error
+  const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Conectando con Spotify…');
   const [playlistUrl, setPlaylistUrl] = useState(null);
+  const ran = useRef(false);
 
   useEffect(() => {
+    if (ran.current) return;  // evitar doble ejecución en React StrictMode
+    ran.current = true;
     const run = async () => {
       const params = new URLSearchParams(window.location.search);
       const code  = params.get('code');
@@ -26,24 +29,26 @@ export default function SpotifyCallbackPage() {
         return;
       }
 
-      const verifier  = localStorage.getItem('spotify_verifier');
-      const savedState = localStorage.getItem('spotify_state');
-      const songsRaw  = localStorage.getItem('spotify_playlist_songs');
-
-      localStorage.removeItem('spotify_verifier');
-      localStorage.removeItem('spotify_state');
-      localStorage.removeItem('spotify_playlist_songs');
-
-      if (state !== savedState) {
+      // Decodificar todo desde el state (no usamos localStorage para evitar
+      // el problema de orígenes distintos entre localhost y 127.0.0.1)
+      let verifier, clientId, redirectUri, playlistName, songs;
+      try {
+        const payload = JSON.parse(atob(state));
+        verifier     = payload.verifier;
+        clientId     = payload.clientId;
+        redirectUri  = payload.redirectUri;
+        playlistName = payload.playlistName ?? 'Setlist';
+        songs        = Array.isArray(payload.songs) ? payload.songs : [];
+      } catch {
         setStatus('error');
-        setMessage('State de Spotify no coincide. Posible ataque CSRF.');
+        setMessage('No se pudo leer los datos del flujo de autorización.');
         return;
       }
-
-      const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID;
-      const redirectUri = `${window.location.origin}/spotify-callback`;
-      const playlistName = decodeURIComponent((savedState || ':::').split(':::')[1] ?? 'Setlist');
-      const songs = JSON.parse(songsRaw || '[]');
+      if (!verifier || !clientId) {
+        setStatus('error');
+        setMessage('Datos incompletos del flujo de autorización.');
+        return;
+      }
 
       try {
         // 1. Intercambiar código por access_token

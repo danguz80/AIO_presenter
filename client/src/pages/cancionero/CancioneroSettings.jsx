@@ -138,10 +138,13 @@ function ProfileSection({ user, onSaved }) {
 }
 
 // ─── Banda ────────────────────────────────────────────────────────────────────
-function BandSection({ members, org, isAdmin }) {
+function BandSection({ members, org, isAdmin, onOrgUpdated }) {
   const [bandName, setBandName]   = useState(org?.band_name || '');
   const [savedBandName, setSavedBandName] = useState(org?.band_name || '');
   const [savingName, setSavingName] = useState(false);
+  const [spotifyClientId, setSpotifyClientId] = useState(org?.spotify_client_id || '');
+  const [savedSpotifyId,  setSavedSpotifyId]  = useState(org?.spotify_client_id || '');
+  const [savingSpotify,   setSavingSpotify]   = useState(false);
   const [configs, setConfigs]     = useState([]);
   const [loading, setLoading]     = useState(true);
   const [openId, setOpenId]   = useState(null);
@@ -150,9 +153,12 @@ function BandSection({ members, org, isAdmin }) {
   useEffect(() => {
     setBandName(org?.band_name || '');
     setSavedBandName(org?.band_name || '');
+    setSpotifyClientId(org?.spotify_client_id || '');
+    setSavedSpotifyId(org?.spotify_client_id || '');
   }, [org]);
 
   const isBandNameDirty = bandName !== savedBandName;
+  const isSpotifyDirty  = spotifyClientId !== savedSpotifyId;
 
   const saveBandName = async () => {
     setSavingName(true);
@@ -164,6 +170,23 @@ function BandSection({ members, org, isAdmin }) {
       });
       if (res.ok) setSavedBandName(bandName);
     } finally { setSavingName(false); }
+  };
+
+  const saveSpotifyId = async () => {
+    setSavingSpotify(true);
+    try {
+      const res = await fetch(`${API}/auth/org`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ spotify_client_id: spotifyClientId.trim() || null }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSavedSpotifyId(updated.spotify_client_id || '');
+        setSpotifyClientId(updated.spotify_client_id || '');
+        onOrgUpdated?.(updated);
+      }
+    } finally { setSavingSpotify(false); }
   };
 
   useEffect(() => {
@@ -266,6 +289,39 @@ function BandSection({ members, org, isAdmin }) {
         <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/10">
           <p className="text-xs text-white/40 mb-0.5">Nombre de la banda</p>
           <p className="text-sm font-semibold text-white">{org.band_name}</p>
+        </div>
+      )}
+
+      {/* Spotify Client ID — solo admin */}
+      {isAdmin && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs text-white/40">Spotify Client ID <span className="text-green-400/60">(para crear playlists)</span></p>
+          <div className="flex items-center gap-2">
+            <input
+              className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/20 focus:outline-none focus:border-green-400/40"
+              placeholder="ej: 4f3a9c2b1e8d..."
+              value={spotifyClientId}
+              onChange={e => setSpotifyClientId(e.target.value)}
+              spellCheck={false}
+            />
+            <button
+              onClick={saveSpotifyId}
+              disabled={savingSpotify || !isSpotifyDirty}
+              className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 disabled:opacity-40 ${
+                !isSpotifyDirty
+                  ? 'bg-green-500/15 border-green-400/35 text-green-300 cursor-default'
+                  : 'bg-green-500/15 border-green-400/35 text-green-300 hover:bg-green-500/25'
+              }`}
+            >
+              {savingSpotify
+                ? <Loader2 size={12} className="animate-spin" />
+                : !isSpotifyDirty ? <Check size={12} /> : <Save size={12} />
+              }
+            </button>
+          </div>
+          <p className="text-[10px] text-white/25">
+            Obtén tu Client ID en <span className="text-white/40">developer.spotify.com</span> · Cada organización configura el suyo propio
+          </p>
         </div>
       )}
 
@@ -733,7 +789,7 @@ export default function CancioneroSettings() {
           title="Banda"
           subtitle={org?.band_name || 'Configura los músicos por servicio'}
         >
-          <BandSection members={members} org={org} isAdmin={user?.is_admin} />
+          <BandSection members={members} org={org} isAdmin={user?.is_admin} onOrgUpdated={setOrg} />
         </SectionCard>
 
         <SectionCard

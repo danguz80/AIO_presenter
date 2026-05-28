@@ -144,8 +144,8 @@ export default function App() {
         <Route path="/cancionero/eventos"            element={<RequireAuth><CancioneroEvents /></RequireAuth>} />
         <Route path="/cancionero/eventos/:id"        element={<RequireAuth><CancioneroEventDetail /></RequireAuth>} />
         <Route path="/cancionero/configuracion"         element={<RequireAuth><CancioneroSettings /></RequireAuth>} />
-        {/* Spotify OAuth callback */}
-        <Route path="/spotify-callback" element={<RequireAuth><SpotifyCallbackPage /></RequireAuth>} />
+        {/* Spotify OAuth callback — sin RequireAuth: llega desde redirect de Spotify (127.0.0.1) */}
+        <Route path="/spotify-callback" element={<SpotifyCallbackPage />} />
         {/* Páginas de display — abiertas en pantallas secundarias, sin auth */}
         <Route path="/output"  element={<OutputPage />} />
         <Route path="/stage"   element={<StagePage />} />
