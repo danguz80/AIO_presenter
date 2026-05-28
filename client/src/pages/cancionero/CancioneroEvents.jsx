@@ -117,7 +117,18 @@ export default function CancioneroEvents() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className={`font-bold text-sm ${isPast ? 'text-white/60' : 'text-white'}`}>{ev.title}</p>
+            <div className="flex items-center gap-2">
+              <p className={`font-bold text-sm ${isPast ? 'text-white/60' : 'text-white'}`}>{ev.title}</p>
+              {/* Botón ir al dashboard del evento */}
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); navigate(`/cancionero/eventos/${ev.id}`); }}
+                className="shrink-0 text-[10px] border border-white/10 hover:border-blue-400/40 text-white/25 hover:text-blue-300 px-1.5 py-0.5 rounded transition-colors"
+                title="Ver dashboard del evento"
+              >
+                Ver →
+              </button>
+            </div>
             <p className="text-xs text-white/40 mt-0.5 capitalize">{formatDate(ev.date)}</p>
             <div className="flex items-center gap-2 mt-1 text-xs">
               <span className={`font-semibold ${color}`}>{badge}</span>
@@ -168,7 +179,7 @@ export default function CancioneroEvents() {
                           .filter(i => i.item_type !== 'separator' && i.song_id)
                           .map(i => ({ id: i.song_id, title: i.title ?? '' }));
                         navigate(`/cancionero/canciones/${item.song_id}`, {
-                          state: { songList, eventTitle: ev.title },
+                          state: { songList, eventTitle: ev.title, eventId: ev.id },
                         });
                       }}
                       className="group w-full flex items-center gap-2.5 py-1.5 text-left hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"

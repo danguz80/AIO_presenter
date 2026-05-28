@@ -120,6 +120,7 @@ export default function CancioneroSongDetail() {
   // Contexto de evento: lista de canciones para navegar prev/next
   const songList   = location.state?.songList   ?? null; // [{id, title}, ...]
   const eventTitle = location.state?.eventTitle ?? null;
+  const eventId    = location.state?.eventId    ?? null;
   const currentIdx = songList ? songList.findIndex(s => String(s.id) === String(id)) : -1;
   const prevSong   = songList && currentIdx > 0                   ? songList[currentIdx - 1] : null;
   const nextSong   = songList && currentIdx < songList.length - 1 ? songList[currentIdx + 1] : null;
@@ -128,9 +129,14 @@ export default function CancioneroSongDetail() {
     if (!song) return;
     setScrolling(false);
     navigate(`/cancionero/canciones/${song.id}`, {
-      state: { songList, eventTitle },
+      state: { songList, eventTitle, eventId },
       replace: false,
     });
+  };
+
+  const goBack = () => {
+    if (eventId) navigate(`/cancionero/eventos/${eventId}`);
+    else navigate('/cancionero/canciones');
   };
 
   const [song, setSong]       = useState(null);
@@ -265,16 +271,23 @@ export default function CancioneroSongDetail() {
       <header className="flex-shrink-0 bg-[#0f1a2e]/95 backdrop-blur-sm border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-3 mb-2">
           <button
-            onClick={() => navigate(eventTitle ? -1 : '/cancionero/canciones')}
+            onClick={goBack}
             className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
           >
             <ArrowLeft size={20} className="text-white/70" />
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-base font-bold truncate">{song?.title ?? '—'}</h1>
-            {/* Breadcrumb: muestra el evento si venimos de ahí, si no el autor */}
+            {/* Breadcrumb: muestra el evento (clickeable) si venimos de ahí, si no el autor */}
             {eventTitle
-              ? <p className="text-xs text-yellow-400/60 truncate">{eventTitle}</p>
+              ? (
+                <button
+                  onClick={() => eventId && navigate(`/cancionero/eventos/${eventId}`)}
+                  className="text-xs text-yellow-400/60 truncate hover:text-yellow-300 transition-colors text-left max-w-full"
+                >
+                  {eventTitle}
+                </button>
+              )
               : song?.author && <p className="text-xs text-white/40 truncate">{song.author}</p>
             }
           </div>
@@ -399,6 +412,8 @@ export default function CancioneroSongDetail() {
           <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
         </button>
       )}
+
+      {/* ── Modal edición ───────────────────────────────────────────── */}
 
       {/* ── Modal edición ───────────────────────────────────────────── */}
       {editOpen && song && (

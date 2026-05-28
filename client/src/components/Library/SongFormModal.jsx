@@ -477,47 +477,16 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 const groups = buildScaleChords(activeKey);
                 if (!groups && !songKey) return null;
                 return (
-                  <div className="border border-surface-600 rounded-xl overflow-y-auto bg-surface-900/50 shrink-0" style={{ maxHeight: '13rem' }}>
-                    {/* Barra: clave activa + botón cambio de clave */}
-                    <div className="flex items-center justify-between px-3 py-1 border-b border-surface-700/50 bg-surface-800/60 sticky top-0 z-10">
+                  <div className="border border-surface-600 rounded-xl overflow-y-auto bg-surface-900/50 shrink-0" style={{ maxHeight: '11rem' }}>
+                    {/* Indicador de clave activa */}
+                    <div className="flex items-center px-3 py-1 border-b border-surface-700/50 bg-surface-800/60 sticky top-0 z-10">
                       <span className="text-[10px] text-zinc-400 uppercase tracking-wider">
                         Clave:&nbsp;<span className="font-bold text-accent">{activeKey || '—'}</span>
                         {activeKey && activeKey !== songKey && (
                           <span className="text-zinc-600 ml-1.5 font-normal">(original: {songKey})</span>
                         )}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setKeyPickerOpen(v => !v)}
-                        className="text-[10px] border border-dashed border-surface-500 hover:border-accent/50 text-zinc-500 hover:text-accent px-2 py-0.5 rounded transition-colors"
-                      >
-                        {keyPickerOpen ? '✕ cancelar' : '+ Cambio de clave'}
-                      </button>
                     </div>
-                    {/* Selector de nueva clave */}
-                    {keyPickerOpen && (
-                      <div className="px-3 py-2 border-b border-surface-700/50 bg-surface-900">
-                        <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1.5">Insertar en el cursor</p>
-                        {COMMON_KEYS.map((row, ri) => (
-                          <div key={ri} className="flex gap-1 mb-1 flex-wrap">
-                            {row.map(k => (
-                              <button
-                                key={k}
-                                type="button"
-                                onClick={() => insertKeyChange(k)}
-                                className={`px-2 py-0.5 rounded text-xs font-mono border transition-colors ${
-                                  k === activeKey
-                                    ? 'bg-accent/30 border-accent/60 text-accent'
-                                    : 'bg-surface-700 border-surface-600 text-zinc-300 hover:bg-accent/20 hover:border-accent/40'
-                                }`}
-                              >
-                                {k}
-                              </button>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                     {/* Paleta de acordes de la clave activa */}
                     {groups && groups.map(group => (
                       <div key={group.label} className="px-3 pt-1.5 pb-2 border-b border-surface-700/50 last:border-b-0">
@@ -617,6 +586,42 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                   });
                 })()}
               </div>
+
+              {/* Cambio de clave */}
+              {songKey && (
+                <>
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide mt-2">Cambio de clave</p>
+                  <button
+                    type="button"
+                    onClick={() => setKeyPickerOpen(v => !v)}
+                    className={`w-full text-xs px-2 py-1.5 rounded-lg border transition-colors ${
+                      keyPickerOpen
+                        ? 'bg-accent/20 border-accent/50 text-accent'
+                        : 'bg-surface-700 border-surface-600 text-zinc-400 hover:text-accent hover:border-accent/40'
+                    }`}
+                  >
+                    {keyPickerOpen ? '✕ Cancelar' : '⇕ Insertar en cursor'}
+                  </button>
+                  {keyPickerOpen && (
+                    <div className="flex flex-col gap-0.5">
+                      {COMMON_KEYS.flat().map(k => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => insertKeyChange(k)}
+                          className={`w-full text-left px-2 py-1 rounded text-xs font-mono border transition-colors ${
+                            k === activeKey
+                              ? 'bg-accent/30 border-accent/60 text-accent'
+                              : 'bg-surface-700 border-surface-600 text-zinc-300 hover:bg-accent/20'
+                          }`}
+                        >
+                          {k}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
