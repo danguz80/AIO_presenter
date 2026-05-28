@@ -50,12 +50,13 @@ function normalizeSectionLabels(text) {
 // Si no hay {label}, el slide se guarda con label '' (vacío).
 function textToSlides(text) {
   const slides = [];
-  const parts = normalizeSectionLabels(text).split(/\n(?=\{[^}]+\})/);
+  // {key:X} markers are NOT section labels — exclude them from the split
+  const parts = normalizeSectionLabels(text).split(/\n(?=\{(?!key:)[^}]+\})/i);
 
   for (const part of parts) {
-    const labelMatch = part.match(/^\{([^}]+)\}/);
+    const labelMatch = part.match(/^\{(?!key:)([^}]+)\}/i);
     const label = labelMatch ? labelMatch[1].trim() : '';
-    const body  = part.replace(/^\{[^}]+\}\n?/, '');
+    const body  = labelMatch ? part.replace(/^\{[^}]+\}\n?/, '') : part;
 
     // Bloques separados por línea(s) en blanco → cada bloque = un slide
     const blocks = body.split(/\n[ \t]*\n/).map(b => b.trim()).filter(b => b.length > 0);
@@ -166,6 +167,20 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const [confirmDel,  setConfirmDel]  = useState(false);
   const textareaRef     = useRef(null);
   const savedCursorPos  = useRef(null);
+  const [cursorPos,     setCursorPos]    = useState(0);
+  const [keyPickerOpen, setKeyPickerOpen] = useState(false);
+
+  // Clave activa: el último marcador {key:X} que aparece antes del cursor en el texto
+  const activeKey = useMemo(() => {
+    const re = /\{key:([^}]+)\}/gi;
+    let current = songKey;
+    let match;
+    while ((match = re.exec(body)) !== null) {
+      if (match.index < cursorPos) current = match[1].trim();
+      else break;
+    }
+    return current || songKey;
+  }, [body, cursorPos, songKey]);
 
   const insertChord = (chord) => {
     const ta  = textareaRef.current;
@@ -178,6 +193,34 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
     const newPos  = pos + ins.length;
     savedCursorPos.current = newPos;
     setBody(newBody);
+    requestAnimationFrame(() => {
+      if (ta) { ta.focus({ preventScroll: true }); ta.scrollTop = scrollTop; ta.setSelectionRange(newPos, newPos); }
+    });
+  };
+
+  // Teclas comunes para el picker de cambio de clave
+  const COMMON_KEYS = [
+    ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'],
+    ['Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm'],
+  ];
+
+  const insertKeyChange = (newKey) => {
+    const ta = textareaRef.current;
+    const scrollTop = ta?.scrollTop ?? 0;
+    const pos = (ta && document.activeElement === ta)
+      ? ta.selectionStart
+      : (savedCursorPos.current ?? body.length);
+    const before = body.slice(0, pos);
+    const after  = body.slice(pos);
+    const needNlBefore = before.length > 0 && !before.endsWith('\n');
+    const needNlAfter  = after.length  > 0 && !after.startsWith('\n');
+    const marker  = `${needNlBefore ? '\n' : ''}{key:${newKey}}${needNlAfter ? '\n' : ''}`;
+    const newBody = before + marker + after;
+    const newPos  = pos + marker.length;
+    setBody(newBody);
+    setCursorPos(newPos);
+    savedCursorPos.current = newPos;
+    setKeyPickerOpen(false);
     requestAnimationFrame(() => {
       if (ta) { ta.focus({ preventScroll: true }); ta.scrollTop = scrollTop; ta.setSelectionRange(newPos, newPos); }
     });
@@ -431,11 +474,52 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
               </div>
               {/* Paleta de acordes */}
               {(() => {
-                const groups = buildScaleChords(songKey);
-                if (!groups) return null;
+                const groups = buildScaleChords(activeKey);
+                if (!groups && !songKey) return null;
                 return (
-                  <div className="border border-surface-600 rounded-xl overflow-y-auto bg-surface-900/50 shrink-0" style={{ maxHeight: '11rem' }}>
-                    {groups.map(group => (
+                  <div className="border border-surface-600 rounded-xl overflow-y-auto bg-surface-900/50 shrink-0" style={{ maxHeight: '13rem' }}>
+                    {/* Barra: clave activa + botón cambio de clave */}
+                    <div className="flex items-center justify-between px-3 py-1 border-b border-surface-700/50 bg-surface-800/60 sticky top-0 z-10">
+                      <span className="text-[10px] text-zinc-400 uppercase tracking-wider">
+                        Clave:&nbsp;<span className="font-bold text-accent">{activeKey || '—'}</span>
+                        {activeKey && activeKey !== songKey && (
+                          <span className="text-zinc-600 ml-1.5 font-normal">(original: {songKey})</span>
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setKeyPickerOpen(v => !v)}
+                        className="text-[10px] border border-dashed border-surface-500 hover:border-accent/50 text-zinc-500 hover:text-accent px-2 py-0.5 rounded transition-colors"
+                      >
+                        {keyPickerOpen ? '✕ cancelar' : '+ Cambio de clave'}
+                      </button>
+                    </div>
+                    {/* Selector de nueva clave */}
+                    {keyPickerOpen && (
+                      <div className="px-3 py-2 border-b border-surface-700/50 bg-surface-900">
+                        <p className="text-[9px] text-zinc-500 uppercase tracking-wider mb-1.5">Insertar en el cursor</p>
+                        {COMMON_KEYS.map((row, ri) => (
+                          <div key={ri} className="flex gap-1 mb-1 flex-wrap">
+                            {row.map(k => (
+                              <button
+                                key={k}
+                                type="button"
+                                onClick={() => insertKeyChange(k)}
+                                className={`px-2 py-0.5 rounded text-xs font-mono border transition-colors ${
+                                  k === activeKey
+                                    ? 'bg-accent/30 border-accent/60 text-accent'
+                                    : 'bg-surface-700 border-surface-600 text-zinc-300 hover:bg-accent/20 hover:border-accent/40'
+                                }`}
+                              >
+                                {k}
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {/* Paleta de acordes de la clave activa */}
+                    {groups && groups.map(group => (
                       <div key={group.label} className="px-3 pt-1.5 pb-2 border-b border-surface-700/50 last:border-b-0">
                         <p className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1">{group.label}</p>
                         <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -462,7 +546,13 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 value={body}
                 onChange={e => setBody(e.target.value)}
                 onBlur={() => { savedCursorPos.current = textareaRef.current?.selectionStart ?? null; }}
-                onSelect={() => { savedCursorPos.current = textareaRef.current?.selectionStart ?? null; }}
+                onSelect={() => {
+                  const p = textareaRef.current?.selectionStart ?? 0;
+                  savedCursorPos.current = p;
+                  setCursorPos(p);
+                }}
+                onClick={() => setCursorPos(textareaRef.current?.selectionStart ?? 0)}
+                onKeyUp={() => setCursorPos(textareaRef.current?.selectionStart ?? 0)}
                 onKeyDown={e => {
                   if (e.key !== 'Tab') return;
                   e.preventDefault();
@@ -471,6 +561,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                   const pos = ta.selectionStart;
                   const next = findNextSyllablePos(body, pos);
                   savedCursorPos.current = next;
+                  setCursorPos(next);
                   ta.setSelectionRange(next, next);
                 }}
                 placeholder={`{Verso 1}\nPrimera línea del verso\nSegunda línea\n\n{Coro}\nLetra del coro`}

@@ -18,6 +18,17 @@ function renderContent(content, showChords, chordsColor) {
   return (
     <div className="flex flex-col">
       {rawLines.map((rawLine, li) => {
+        // Marcador de cambio de clave {key:X}
+        const keyMatch = rawLine.trim().match(/^\{key:([^}]+)\}$/i);
+        if (keyMatch) {
+          return (
+            <div key={li} className="flex items-center gap-1.5 my-1 py-0.5 border-l-2 border-yellow-400/40 pl-2">
+              <span className="text-[10px] uppercase tracking-widest text-yellow-400/50">↕ Clave:</span>
+              <span className="text-xs font-bold text-yellow-400/70">{keyMatch[1].trim()}</span>
+            </div>
+          );
+        }
+
         // Línea completa de comentario (//): siempre en cursiva gris
         if (isCommentLine(rawLine)) {
           const text = rawLine.replace(/^\s*\/\/\s*/, '');
