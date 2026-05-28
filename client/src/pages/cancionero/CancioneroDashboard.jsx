@@ -58,12 +58,21 @@ const COLOR_MAP = {
   orange:  { card: 'border-orange-500/30 bg-orange-500/10 hover:border-orange-400/60 hover:bg-orange-500/20', icon: 'bg-orange-500/20 border-orange-400/30', text: 'text-orange-300', badge: '' },
 };
 
+function getIsAdmin() {
+  try {
+    const token = localStorage.getItem('aio_sync_token');
+    if (!token) return false;
+    return Boolean(JSON.parse(atob(token.split('.')[1])).isAdmin);
+  } catch { return false; }
+}
+
 export default function CancioneroDashboard() {
   const navigate = useNavigate();
   const [user, setUser]   = useState(null);
   const [org, setOrg]     = useState(null);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const isAdmin = getIsAdmin();
 
   // Notificaciones
   const [notifs,       setNotifs]       = useState([]);
@@ -108,10 +117,6 @@ export default function CancioneroDashboard() {
     ]).then(([me, orgData, evs]) => {
       setUser(me);
       setOrg(orgData);
-      const token = localStorage.getItem('aio_sync_token');
-      const isAdmin = (() => {
-        try { return Boolean(JSON.parse(atob(token.split('.')[1])).isAdmin); } catch { return false; }
-      })();
       const evList = Array.isArray(evs) ? evs : [];
       const today = todayStr();
       const visible = evList
