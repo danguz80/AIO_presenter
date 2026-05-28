@@ -4,6 +4,7 @@ import {
   Music, Trash2, X, Clock, RefreshCw, ArrowLeft,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import CancioneroNavbar from './cancionero/CancioneroNavbar';
 
 const DAYS_ES   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
@@ -390,7 +391,8 @@ export default function CalendarPage() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[100dvh] bg-surface-900 text-white overflow-hidden">
+    <div className="flex flex-col h-[100dvh] bg-surface-900 text-white overflow-hidden">
+    <div className="flex flex-col md:flex-row flex-1 min-h-0 overflow-hidden">
       {/* ── Columna izquierda: Calendario ── */}
       <div className="flex flex-col flex-1 min-w-0 p-2 xs:p-3 sm:p-4 md:p-5 overflow-hidden">
         {/* Header */}
@@ -595,6 +597,8 @@ export default function CalendarPage() {
           onSaved={() => { setShowModal(false); setEditingEvent(null); loadEvents(); }}
         />
       )}
+    </div>{/* end inner flex-row */}
+    <CancioneroNavbar />
     </div>
   );
 }
