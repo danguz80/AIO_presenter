@@ -1,13 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Pencil
 } from 'lucide-react';
-import { stripChords, parseChordLine, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
+import { io } from 'socket.io-client';
+import { stripChords, parseChordLine, isCommentLine, extractInlineComment, transposeContent, transposeKey } from '../../utils/chordUtils';
 import SongFormModal from '../../components/Library/SongFormModal';
 import CancioneroNavbar from './CancioneroNavbar';
 
 const API = import.meta.env.VITE_API_URL || '';
+const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
 }
@@ -144,6 +146,48 @@ export default function CancioneroSongDetail() {
   const [slides, setSlides]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
+
+  // Transposición global (todos en la org) y capo personal
+  const [keyOffset, setKeyOffset]   = useState(0);
+  const [capoOffset, setCapoOffset] = useState(0);
+  const socketRef = useRef(null);
+
+  // displayOffset: lo que YO veo (keyOffset global - capo personal)
+  const displayOffset = useMemo(() => keyOffset - capoOffset, [keyOffset, capoOffset]);
+
+  // Conectar socket y pedir offset actual al montar
+  useEffect(() => {
+    const token = localStorage.getItem('aio_sync_token');
+    const orgId = localStorage.getItem('aio_org_id');
+    const sock  = io(SOCKET_URL, { auth: { token, orgId } });
+    socketRef.current = sock;
+
+    sock.on('connect', () => {
+      sock.emit('song:getKeyOffset', id);
+    });
+    sock.on('song:keyOffset', ({ songId, offset }) => {
+      if (String(songId) === String(id)) setKeyOffset(offset);
+    });
+    return () => { sock.disconnect(); socketRef.current = null; };
+  }, [id]);
+
+  // Cargar capo desde localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(`aio_capo_${id}`);
+    setCapoOffset(saved ? parseInt(saved, 10) : 0);
+  }, [id]);
+
+  const changeKey = (delta) => {
+    const next = keyOffset + delta;
+    setKeyOffset(next);
+    socketRef.current?.emit('song:setKeyOffset', { songId: id, offset: next });
+  };
+
+  const changeCapo = (delta) => {
+    const next = Math.max(0, Math.min(11, capoOffset + delta));
+    setCapoOffset(next);
+    localStorage.setItem(`aio_capo_${id}`, String(next));
+  };
 
   // Opciones de visualización
   const [showChords, setShowChords] = useState(true);
@@ -372,6 +416,61 @@ export default function CancioneroSongDetail() {
           >
             {scrolling ? <><Pause size={12} /> Pausar</> : <><Play size={12} /> Auto-scroll</>}
           </button>
+
+          {/* ── Key (global, todos la ven) ── */}
+          <div className="flex-shrink-0 flex items-center gap-1 bg-yellow-500/10 border border-yellow-400/25 rounded-lg px-1.5 py-1">
+            <button
+              onClick={() => changeKey(-1)}
+              className="p-0.5 rounded hover:bg-white/10 transition-colors"
+              title="Bajar semitono (global)"
+            >
+              <Minus size={13} className="text-yellow-300/70" />
+            </button>
+            <div className="flex flex-col items-center leading-none" style={{ minWidth: '3rem' }}>
+              <span className="text-[8px] uppercase tracking-widest text-yellow-400/50 leading-none">Key</span>
+              <span className="text-xs font-bold text-yellow-300 leading-tight">
+                {song?.song_key
+                  ? transposeKey(song.song_key, keyOffset)
+                  : keyOffset === 0 ? '—' : (keyOffset > 0 ? `+${keyOffset}` : `${keyOffset}`)}
+              </span>
+            </div>
+            <button
+              onClick={() => changeKey(+1)}
+              className="p-0.5 rounded hover:bg-white/10 transition-colors"
+              title="Subir semitono (global)"
+            >
+              <Plus size={13} className="text-yellow-300/70" />
+            </button>
+          </div>
+
+          {/* ── Capo (personal, solo yo) ── */}
+          <div className="flex-shrink-0 flex items-center gap-1 bg-blue-500/10 border border-blue-400/25 rounded-lg px-1.5 py-1">
+            <button
+              onClick={() => changeCapo(-1)}
+              disabled={capoOffset === 0}
+              className="p-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-20"
+              title="Bajar capo"
+            >
+              <Minus size={13} className="text-blue-300/70" />
+            </button>
+            <div className="flex flex-col items-center leading-none" style={{ minWidth: '3rem' }}>
+              <span className="text-[8px] uppercase tracking-widest text-blue-400/50 leading-none">Capo</span>
+              <span className="text-xs font-bold text-blue-300 leading-tight">
+                {capoOffset === 0
+                  ? 'Sin'
+                  : capoOffset === 1 ? 'Traste 1'
+                  : `Traste ${capoOffset}`}
+              </span>
+            </div>
+            <button
+              onClick={() => changeCapo(+1)}
+              disabled={capoOffset >= 11}
+              className="p-0.5 rounded hover:bg-white/10 transition-colors disabled:opacity-20"
+              title="Subir capo"
+            >
+              <Plus size={13} className="text-blue-300/70" />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -391,7 +490,7 @@ export default function CancioneroSongDetail() {
               )}
               {/* Contenido */}
               <p className="leading-relaxed text-white/90" style={{ fontSize: `${fontSize}px` }}>
-                {renderContent(slide.content, showChords, chordsColor)}
+                {renderContent(transposeContent(slide.content, displayOffset), showChords, chordsColor)}
               </p>
             </div>
           ))

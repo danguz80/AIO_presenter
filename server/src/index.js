@@ -570,6 +570,21 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log(`[Socket] Org ${orgId} — cliente desconectado: ${socket.id}`);
   });
+
+  // ── Transposición global de canción (modo Cancionero) ──────────────────────
+  // songKeyOffsets: Map<songId, number> dentro del estado de org
+  if (!s.songKeyOffsets) s.songKeyOffsets = {};
+
+  // Cuando un cliente se conecta y pide el offset actual de una canción
+  socket.on('song:getKeyOffset', (songId) => {
+    socket.emit('song:keyOffset', { songId, offset: s.songKeyOffsets[songId] ?? 0 });
+  });
+
+  // Cuando un cliente cambia la key globalmente
+  socket.on('song:setKeyOffset', ({ songId, offset }) => {
+    s.songKeyOffsets[songId] = offset;
+    emitToOrg('song:keyOffset', { songId, offset });
+  });
 });
 
 // ─── MIDDLEWARES ─────────────────────────────────────────────────────────────

@@ -125,6 +125,83 @@ export function parseChordLines(content) {
   return content.split('\n').map(parseChordLine);
 }
 
+// ─── Transposición de acordes ─────────────────────────────────────────────────
+const _T_SHARP = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const _T_FLAT  = ['C','Db','D','Eb','E','F','Gb','G','Ab','A','Bb','B'];
+const _T_SEMI  = {
+  'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,
+  'F#':6,'Gb':6,'G':7,'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11,
+};
+
+function _parseNoteFromChord(chord) {
+  if (!chord) return '';
+  if (chord.length >= 2 && (chord[1] === '#' || chord[1] === 'b')) return chord.slice(0, 2);
+  return chord[0];
+}
+
+function _transposeNote(note, steps) {
+  const semi = _T_SEMI[note];
+  if (semi === undefined) return note;
+  // Decide si usar bemoles: si la nota original es bemol
+  const useFlat = note.length > 1 && note[1] === 'b';
+  const newSemi = ((semi + steps) % 12 + 12) % 12;
+  return (useFlat ? _T_FLAT : _T_SHARP)[newSemi];
+}
+
+/**
+ * Transpone un acorde (ej: "Am7", "G/B", "F#m") N semitonos.
+ * Soporta: sufijos de calidad (m, 7, maj7, dim, sus2, sus4, add9…)
+ *          acordes con bajo (G/B → transpone ambas notas)
+ */
+export function transposeChord(chord, steps) {
+  if (!chord || steps === 0) return chord;
+  // Slash chord: G/B, Am/C, etc.
+  const slashIdx = chord.lastIndexOf('/');
+  let main = chord;
+  let bass = null;
+  if (slashIdx > 0) {
+    main = chord.slice(0, slashIdx);
+    bass = chord.slice(slashIdx + 1);
+  }
+  const note    = _parseNoteFromChord(main);
+  const quality = main.slice(note.length);
+  const transposedNote = _transposeNote(note, steps);
+
+  if (bass) {
+    const bassNote    = _parseNoteFromChord(bass);
+    const bassQuality = bass.slice(bassNote.length);
+    const transposedBass = _transposeNote(bassNote, steps);
+    return transposedNote + quality + '/' + transposedBass + bassQuality;
+  }
+  return transposedNote + quality;
+}
+
+/**
+ * Transpone todos los acordes [X] y marcadores {key:X} de un bloque de texto.
+ * No modifica el texto sin acordes.
+ */
+export function transposeContent(content, steps) {
+  if (!content || steps === 0) return content;
+  return content.split('\n').map(line => {
+    // Marcador de clave: {key:Am} → {key:Bm}
+    const keyMatch = line.trim().match(/^\{key:([^}]+)\}$/i);
+    if (keyMatch) {
+      return `{key:${transposeChord(keyMatch[1].trim(), steps)}}`;
+    }
+    // Acordes inline: [Am] → [Bm]
+    return line.replace(/\[([^\]]+)\]/g, (_, c) => `[${transposeChord(c, steps)}]`);
+  }).join('\n');
+}
+
+/**
+ * Transpone la key base de una canción (ej: "Am" → "Bm" con +2 semitonos).
+ */
+export function transposeKey(key, steps) {
+  if (!key || steps === 0) return key;
+  return transposeChord(key, steps);
+}
+}
+
 // ─── Generador de acordes por tonalidad ──────────────────────────────────────
 const _SEMI = {
   'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,
