@@ -355,10 +355,10 @@ export default function CancioneroSongDetail() {
         {slides.length === 0 ? (
           <p className="text-white/30 text-sm text-center py-8">Esta canción no tiene secciones.</p>
         ) : (
-          slides.map(slide => (
+          slides.map((slide, idx) => (
             <div key={slide.id}>
-              {/* Label de sección */}
-              {slide.label && (
+              {/* Label de sección: solo cuando cambia respecto al slide anterior */}
+              {slide.label && slide.label !== slides[idx - 1]?.label && (
                 <p className="font-bold uppercase tracking-widest mb-2"
                   style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}>
                   {slide.label}
