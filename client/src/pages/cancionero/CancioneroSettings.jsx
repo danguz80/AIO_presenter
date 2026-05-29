@@ -140,14 +140,19 @@ function ProfileSection({ user, onSaved }) {
 
 // ─── Equipo (solo admin) ──────────────────────────────────────────────────────
 function TeamSection({ members: initialMembers, onMembersUpdated }) {
-  const [members, setMembers]           = useState(initialMembers || []);
-  const [invitations, setInvitations]   = useState([]);
-  const [loadingInv, setLoadingInv]     = useState(true);
-  const [email, setEmail]               = useState('');
-  const [sending, setSending]           = useState(false);
-  const [sendResult, setSendResult]     = useState(null); // { ok, msg }
-  const [editingId, setEditingId]       = useState(null); // userId con panel de inst abierto
-  const [savingInst, setSavingInst]     = useState(null);
+  const [members, setMembers]       = useState(initialMembers || []);
+  const [invitations, setInvitations] = useState([]);
+  const [loadingInv, setLoadingInv] = useState(true);
+
+  // Campos del formulario de invitación
+  const [firstName, setFirstName]   = useState('');
+  const [lastName, setLastName]     = useState('');
+  const [email, setEmail]           = useState('');
+  const [sending, setSending]       = useState(false);
+  const [sendResult, setSendResult] = useState(null);
+
+  const [editingId, setEditingId]   = useState(null); // memberId o `inv:${id}`
+  const [savingInst, setSavingInst] = useState(null);
 
   useEffect(() => { setMembers(initialMembers || []); }, [initialMembers]);
 
@@ -167,17 +172,19 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
     if (!email.trim()) return;
     setSending(true);
     setSendResult(null);
+    const displayName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') || null;
     try {
       const r = await fetch(`${API}/auth/invite`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify({ email: email.trim() }),
+        body: JSON.stringify({ email: email.trim(), display_name: displayName, instruments: [] }),
       });
       const d = await r.json();
       if (r.ok) {
         setSendResult({ ok: true, msg: d.emailSent ? `Invitación enviada a ${email.trim()}` : `Invitación creada (email no configurado)` });
-        setEmail('');
+        setEmail(''); setFirstName(''); setLastName('');
         loadInvitations();
+        onMembersUpdated?.();
       } else {
         setSendResult({ ok: false, msg: d.error || 'Error al enviar' });
       }
@@ -190,13 +197,20 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
   const revokeInvite = async (id) => {
     await fetch(`${API}/auth/invitations/${id}`, { method: 'DELETE', headers: authHeaders() });
     setInvitations(prev => prev.filter(i => i.id !== id));
+    onMembersUpdated?.();
   };
 
-  const toggleInstrument = (memberId, inst, current) => {
+  // Toggle instrumento — funciona para miembros reales e invitados pendientes
+  const toggleInstrument = (id, inst, current, isPending) => {
     const next = current.includes(inst) ? current.filter(i => i !== inst) : [...current, inst];
-    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, instruments: next } : m));
+    if (isPending) {
+      setInvitations(prev => prev.map(inv => inv.id === id ? { ...inv, instruments: next } : inv));
+    } else {
+      setMembers(prev => prev.map(m => m.id === id ? { ...m, instruments: next } : m));
+    }
   };
 
+  // Guardar instrumentos de miembro real
   const saveInstruments = async (member) => {
     setSavingInst(member.id);
     try {
@@ -211,19 +225,82 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
         onMembersUpdated?.();
         setEditingId(null);
       }
-    } finally {
-      setSavingInst(null);
-    }
+    } finally { setSavingInst(null); }
+  };
+
+  // Guardar instrumentos de invitado pendiente
+  const saveInvitationInstruments = async (inv) => {
+    setSavingInst(`inv:${inv.id}`);
+    try {
+      const r = await fetch(`${API}/auth/invitations/${inv.id}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ instruments: inv.instruments || [] }),
+      });
+      if (r.ok) {
+        onMembersUpdated?.();
+        setEditingId(null);
+      }
+    } finally { setSavingInst(null); }
   };
 
   const pending = invitations.filter(i => !i.used_at);
-  const used    = invitations.filter(i => i.used_at);
+
+  // Renderiza el panel de instrumentos (compartido para reales y pendientes)
+  const renderInstrumentPanel = (id, name, instruments, isPending, invObj) => (
+    <div className="px-3 pb-3 pt-2 border-t border-white/10 space-y-3">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30">
+        Instrumentos {isPending ? '(pre-configurar para cuando acepte)' : `de ${name}`}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {INSTRUMENTS.map(inst => {
+          const active = (instruments || []).includes(inst);
+          return (
+            <button
+              key={inst}
+              onClick={() => toggleInstrument(id, inst, instruments || [], isPending)}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                active
+                  ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-300'
+                  : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70 hover:border-white/25'
+              }`}
+            >
+              {active && <Check size={9} />}
+              {inst}
+            </button>
+          );
+        })}
+      </div>
+      <button
+        onClick={() => isPending ? saveInvitationInstruments(invObj) : saveInstruments({ id, instruments })}
+        disabled={savingInst === (isPending ? `inv:${id}` : id)}
+        className="w-full py-2 rounded-xl text-xs font-semibold bg-yellow-500/15 border border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25 transition-colors flex items-center justify-center gap-1.5"
+      >
+        {savingInst === (isPending ? `inv:${id}` : id) ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+        Guardar instrumentos
+      </button>
+    </div>
+  );
 
   return (
     <div className="space-y-5">
       {/* ── Invitar por email ── */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-2">Invitar a la banda</p>
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <input
+            value={firstName}
+            onChange={e => setFirstName(e.target.value)}
+            placeholder="Nombre"
+            className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-yellow-400/50"
+          />
+          <input
+            value={lastName}
+            onChange={e => setLastName(e.target.value)}
+            placeholder="Apellido"
+            className="bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-yellow-400/50"
+          />
+        </div>
         <div className="flex gap-2">
           <input
             type="email"
@@ -249,38 +326,12 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
         )}
       </div>
 
-      {/* ── Invitaciones pendientes ── */}
-      {loadingInv
-        ? <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-white/30" /></div>
-        : pending.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-white/25 mb-2">Pendientes</p>
-            <div className="space-y-1.5">
-              {pending.map(inv => (
-                <div key={inv.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
-                  <Clock size={12} className="text-yellow-400/60 flex-shrink-0" />
-                  <span className="flex-1 text-xs text-white/70 truncate">{inv.email}</span>
-                  <span className="text-[10px] text-white/30">
-                    {new Date(inv.expires_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
-                  </span>
-                  <button
-                    onClick={() => revokeInvite(inv.id)}
-                    className="p-0.5 hover:text-red-400 text-white/20 transition-colors"
-                    title="Revocar invitación"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      }
-
-      {/* ── Miembros actuales + edición de instrumentos ── */}
+      {/* ── Miembros + invitados pendientes ── */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-2">Miembros del equipo</p>
+        {loadingInv && <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-white/30" /></div>}
         <div className="space-y-2">
+          {/* Miembros reales */}
           {members.map(member => {
             const isEditing = editingId === member.id;
             return (
@@ -291,53 +342,54 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
                 >
                   {member.avatar_url
                     ? <img src={member.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                    : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
-                        <User size={14} className="text-white/35" />
-                      </div>
+                    : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0"><User size={14} className="text-white/35" /></div>
                   }
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white/90 truncate">{member.display_name}</p>
                     <p className="text-[10px] text-white/30 truncate">
-                      {(member.instruments || []).length > 0
-                        ? (member.instruments || []).join(', ')
-                        : 'Sin instrumentos configurados'}
+                      {(member.instruments || []).length > 0 ? (member.instruments || []).join(', ') : 'Sin instrumentos'}
                     </p>
                   </div>
                   {isEditing ? <ChevronUp size={14} className="text-white/30 flex-shrink-0" /> : <ChevronDown size={14} className="text-white/30 flex-shrink-0" />}
                 </div>
+                {isEditing && renderInstrumentPanel(member.id, member.display_name, member.instruments, false, null)}
+              </div>
+            );
+          })}
 
-                {isEditing && (
-                  <div className="px-3 pb-3 pt-2 border-t border-white/10 space-y-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30">Instrumentos de {member.display_name}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {INSTRUMENTS.map(inst => {
-                        const active = (member.instruments || []).includes(inst);
-                        return (
-                          <button
-                            key={inst}
-                            onClick={() => toggleInstrument(member.id, inst, member.instruments || [])}
-                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
-                              active
-                                ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-300'
-                                : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70 hover:border-white/25'
-                            }`}
-                          >
-                            {active && <Check size={9} />}
-                            {inst}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <button
-                      onClick={() => saveInstruments(member)}
-                      disabled={savingInst === member.id}
-                      className="w-full py-2 rounded-xl text-xs font-semibold bg-yellow-500/15 border border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25 transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      {savingInst === member.id ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
-                      Guardar instrumentos
-                    </button>
+          {/* Invitados pendientes */}
+          {pending.map(inv => {
+            const editKey = `inv:${inv.id}`;
+            const isEditing = editingId === editKey;
+            const displayName = inv.display_name || inv.email;
+            return (
+              <div key={inv.id} className="border border-dashed border-yellow-400/25 rounded-xl overflow-hidden">
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition-colors"
+                  onClick={() => setEditingId(isEditing ? null : editKey)}
+                >
+                  <div className="w-8 h-8 rounded-full bg-yellow-500/10 border border-yellow-400/25 flex items-center justify-center flex-shrink-0">
+                    <Clock size={13} className="text-yellow-400/60" />
                   </div>
-                )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-sm font-medium text-white/70 truncate">{displayName}</p>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400/70 font-semibold flex-shrink-0">pendiente</span>
+                    </div>
+                    <p className="text-[10px] text-white/25 truncate">
+                      {(inv.instruments || []).length > 0 ? (inv.instruments || []).join(', ') : 'Sin instrumentos pre-configurados'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); revokeInvite(inv.id); }}
+                    className="p-1 hover:text-red-400 text-white/15 transition-colors flex-shrink-0"
+                    title="Revocar invitación"
+                  >
+                    <X size={13} />
+                  </button>
+                  {isEditing ? <ChevronUp size={14} className="text-white/30 flex-shrink-0" /> : <ChevronDown size={14} className="text-white/30 flex-shrink-0" />}
+                </div>
+                {isEditing && renderInstrumentPanel(inv.id, displayName, inv.instruments, true, inv)}
               </div>
             );
           })}

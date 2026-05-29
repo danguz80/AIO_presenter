@@ -103,7 +103,7 @@ router.get('/google/callback', async (req, res) => {
     if (inviteCode) {
       // Validar invitación y obtener orgId
       const { rows: invRows } = await pool.query(
-        `SELECT id, email, can_push, can_push_all, expires_at, used_by, organization_id
+        `SELECT id, email, display_name, instruments, can_push, can_push_all, expires_at, used_by, organization_id
          FROM sync_invitations WHERE code = $1`, [inviteCode]
       );
       if (!invRows.length) {
@@ -147,6 +147,13 @@ router.get('/google/callback', async (req, res) => {
         'UPDATE sync_invitations SET used_by=$1, used_at=NOW() WHERE id=$2',
         [rows[0].id, inv.id]
       );
+      // Copiar instrumentos pre-configurados de la invitación al usuario
+      if (inv.instruments?.length) {
+        await pool.query(
+          `UPDATE sync_users SET instruments = $1 WHERE id = $2 AND (instruments IS NULL OR instruments = '{}')`,
+          [inv.instruments, rows[0].id]
+        );
+      }
       // Registrar membresía en user_organizations
       await pool.query(
         `INSERT INTO user_organizations (user_id, organization_id, role)
@@ -290,18 +297,39 @@ router.patch('/me', requireAuth, async (req, res) => {
   }
 });
 
-/** GET /auth/org/members — todos los miembros de la org actual */
+/** GET /auth/org/members — todos los miembros de la org actual + invitados pendientes */
 router.get('/org/members', requireAuth, async (req, res) => {
   try {
-    const { rows } = await pool.query(
-      `SELECT u.id, u.display_name, u.avatar_url, u.email, u.instruments, uo.role
+    const { rows: real } = await pool.query(
+      `SELECT u.id, u.display_name, u.avatar_url, u.email, u.instruments, uo.role, false AS is_pending, NULL AS invitation_id
          FROM user_organizations uo
          JOIN sync_users u ON u.id = uo.user_id
         WHERE uo.organization_id = $1
         ORDER BY u.display_name ASC`,
       [req.user.orgId]
     );
-    res.json(rows);
+    // Incluir invitados pendientes solo si el usuario es admin
+    if (req.user.isAdmin) {
+      const { rows: pending } = await pool.query(
+        `SELECT id, email, display_name, instruments, expires_at
+           FROM sync_invitations
+          WHERE organization_id = $1 AND used_at IS NULL AND expires_at > NOW()
+          ORDER BY created_at DESC`,
+        [req.user.orgId]
+      );
+      const pendingMembers = pending.map(inv => ({
+        id           : `inv:${inv.id}`,
+        display_name : inv.display_name || inv.email,
+        avatar_url   : null,
+        email        : inv.email,
+        instruments  : inv.instruments || [],
+        role         : 'invited',
+        is_pending   : true,
+        invitation_id: inv.id,
+      }));
+      return res.json([...real, ...pendingMembers]);
+    }
+    res.json(real);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -444,7 +472,7 @@ router.get('/invitations', requireAuth, async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, can_push, can_push_all, created_at, expires_at, used_at, used_by
+      `SELECT id, email, display_name, instruments, can_push, can_push_all, created_at, expires_at, used_at, used_by
          FROM sync_invitations
         WHERE organization_id = $1
         ORDER BY created_at DESC`,
@@ -459,11 +487,13 @@ router.get('/invitations', requireAuth, async (req, res) => {
 /** POST /auth/invite — crear invitación y enviar email (solo admin) */
 router.post('/invite', requireAuth, async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins pueden invitar' });
-  const { email } = req.body;
+  const { email, display_name, instruments } = req.body;
   if (!email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
     return res.status(400).json({ error: 'Email inválido' });
   }
   const targetEmail = email.trim().toLowerCase();
+  const targetName  = display_name?.trim() || null;
+  const targetInst  = Array.isArray(instruments) ? instruments : [];
   try {
     // Comprobar si ya es miembro
     const { rows: existing } = await pool.query(
@@ -480,10 +510,10 @@ router.post('/invite', requireAuth, async (req, res) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días
 
     const { rows } = await pool.query(
-      `INSERT INTO sync_invitations (code, email, organization_id, can_push, can_push_all, expires_at)
-       VALUES ($1, $2, $3, true, false, $4)
-       RETURNING id, code, email, expires_at`,
-      [code, targetEmail, req.user.orgId, expiresAt]
+      `INSERT INTO sync_invitations (code, email, display_name, instruments, organization_id, can_push, can_push_all, expires_at)
+       VALUES ($1, $2, $3, $4, $5, true, false, $6)
+       RETURNING id, code, email, display_name, instruments, expires_at`,
+      [code, targetEmail, targetName, targetInst, req.user.orgId, expiresAt]
     );
     const invitation = rows[0];
     const inviteUrl = `${CLIENT_URL}/?invite=${code}`;
@@ -496,13 +526,14 @@ router.post('/invite', requireAuth, async (req, res) => {
       );
       const orgName = orgRows[0]?.band_name || orgRows[0]?.name || 'el equipo';
       const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
+      const greeting = targetName ? `Hola ${targetName.split(' ')[0]},` : '¡Hola!';
       await resend.emails.send({
         from   : `AIO Presenter <${fromDomain}>`,
         to     : targetEmail,
         subject: `Te invitaron a unirte a ${orgName} en AIO Presenter`,
         html   : `
           <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px">
-            <h2 style="margin-bottom:8px">¡Tienes una invitación!</h2>
+            <h2 style="margin-bottom:8px">${greeting}</h2>
             <p>Fuiste invitado/a a unirte a <strong>${orgName}</strong> en AIO Presenter, la plataforma de gestión para músicos de iglesia.</p>
             <a href="${inviteUrl}" style="display:inline-block;margin:20px 0;padding:12px 24px;background:#eab308;color:#000;font-weight:bold;border-radius:8px;text-decoration:none">
               Aceptar invitación
@@ -528,6 +559,26 @@ router.delete('/invitations/:id', requireAuth, async (req, res) => {
       [req.params.id, req.user.orgId]
     );
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** PATCH /auth/invitations/:id — actualizar nombre e instrumentos de invitación pendiente (solo admin) */
+router.patch('/invitations/:id', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });
+  const { display_name, instruments } = req.body;
+  try {
+    const { rows } = await pool.query(
+      `UPDATE sync_invitations
+          SET display_name = COALESCE($1, display_name),
+              instruments  = COALESCE($2, instruments)
+        WHERE id = $3 AND organization_id = $4 AND used_at IS NULL
+       RETURNING id, email, display_name, instruments, expires_at`,
+      [display_name ?? null, instruments ?? null, req.params.id, req.user.orgId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Invitación no encontrada o ya usada' });
+    res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
