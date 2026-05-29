@@ -586,6 +586,29 @@ export default function CancioneroSongDetail() {
   // Refs para scroll a sección — clave: "label:occurrenceIndex"
   const sectionRefs = useRef({});
 
+  // Sección activa (la más arriba visible durante auto-scroll)
+  const [activeSection, setActiveSection] = useState(null);
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+    const updateActive = () => {
+      const scrollTop = container.scrollTop + 16; // pequeño offset
+      const entries = Object.entries(sectionRefs.current);
+      let best = null;
+      let bestTop = -Infinity;
+      for (const [key, el] of entries) {
+        const top = el.offsetTop;
+        if (top <= scrollTop && top > bestTop) {
+          bestTop = top;
+          best = key.split(':')[0]; // solo el label, sin occurrenceIdx
+        }
+      }
+      setActiveSection(best);
+    };
+    container.addEventListener('scroll', updateActive, { passive: true });
+    return () => container.removeEventListener('scroll', updateActive);
+  }, []);
+
   // Persistir velocidad en localStorage al cambiar
   useEffect(() => {
     localStorage.setItem(`aio_scroll_speed_${id}`, scrollSpeed);
@@ -1044,8 +1067,12 @@ export default function CancioneroSongDetail() {
                 )}
                 {/* Label de sección */}
                 {isNewSection && slide.label && (
-                  <p className="font-bold uppercase tracking-widest mb-2"
-                    style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}>
+                  <p
+                    className={`font-bold uppercase tracking-widest mb-2 transition-all ${
+                      scrolling && slide.label === activeSection ? 'animate-pulse' : ''
+                    }`}
+                    style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}
+                  >
                     {slide.label}
                   </p>
                 )}
