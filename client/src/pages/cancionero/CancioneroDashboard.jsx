@@ -441,13 +441,16 @@ export default function CancioneroDashboard() {
                           <span>{formatTime(ev.time)}</span>
                         </>
                       )}
-                      {ev.songs?.length > 0 && (
-                        <>
-                          <span>·</span>
-                          <Music2 size={11} />
-                          <span>{ev.songs.filter(s => s.item_type !== 'separator').length} canciones</span>
-                        </>
-                      )}
+                      {(() => {
+                        const songCount = (ev.songs || []).filter(s => s.item_type === 'song' && s.song_id).length;
+                        return songCount > 0 ? (
+                          <>
+                            <span>·</span>
+                            <Music2 size={11} />
+                            <span>{songCount} canciones</span>
+                          </>
+                        ) : null;
+                      })()}
                     </div>
                     {/* Badge de asignación */}
                     {assignment && (
