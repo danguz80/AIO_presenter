@@ -318,8 +318,12 @@ router.get('/org/members', requireAuth, async (req, res) => {
         [req.user.orgId]
       );
       const realEmails = new Set(real.map(m => m.email?.toLowerCase()).filter(Boolean));
+      const realNames  = new Set(real.map(m => m.display_name?.toLowerCase()).filter(Boolean));
       const pendingMembers = pending
-        .filter(inv => !realEmails.has(inv.email?.toLowerCase()))
+        .filter(inv =>
+          !realEmails.has(inv.email?.toLowerCase()) &&
+          !(inv.display_name && realNames.has(inv.display_name.toLowerCase()))
+        )
         .map(inv => ({
           id           : `inv:${inv.id}`,
           display_name : inv.display_name || inv.email,

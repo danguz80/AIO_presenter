@@ -1064,7 +1064,18 @@ export default function CancioneroSettings() {
       fetch(`${API}/auth/org`,         { headers: h }).then(r => r.json()),
     ]).then(([u, m, o, orgData]) => {
       if (u?.id) setUser(u);
-      setMembers(Array.isArray(m) ? m : []);
+      if (Array.isArray(m)) {
+        // deduplicar: un pendiente no debe aparecer si ya existe miembro real con mismo email o display_name
+        const real = m.filter(x => !x.is_pending);
+        const realKeys = new Set([
+          ...real.map(x => x.email?.toLowerCase()).filter(Boolean),
+          ...real.map(x => x.display_name?.toLowerCase()).filter(Boolean),
+        ]);
+        const pending = m.filter(x => x.is_pending && !realKeys.has(x.email?.toLowerCase()) && !realKeys.has(x.display_name?.toLowerCase()));
+        setMembers([...real, ...pending]);
+      } else {
+        setMembers([]);
+      }
       setOrgs(Array.isArray(o) ? o : []);
       if (orgData?.id) setOrg(orgData);
     }).catch(() => {});
