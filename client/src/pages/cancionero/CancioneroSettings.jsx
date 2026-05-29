@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, User, Users, Calendar, Building2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Check, Plus, Trash2, Save, Loader2, Lock, X, CheckCircle2,
+  Check, Plus, Trash2, Save, Loader2, Lock, X, CheckCircle2, HelpCircle,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -145,6 +145,7 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
   const [spotifyClientId, setSpotifyClientId] = useState(org?.spotify_client_id || '');
   const [savedSpotifyId,  setSavedSpotifyId]  = useState(org?.spotify_client_id || '');
   const [savingSpotify,   setSavingSpotify]   = useState(false);
+  const [showSpotifyHelp, setShowSpotifyHelp] = useState(false);
   const [configs, setConfigs]     = useState([]);
   const [loading, setLoading]     = useState(true);
   const [openId, setOpenId]   = useState(null);
@@ -319,9 +320,51 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
               }
             </button>
           </div>
-          <p className="text-[10px] text-white/25">
-            Obtén tu Client ID en <span className="text-white/40">developer.spotify.com</span> · Cada organización configura el suyo propio
-          </p>
+          {/* Ayuda paso a paso */}
+          <button
+            type="button"
+            onClick={() => setShowSpotifyHelp(v => !v)}
+            className="flex items-center gap-1 text-[10px] text-green-400/60 hover:text-green-300 transition-colors"
+          >
+            {showSpotifyHelp ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+            {showSpotifyHelp ? 'Ocultar instrucciones' : '¿Cómo obtener el Client ID?'}
+          </button>
+
+          {showSpotifyHelp && (
+            <div className="rounded-xl border border-green-400/15 bg-green-500/5 px-4 py-3 space-y-3 text-xs text-white/60">
+              <p className="font-semibold text-green-300/80 text-[11px] uppercase tracking-wider">Configuración de Spotify — paso a paso</p>
+
+              <ol className="space-y-2.5 list-none">
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">1</span>
+                  <span>Ve a <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-green-300 underline underline-offset-2">developer.spotify.com/dashboard</a> e inicia sesión con tu cuenta de Spotify.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">2</span>
+                  <span>Haz clic en <strong className="text-white/80">Create app</strong> y rellena el nombre y descripción (cualquier valor).</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">3</span>
+                  <div className="flex flex-col gap-1">
+                    <span>En <strong className="text-white/80">Redirect URIs</strong> agrega la URL de esta app:</span>
+                    <code className="block bg-black/30 rounded px-2 py-1 text-green-200/70 text-[10px] break-all">{window.location.origin}/cancionero/spotify-callback</code>
+                  </div>
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">4</span>
+                  <span>Marca <strong className="text-white/80">Web API</strong> en <em>APIs used</em>, acepta los términos y guarda.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">5</span>
+                  <span>Copia el <strong className="text-white/80">Client ID</strong> que aparece en la página de la app y pégalo arriba.</span>
+                </li>
+              </ol>
+
+              <div className="rounded-lg bg-yellow-500/10 border border-yellow-400/20 px-3 py-2 text-yellow-200/70 text-[10px]">
+                <strong className="text-yellow-300">Modo desarrollo:</strong> Spotify limita a 25 usuarios. Para que otros puedan usarlo ve a <strong className="text-white/70">Settings → User Management</strong> dentro de tu app y agrega sus correos de Spotify.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
