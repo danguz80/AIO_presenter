@@ -596,10 +596,13 @@ export default function CancioneroSongDetail() {
     const containerTop = container.getBoundingClientRect().top;
     const entries = Object.entries(sectionRefs.current);
     let best = null;
-    let bestDiff = -Infinity;
+    // Queremos la sección cuya etiqueta cruzó el tope MÁS RECIENTEMENTE,
+    // es decir, la que tiene el diff más pequeño pero >= 0
+    // diff = containerTop - el.top: positivo = ya pasó el tope, negativo = aún no llega
+    let bestDiff = Infinity;
     for (const [key, el] of entries) {
-      const diff = containerTop - el.getBoundingClientRect().top; // negativo = debajo del top, positivo = ya pasó
-      if (diff >= -8 && diff > bestDiff) { // -8px de tolerancia
+      const diff = containerTop - el.getBoundingClientRect().top;
+      if (diff >= -8 && diff < bestDiff) { // más recientemente pasada = diff más pequeño
         bestDiff = diff;
         best = key.split(':')[0];
       }
