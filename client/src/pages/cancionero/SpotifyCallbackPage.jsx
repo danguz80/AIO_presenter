@@ -67,11 +67,17 @@ export default function SpotifyCallbackPage() {
         });
         if (!tokenRes.ok) {
           const errData = await tokenRes.json().catch(() => ({}));
-          throw new Error(`Error obteniendo token: ${errData.error} — ${errData.error_description ?? tokenRes.status}`);
+          throw new Error(`Error obteniendo token (${tokenRes.status}): ${errData.error} — ${errData.error_description ?? tokenRes.status}\nredirect_uri usado: ${redirectUri}`);
         }
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
         const grantedScopes = tokenData.scope ?? '(sin scopes)';
+
+        if (!accessToken) {
+          throw new Error(
+            `Token vacío tras intercambio.\nRespuesta completa: ${JSON.stringify(tokenData)}`
+          );
+        }
 
         // 2. Obtener user ID del usuario autenticado
         setMessage('Obteniendo perfil de Spotify…');
@@ -79,13 +85,14 @@ export default function SpotifyCallbackPage() {
           headers: { Authorization: `Bearer ${accessToken}` },
         });
         if (!meRes.ok) {
-          const errMe = await meRes.json().catch(() => ({}));
-          const rawDetail = JSON.stringify(errMe);
+          const errRaw = await meRes.text().catch(() => '(sin cuerpo)');
           throw new Error(
             `[DEBUG] Status: ${meRes.status}\n` +
             `Scopes concedidos: ${grantedScopes}\n` +
             `Client ID usado: ${clientId}\n` +
-            `Respuesta Spotify: ${rawDetail}`
+            `redirect_uri usado: ${redirectUri}\n` +
+            `Token (inicio): ${accessToken.substring(0, 30)}…\n` +
+            `Respuesta Spotify (raw): ${errRaw}`
           );
         }
         const meData = await meRes.json();
