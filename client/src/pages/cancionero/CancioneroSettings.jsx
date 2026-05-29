@@ -351,10 +351,8 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
                 <li className="flex gap-2">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">3</span>
                   <div className="flex flex-col gap-1.5">
-                    <span>En <strong className="text-white/80">Redirect URIs</strong> agrega <em>ambas</em> URLs (producción y local si vas a desarrollar):</span>
+                    <span>En <strong className="text-white/80">Redirect URIs</strong> agrega esta URL:</span>
                     <code className="block bg-black/30 rounded px-2 py-1 text-green-200/80 text-[10px] break-all font-mono">{window.location.origin}/cancionero/spotify-callback</code>
-                    <code className="block bg-black/30 rounded px-2 py-1 text-white/30 text-[10px] break-all font-mono">http://localhost:5173/cancionero/spotify-callback</code>
-                    <p className="text-[10px] text-white/30">La primera es la URL de producción de esta instancia. La segunda solo es necesaria si también vas a probar en local.</p>
                   </div>
                 </li>
                 <li className="flex gap-2">
