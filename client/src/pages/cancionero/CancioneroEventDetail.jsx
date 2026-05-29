@@ -24,7 +24,7 @@ function abbr(label) {
 }
 
 // ─── Generación de PDF ────────────────────────────────────────────────────────
-async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlaylistUrl) {
+async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlaylistUrl, bandConfig) {
   const { jsPDF } = await import('jspdf');
   const QRCode = spotifyPlaylistUrl ? (await import('qrcode')).default : null;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -62,7 +62,59 @@ async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlayli
   doc.line(marginL, y + 3, pageW - marginR, y + 3);
   y += 9;
 
-  // ─── Ítems ────────────────────────────────────────────────────────────────
+  // ─── Configuración de banda ───────────────────────────────────────────────
+  if (bandConfig && (bandConfig.slots || []).length > 0) {
+    const slots = bandConfig.slots;
+    const colW  = contentW / 2;
+    const rowH  = 6;
+    const neededH = 10 + Math.ceil(slots.length / 2) * rowH + 6;
+    checkPage(neededH);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(100, 80, 160);
+    const bandLabel = bandConfig.subtitle
+      ? `CONFIGURACIÓN DE BANDA · ${bandConfig.subtitle.toUpperCase()}`
+      : 'CONFIGURACIÓN DE BANDA';
+    doc.text(bandLabel, marginL, y);
+    y += 5;
+
+    const leftSlots  = slots.filter((_, i) => i % 2 === 0);
+    const rightSlots = slots.filter((_, i) => i % 2 === 1);
+    const rows = Math.max(leftSlots.length, rightSlots.length);
+
+    for (let r = 0; r < rows; r++) {
+      const left  = leftSlots[r];
+      const right = rightSlots[r];
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8.5);
+      if (left) {
+        doc.setTextColor(20, 20, 60);
+        doc.text(left.userName || '', marginL, y);
+        if (left.instrument) {
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(100, 100, 140);
+          doc.text(left.instrument, marginL + colW * 0.55, y);
+        }
+      }
+      if (right) {
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(20, 20, 60);
+        doc.text(right.userName || '', marginL + colW, y);
+        if (right.instrument) {
+          doc.setFont('helvetica', 'italic');
+          doc.setTextColor(100, 100, 140);
+          doc.text(right.instrument, marginL + colW + colW * 0.55, y);
+        }
+      }
+      y += rowH;
+    }
+
+    doc.setDrawColor(200, 200, 220);
+    doc.setLineWidth(0.3);
+    doc.line(marginL, y, pageW - marginR, y);
+    y += 7;
+  }
   let songNumber = 0;
   for (const item of allItems) {
     checkPage(22);
@@ -742,7 +794,8 @@ export default function CancioneroEventDetail() {
           } catch { return item; }
         })
       );
-      await generateSetlistPDF(event, enriched, occurrenceDate, spotifyPlaylistUrl);
+      const activeBandConfig = bandConfigs.find(c => c.id === event.band_config_id) ?? null;
+      await generateSetlistPDF(event, enriched, occurrenceDate, spotifyPlaylistUrl, activeBandConfig);
     } finally { setGeneratingPdf(false); }
   };
 
