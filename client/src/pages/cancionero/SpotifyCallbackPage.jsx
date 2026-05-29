@@ -132,11 +132,15 @@ export default function SpotifyCallbackPage() {
           setMessage('Agregando canciones a la playlist…');
           // Spotify acepta máx 100 URIs por llamada
           for (let i = 0; i < uris.length; i += 100) {
-            await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+            const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
               method: 'POST',
               headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
             });
+            if (!addRes.ok) {
+              const addErr = await addRes.text().catch(() => '(sin cuerpo)');
+              throw new Error(`Error agregando tracks (${addRes.status}): ${addErr}\nURIs enviadas: ${uris.slice(i, i + 100).join(', ')}`);
+            }
           }
         }
 
