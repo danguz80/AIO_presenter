@@ -491,10 +491,23 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
     if (openId === id) setOpenId(null);
   };
 
+  const updateSubtitle = (configId, subtitle) =>
+    setConfigs(prev => prev.map(c => c.id === configId ? { ...c, subtitle } : c));
+
   const updateSlot = (configId, userId, instrument) =>
     setConfigs(prev => prev.map(c => {
       if (c.id !== configId) return c;
       return { ...c, slots: c.slots.map(s => s.userId === userId ? { ...s, instrument } : s) };
+    }));
+
+  const moveSlot = (configId, idx, dir) =>
+    setConfigs(prev => prev.map(c => {
+      if (c.id !== configId) return c;
+      const slots = [...c.slots];
+      const target = idx + dir;
+      if (target < 0 || target >= slots.length) return c;
+      [slots[idx], slots[target]] = [slots[target], slots[idx]];
+      return { ...c, slots };
     }));
 
   const addSlot = (configId, member) =>
@@ -524,7 +537,7 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
       await fetch(`${API}/api/band-configs/${config.id}`, {
         method: 'PUT',
         headers: authHeaders(),
-        body: JSON.stringify({ name: config.name, slots: config.slots }),
+        body: JSON.stringify({ name: config.name, subtitle: config.subtitle ?? null, slots: config.slots }),
       });
     } finally {
       setSaving(false);
@@ -669,7 +682,9 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
           >
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-white">{config.name}</p>
-              <p className="text-xs text-white/30">{(config.slots || []).length} músicos</p>
+              <p className="text-xs text-white/30">
+                {(config.slots || []).length} músicos{config.subtitle ? ` · ${config.subtitle}` : ''}
+              </p>
             </div>
             {idx > 0 && (
               <button
@@ -688,18 +703,41 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
 
           {openId === config.id && (
             <div className="px-4 pb-4 pt-3 border-t border-white/10 space-y-4">
-              {/* Nombre editable */}
+              {/* Nombre y subtítulo editables */}
               <input
                 value={config.name}
                 onChange={e => updateName(config.id, e.target.value)}
                 className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-yellow-400/50"
                 placeholder="Nombre de la configuración"
               />
+              <input
+                value={config.subtitle || ''}
+                onChange={e => updateSubtitle(config.id, e.target.value)}
+                className="w-full bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-xs text-white/60 placeholder-white/20 focus:outline-none focus:border-yellow-400/40"
+                placeholder="Subtítulo opcional (ej: Domingo de alabanza)"
+              />
 
               {/* Slots de músicos */}
               <div className="space-y-2.5">
-                {(config.slots || []).map(slot => (
-                  <div key={slot.userId} className="flex items-center gap-3">
+                {(config.slots || []).map((slot, idx, arr) => (
+                  <div key={slot.userId} className="flex items-center gap-2">
+                    {/* Botones subir/bajar */}
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        onClick={() => moveSlot(config.id, idx, -1)}
+                        disabled={idx === 0}
+                        className="p-0.5 rounded text-white/20 hover:text-white/60 disabled:opacity-0 transition-colors"
+                      >
+                        <ChevronUp size={12} />
+                      </button>
+                      <button
+                        onClick={() => moveSlot(config.id, idx, 1)}
+                        disabled={idx === arr.length - 1}
+                        className="p-0.5 rounded text-white/20 hover:text-white/60 disabled:opacity-0 transition-colors"
+                      >
+                        <ChevronDown size={12} />
+                      </button>
+                    </div>
                     {slot.avatarUrl
                       ? <img src={slot.avatarUrl} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                       : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
