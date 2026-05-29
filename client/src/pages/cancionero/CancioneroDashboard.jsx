@@ -442,7 +442,9 @@ export default function CancioneroDashboard() {
                         </>
                       )}
                       {(() => {
-                        const songCount = (ev.songs || []).filter(s => s.item_type === 'song' && s.song_id).length;
+                        const songCount = ev.song_count != null
+                          ? Number(ev.song_count)
+                          : (ev.songs || []).filter(s => s.item_type === 'song' && s.song_id).length;
                         return songCount > 0 ? (
                           <>
                             <span>·</span>

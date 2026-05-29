@@ -60,7 +60,8 @@ async function getEvents(req, res) {
         ) ORDER BY es.position
       ) FILTER (WHERE es.id IS NOT NULL),
       '[]'
-    ) AS songs
+    ) AS songs,
+    COUNT(es.id) FILTER (WHERE es.item_type = 'song' AND es.song_id IS NOT NULL) AS song_count
   `;
 
   try {
@@ -104,7 +105,8 @@ async function getEvents(req, res) {
                ORDER BY es.position
              ) FILTER (WHERE es.id IS NOT NULL),
              '[]'
-           ) AS songs
+           ) AS songs,
+           COUNT(es.id) FILTER (WHERE es.item_type = 'song' AND es.song_id IS NOT NULL) AS song_count
          FROM event_songs es
          LEFT JOIN songs s ON s.id = es.song_id
          WHERE es.event_id = ANY($1::int[])
@@ -113,7 +115,10 @@ async function getEvents(req, res) {
       );
       for (const row of rs) {
         if (!recurSongMap[row.event_id]) recurSongMap[row.event_id] = {};
-        recurSongMap[row.event_id][row.occ_date || '__base__'] = row.songs;
+        recurSongMap[row.event_id][row.occ_date || '__base__'] = {
+          songs: row.songs,
+          song_count: Number(row.song_count),
+        };
       }
     }
 
@@ -129,8 +134,8 @@ async function getEvents(req, res) {
       const dates = expandRecurring(baseDateStr, ev.recurrence, recurEndStr, start, end);
       const evMap = recurSongMap[ev.id] || {};
       for (const d of dates) {
-        const songs = evMap[d] || evMap['__base__'] || [];
-        expanded.push({ ...ev, date: d, base_date: baseDateStr, songs });
+        const entry = evMap[d] || evMap['__base__'] || { songs: [], song_count: 0 };
+        expanded.push({ ...ev, date: d, base_date: baseDateStr, songs: entry.songs, song_count: entry.song_count });
       }
     }
 
