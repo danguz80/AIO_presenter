@@ -738,7 +738,7 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
                 {/* Agregar músico que no está en la config */}
                 {(() => {
                   const slotIds = new Set((config.slots || []).map(s => s.userId));
-                  const available = members.filter(m => !m.is_pending && !slotIds.has(m.id));
+                  const available = members.filter(m => !slotIds.has(m.id));
                   if (!available.length) return null;
                   return (
                     <div className="flex items-center gap-2 pt-1">
