@@ -310,20 +310,23 @@ router.get('/org/members', requireAuth, async (req, res) => {
     );
     // Incluir invitados pendientes solo si el usuario es admin
     if (req.user.isAdmin) {
+      // Solo invitaciones sin usar cuyo email NO pertenece ya a un miembro real de la org
       const { rows: pending } = await pool.query(
-        `SELECT id, email, display_name, instruments, expires_at
-           FROM sync_invitations
-          WHERE organization_id = $1 AND used_at IS NULL AND expires_at > NOW()
-          ORDER BY created_at DESC`,
+        `SELECT si.id, si.email, si.display_name, si.instruments, si.expires_at
+           FROM sync_invitations si
+          WHERE si.organization_id = $1
+            AND si.used_at IS NULL
+            AND si.expires_at > NOW()
+            AND NOT EXISTS (
+              SELECT 1 FROM user_organizations uo
+              JOIN sync_users u ON u.id = uo.user_id
+              WHERE uo.organization_id = si.organization_id
+                AND LOWER(u.email) = LOWER(si.email)
+            )
+          ORDER BY si.created_at DESC`,
         [req.user.orgId]
       );
-      const realEmails = new Set(real.map(m => m.email?.toLowerCase()).filter(Boolean));
-      const realNames  = new Set(real.map(m => m.display_name?.toLowerCase()).filter(Boolean));
       const pendingMembers = pending
-        .filter(inv =>
-          !realEmails.has(inv.email?.toLowerCase()) &&
-          !(inv.display_name && realNames.has(inv.display_name.toLowerCase()))
-        )
         .map(inv => ({
           id           : `inv:${inv.id}`,
           display_name : inv.display_name || inv.email,

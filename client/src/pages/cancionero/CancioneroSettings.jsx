@@ -331,8 +331,8 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
         <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-2">Miembros del equipo</p>
         {loadingInv && <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-white/30" /></div>}
         <div className="space-y-2">
-          {/* Miembros reales */}
-          {members.map(member => {
+          {/* Miembros reales (excluir pendientes, ya se muestran abajo desde invitations) */}
+          {members.filter(m => !m.is_pending).map(member => {
             const isEditing = editingId === member.id;
             return (
               <div key={member.id} className="border border-white/10 rounded-xl overflow-hidden">
