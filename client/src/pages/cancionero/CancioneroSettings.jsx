@@ -4,6 +4,7 @@ import {
   ArrowLeft, User, Users, Calendar, Building2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Check, Plus, Trash2, Save, Loader2, Lock, X, CheckCircle2, HelpCircle,
+  Mail, Send, ShieldCheck, UserPlus, Clock,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -133,6 +134,215 @@ function ProfileSection({ user, onSaved }) {
             : <><Save size={14} /> Guardar perfil</>
         }
       </button>
+    </div>
+  );
+}
+
+// ─── Equipo (solo admin) ──────────────────────────────────────────────────────
+function TeamSection({ members: initialMembers, onMembersUpdated }) {
+  const [members, setMembers]           = useState(initialMembers || []);
+  const [invitations, setInvitations]   = useState([]);
+  const [loadingInv, setLoadingInv]     = useState(true);
+  const [email, setEmail]               = useState('');
+  const [sending, setSending]           = useState(false);
+  const [sendResult, setSendResult]     = useState(null); // { ok, msg }
+  const [editingId, setEditingId]       = useState(null); // userId con panel de inst abierto
+  const [savingInst, setSavingInst]     = useState(null);
+
+  useEffect(() => { setMembers(initialMembers || []); }, [initialMembers]);
+
+  const loadInvitations = useCallback(async () => {
+    setLoadingInv(true);
+    try {
+      const r = await fetch(`${API}/auth/invitations`, { headers: authHeaders() });
+      const d = await r.json();
+      setInvitations(Array.isArray(d) ? d : []);
+    } catch {}
+    setLoadingInv(false);
+  }, []);
+
+  useEffect(() => { loadInvitations(); }, [loadInvitations]);
+
+  const sendInvite = async () => {
+    if (!email.trim()) return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const r = await fetch(`${API}/auth/invite`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setSendResult({ ok: true, msg: d.emailSent ? `Invitación enviada a ${email.trim()}` : `Invitación creada (email no configurado)` });
+        setEmail('');
+        loadInvitations();
+      } else {
+        setSendResult({ ok: false, msg: d.error || 'Error al enviar' });
+      }
+    } catch {
+      setSendResult({ ok: false, msg: 'Error de conexión' });
+    }
+    setSending(false);
+  };
+
+  const revokeInvite = async (id) => {
+    await fetch(`${API}/auth/invitations/${id}`, { method: 'DELETE', headers: authHeaders() });
+    setInvitations(prev => prev.filter(i => i.id !== id));
+  };
+
+  const toggleInstrument = (memberId, inst, current) => {
+    const next = current.includes(inst) ? current.filter(i => i !== inst) : [...current, inst];
+    setMembers(prev => prev.map(m => m.id === memberId ? { ...m, instruments: next } : m));
+  };
+
+  const saveInstruments = async (member) => {
+    setSavingInst(member.id);
+    try {
+      const r = await fetch(`${API}/auth/members/${member.id}/instruments`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ instruments: member.instruments || [] }),
+      });
+      if (r.ok) {
+        const updated = await r.json();
+        setMembers(prev => prev.map(m => m.id === member.id ? { ...m, instruments: updated.instruments } : m));
+        onMembersUpdated?.();
+        setEditingId(null);
+      }
+    } finally {
+      setSavingInst(null);
+    }
+  };
+
+  const pending = invitations.filter(i => !i.used_at);
+  const used    = invitations.filter(i => i.used_at);
+
+  return (
+    <div className="space-y-5">
+      {/* ── Invitar por email ── */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-2">Invitar a la banda</p>
+        <div className="flex gap-2">
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && sendInvite()}
+            placeholder="correo@ejemplo.com"
+            className="flex-1 bg-white/5 border border-white/15 rounded-lg px-3 py-2 text-sm text-white placeholder-white/25 focus:outline-none focus:border-yellow-400/50"
+          />
+          <button
+            onClick={sendInvite}
+            disabled={sending || !email.trim()}
+            className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors flex items-center gap-1.5 bg-yellow-500/15 border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25 disabled:opacity-40"
+          >
+            {sending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            Invitar
+          </button>
+        </div>
+        {sendResult && (
+          <p className={`mt-1.5 text-xs ${sendResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+            {sendResult.ok ? '✓ ' : '✗ '}{sendResult.msg}
+          </p>
+        )}
+      </div>
+
+      {/* ── Invitaciones pendientes ── */}
+      {loadingInv
+        ? <div className="flex justify-center py-2"><Loader2 size={16} className="animate-spin text-white/30" /></div>
+        : pending.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-white/25 mb-2">Pendientes</p>
+            <div className="space-y-1.5">
+              {pending.map(inv => (
+                <div key={inv.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
+                  <Clock size={12} className="text-yellow-400/60 flex-shrink-0" />
+                  <span className="flex-1 text-xs text-white/70 truncate">{inv.email}</span>
+                  <span className="text-[10px] text-white/30">
+                    {new Date(inv.expires_at).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })}
+                  </span>
+                  <button
+                    onClick={() => revokeInvite(inv.id)}
+                    className="p-0.5 hover:text-red-400 text-white/20 transition-colors"
+                    title="Revocar invitación"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+
+      {/* ── Miembros actuales + edición de instrumentos ── */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-2">Miembros del equipo</p>
+        <div className="space-y-2">
+          {members.map(member => {
+            const isEditing = editingId === member.id;
+            return (
+              <div key={member.id} className="border border-white/10 rounded-xl overflow-hidden">
+                <div
+                  className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-white/5 transition-colors"
+                  onClick={() => setEditingId(isEditing ? null : member.id)}
+                >
+                  {member.avatar_url
+                    ? <img src={member.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                    : <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+                        <User size={14} className="text-white/35" />
+                      </div>
+                  }
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white/90 truncate">{member.display_name}</p>
+                    <p className="text-[10px] text-white/30 truncate">
+                      {(member.instruments || []).length > 0
+                        ? (member.instruments || []).join(', ')
+                        : 'Sin instrumentos configurados'}
+                    </p>
+                  </div>
+                  {isEditing ? <ChevronUp size={14} className="text-white/30 flex-shrink-0" /> : <ChevronDown size={14} className="text-white/30 flex-shrink-0" />}
+                </div>
+
+                {isEditing && (
+                  <div className="px-3 pb-3 pt-2 border-t border-white/10 space-y-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-white/30">Instrumentos de {member.display_name}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {INSTRUMENTS.map(inst => {
+                        const active = (member.instruments || []).includes(inst);
+                        return (
+                          <button
+                            key={inst}
+                            onClick={() => toggleInstrument(member.id, inst, member.instruments || [])}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors border ${
+                              active
+                                ? 'bg-yellow-500/20 border-yellow-400/40 text-yellow-300'
+                                : 'bg-white/5 border-white/10 text-white/40 hover:text-white/70 hover:border-white/25'
+                            }`}
+                          >
+                            {active && <Check size={9} />}
+                            {inst}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      onClick={() => saveInstruments(member)}
+                      disabled={savingInst === member.id}
+                      className="w-full py-2 rounded-xl text-xs font-semibold bg-yellow-500/15 border border-yellow-400/35 text-yellow-300 hover:bg-yellow-500/25 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      {savingInst === member.id ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
+                      Guardar instrumentos
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -793,7 +1003,7 @@ export default function CancioneroSettings() {
   const [orgs, setOrgs]       = useState([]);
   const [org, setOrg]         = useState(null);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     const h = authHeaders();
     Promise.all([
       fetch(`${API}/auth/me`,          { headers: h }).then(r => r.json()),
@@ -807,6 +1017,8 @@ export default function CancioneroSettings() {
       if (orgData?.id) setOrg(orgData);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
 
   return (
     <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
@@ -839,6 +1051,16 @@ export default function CancioneroSettings() {
         >
           <BandSection members={members} org={org} isAdmin={user?.is_admin} onOrgUpdated={setOrg} />
         </SectionCard>
+
+        {user?.is_admin && (
+          <SectionCard
+            icon={UserPlus}
+            title="Equipo"
+            subtitle="Invitar músicos y configurar sus instrumentos"
+          >
+            <TeamSection members={members} onMembersUpdated={loadData} />
+          </SectionCard>
+        )}
 
         <SectionCard
           icon={Calendar}

@@ -439,6 +439,126 @@ router.post('/switch-org/:orgId', requireAuth, async (req, res) => {
   }
 });
 
+/** GET /auth/invitations — lista invitaciones pendientes de la org (solo admin) */
+router.get('/invitations', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email, can_push, can_push_all, created_at, expires_at, used_at, used_by
+         FROM sync_invitations
+        WHERE organization_id = $1
+        ORDER BY created_at DESC`,
+      [req.user.orgId]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** POST /auth/invite — crear invitación y enviar email (solo admin) */
+router.post('/invite', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins pueden invitar' });
+  const { email } = req.body;
+  if (!email?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.status(400).json({ error: 'Email inválido' });
+  }
+  const targetEmail = email.trim().toLowerCase();
+  try {
+    // Comprobar si ya es miembro
+    const { rows: existing } = await pool.query(
+      `SELECT u.id FROM sync_users u
+         JOIN user_organizations uo ON uo.user_id = u.id
+        WHERE u.email = $1 AND uo.organization_id = $2`,
+      [targetEmail, req.user.orgId]
+    );
+    if (existing.length) return res.status(409).json({ error: 'Ese email ya es miembro de la banda' });
+
+    // Generar código único
+    const crypto = require('crypto');
+    const code = crypto.randomBytes(20).toString('hex');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 días
+
+    const { rows } = await pool.query(
+      `INSERT INTO sync_invitations (code, email, organization_id, can_push, can_push_all, expires_at)
+       VALUES ($1, $2, $3, true, false, $4)
+       RETURNING id, code, email, expires_at`,
+      [code, targetEmail, req.user.orgId, expiresAt]
+    );
+    const invitation = rows[0];
+    const inviteUrl = `${CLIENT_URL}/?invite=${code}`;
+
+    // Enviar email si Resend está configurado
+    const resend = getResend();
+    if (resend) {
+      const { rows: orgRows } = await pool.query(
+        'SELECT name, band_name FROM organizations WHERE id=$1', [req.user.orgId]
+      );
+      const orgName = orgRows[0]?.band_name || orgRows[0]?.name || 'el equipo';
+      const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
+      await resend.emails.send({
+        from   : `AIO Presenter <${fromDomain}>`,
+        to     : targetEmail,
+        subject: `Te invitaron a unirte a ${orgName} en AIO Presenter`,
+        html   : `
+          <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:24px">
+            <h2 style="margin-bottom:8px">¡Tienes una invitación!</h2>
+            <p>Fuiste invitado/a a unirte a <strong>${orgName}</strong> en AIO Presenter, la plataforma de gestión para músicos de iglesia.</p>
+            <a href="${inviteUrl}" style="display:inline-block;margin:20px 0;padding:12px 24px;background:#eab308;color:#000;font-weight:bold;border-radius:8px;text-decoration:none">
+              Aceptar invitación
+            </a>
+            <p style="color:#888;font-size:12px">Este enlace expira en 7 días. Si no esperabas esta invitación, puedes ignorarlo.</p>
+          </div>`,
+        text: `Fuiste invitado/a a unirte a ${orgName} en AIO Presenter. Acepta la invitación en: ${inviteUrl}`,
+      });
+    }
+
+    res.json({ ok: true, invitation, emailSent: !!resend });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** DELETE /auth/invitations/:id — revocar invitación pendiente (solo admin) */
+router.delete('/invitations/:id', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });
+  try {
+    await pool.query(
+      'DELETE FROM sync_invitations WHERE id=$1 AND organization_id=$2 AND used_at IS NULL',
+      [req.params.id, req.user.orgId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** PATCH /auth/members/:memberId/instruments — admin edita instrumentos de cualquier miembro */
+router.patch('/members/:memberId/instruments', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins pueden editar instrumentos de otros' });
+  const memberId = parseInt(req.params.memberId, 10);
+  if (isNaN(memberId)) return res.status(400).json({ error: 'memberId inválido' });
+  const { instruments } = req.body;
+  if (!Array.isArray(instruments)) return res.status(400).json({ error: 'instruments debe ser array' });
+  try {
+    // Verificar que el miembro pertenece a la misma org
+    const { rows: membership } = await pool.query(
+      'SELECT 1 FROM user_organizations WHERE user_id=$1 AND organization_id=$2',
+      [memberId, req.user.orgId]
+    );
+    if (!membership.length) return res.status(403).json({ error: 'Ese usuario no pertenece a tu organización' });
+
+    const { rows } = await pool.query(
+      `UPDATE sync_users SET instruments=$1, updated_at=NOW()
+       WHERE id=$2 RETURNING id, display_name, instruments`,
+      [instruments, memberId]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Middleware de autenticación JWT ────────────────────────────────────────
 async function requireAuth(req, res, next) {
   const header = req.headers.authorization;
