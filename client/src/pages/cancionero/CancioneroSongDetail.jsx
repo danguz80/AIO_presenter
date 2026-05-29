@@ -587,39 +587,38 @@ export default function CancioneroSongDetail() {
   const sectionRefs = useRef({});
 
   // Sección activa durante auto-scroll (la más arriba visible)
-  const [activeSection, setActiveSection] = useState(null);
-  const activeSectionRef = useRef(null);
+  // activeSectionKey = "label:occurrenceIdx" — identifica el badge exacto del header
+  const [activeSectionKey, setActiveSectionKey] = useState(null);
+  const activeSectionKeyRef = useRef(null);
 
   // Intervalo independiente que actualiza la sección activa cada 100ms mientras scrolling
   useEffect(() => {
     if (!scrolling) {
-      setActiveSection(null);
-      activeSectionRef.current = null;
+      setActiveSectionKey(null);
+      activeSectionKeyRef.current = null;
       return;
     }
     const tick = () => {
       const container = scrollRef.current;
       if (!container) return;
-      const containerRect = container.getBoundingClientRect();
-      const refTop = containerRect.top;
+      const refTop = container.getBoundingClientRect().top;
       const entries = Object.entries(sectionRefs.current);
-      let best = null;
+      let bestKey = null;
       let bestDiff = Infinity;
       for (const [key, el] of entries) {
-        const elTop = el.getBoundingClientRect().top;
-        // diff positivo = el label ya pasó el tope del contenedor
-        const diff = refTop - elTop;
+        const diff = refTop - el.getBoundingClientRect().top;
+        // diff positivo = el label ya pasó el tope; queremos el más reciente (diff más pequeño >= -4)
         if (diff >= -4 && diff < bestDiff) {
           bestDiff = diff;
-          best = key.split(':')[0];
+          bestKey = key; // "label:occurrenceIdx"
         }
       }
-      if (best !== activeSectionRef.current) {
-        activeSectionRef.current = best;
-        setActiveSection(best);
+      if (bestKey !== activeSectionKeyRef.current) {
+        activeSectionKeyRef.current = bestKey;
+        setActiveSectionKey(bestKey);
       }
     };
-    tick(); // primera llamada inmediata
+    tick();
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
   }, [scrolling]);
@@ -1031,12 +1030,19 @@ export default function CancioneroSongDetail() {
                   {activeStructItems.map((lbl, i) => {
                     if (seen[lbl] === undefined) seen[lbl] = 0;
                     const occ = seen[lbl]++;
+                    const badgeKey = `${lbl}:${occ}`;
+                    const isActive = scrolling && badgeKey === activeSectionKey;
                     return (
                       <button
                         key={i}
                         onClick={() => scrollToSection(lbl, occ)}
                         className="text-xs font-bold font-mono px-2 py-0.5 rounded-lg transition-opacity hover:opacity-80 active:opacity-60"
-                        style={{ color: labelColor(lbl), backgroundColor: labelColor(lbl) + '25', border: `1px solid ${labelColor(lbl)}35` }}
+                        style={{
+                          color: labelColor(lbl),
+                          backgroundColor: labelColor(lbl) + (isActive ? '50' : '25'),
+                          border: `1px solid ${labelColor(lbl)}${isActive ? 'aa' : '35'}`,
+                          ...(isActive ? { animation: 'sectionPulse 0.8s ease-in-out infinite' } : {}),
+                        }}
                         title={`Ir a ${lbl}`}
                       >
                         {labelAbbr(lbl)}
@@ -1084,13 +1090,7 @@ export default function CancioneroSongDetail() {
                 {isNewSection && slide.label && (
                   <p
                     className="font-bold uppercase tracking-widest mb-2"
-                    style={{
-                      fontSize: `${Math.round(fontSize * 0.62)}px`,
-                      color: sectionColor(slide.label),
-                      ...(scrolling && slide.label === activeSection ? {
-                        animation: 'sectionPulse 0.8s ease-in-out infinite',
-                      } : {}),
-                    }}
+                    style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}
                   >
                     {slide.label}
                   </p>
