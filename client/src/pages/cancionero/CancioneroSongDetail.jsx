@@ -588,25 +588,26 @@ export default function CancioneroSongDetail() {
 
   // Sección activa (la más arriba visible durante auto-scroll)
   const [activeSection, setActiveSection] = useState(null);
-  useEffect(() => {
+  const activeSectionRef = useRef(null); // para leer/escribir desde el RAF sin closures
+
+  const computeActiveSection = useCallback(() => {
     const container = scrollRef.current;
     if (!container) return;
-    const updateActive = () => {
-      const scrollTop = container.scrollTop + 16; // pequeño offset
-      const entries = Object.entries(sectionRefs.current);
-      let best = null;
-      let bestTop = -Infinity;
-      for (const [key, el] of entries) {
-        const top = el.offsetTop;
-        if (top <= scrollTop && top > bestTop) {
-          bestTop = top;
-          best = key.split(':')[0]; // solo el label, sin occurrenceIdx
-        }
+    const containerTop = container.getBoundingClientRect().top;
+    const entries = Object.entries(sectionRefs.current);
+    let best = null;
+    let bestDiff = -Infinity;
+    for (const [key, el] of entries) {
+      const diff = containerTop - el.getBoundingClientRect().top; // negativo = debajo del top, positivo = ya pasó
+      if (diff >= -8 && diff > bestDiff) { // -8px de tolerancia
+        bestDiff = diff;
+        best = key.split(':')[0];
       }
+    }
+    if (best !== activeSectionRef.current) {
+      activeSectionRef.current = best;
       setActiveSection(best);
-    };
-    container.addEventListener('scroll', updateActive, { passive: true });
-    return () => container.removeEventListener('scroll', updateActive);
+    }
   }, []);
 
   // Persistir velocidad en localStorage al cambiar
@@ -721,6 +722,7 @@ export default function CancioneroSongDetail() {
         if (intPx >= 1) {
           scrollRef.current.scrollTop += intPx;
           accumRef.current -= intPx;
+          computeActiveSection();
         }
 
         // Detener al llegar al fondo
@@ -741,7 +743,7 @@ export default function CancioneroSongDetail() {
       lastTs.current   = null;
       accumRef.current = 0;
     };
-  }, [scrolling]); // scrollSpeed se lee a través del ref, sin reiniciar el loop
+  }, [scrolling, computeActiveSection]); // scrollSpeed se lee a través del ref, sin reiniciar el loop
 
   if (loading) {
     return (
