@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Parpadeo de etiqueta de sección activa durante auto-scroll */
+@keyframes sectionPulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 8px currentColor; }
+  50%       { opacity: 0.4; text-shadow: none; }
+}
+
 /* ── Variables de tema ── */
 /* Los valores son canales RGB separados por espacio para compatibilidad
    con los modificadores de opacidad de Tailwind (e.g. bg-accent/15).  */

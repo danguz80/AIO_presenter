@@ -586,32 +586,43 @@ export default function CancioneroSongDetail() {
   // Refs para scroll a sección — clave: "label:occurrenceIndex"
   const sectionRefs = useRef({});
 
-  // Sección activa (la más arriba visible durante auto-scroll)
+  // Sección activa durante auto-scroll (la más arriba visible)
   const [activeSection, setActiveSection] = useState(null);
-  const activeSectionRef = useRef(null); // para leer/escribir desde el RAF sin closures
+  const activeSectionRef = useRef(null);
 
-  const computeActiveSection = useCallback(() => {
-    const container = scrollRef.current;
-    if (!container) return;
-    const containerTop = container.getBoundingClientRect().top;
-    const entries = Object.entries(sectionRefs.current);
-    let best = null;
-    // Queremos la sección cuya etiqueta cruzó el tope MÁS RECIENTEMENTE,
-    // es decir, la que tiene el diff más pequeño pero >= 0
-    // diff = containerTop - el.top: positivo = ya pasó el tope, negativo = aún no llega
-    let bestDiff = Infinity;
-    for (const [key, el] of entries) {
-      const diff = containerTop - el.getBoundingClientRect().top;
-      if (diff >= -8 && diff < bestDiff) { // más recientemente pasada = diff más pequeño
-        bestDiff = diff;
-        best = key.split(':')[0];
+  // Intervalo independiente que actualiza la sección activa cada 100ms mientras scrolling
+  useEffect(() => {
+    if (!scrolling) {
+      setActiveSection(null);
+      activeSectionRef.current = null;
+      return;
+    }
+    const tick = () => {
+      const container = scrollRef.current;
+      if (!container) return;
+      const containerRect = container.getBoundingClientRect();
+      const refTop = containerRect.top;
+      const entries = Object.entries(sectionRefs.current);
+      let best = null;
+      let bestDiff = Infinity;
+      for (const [key, el] of entries) {
+        const elTop = el.getBoundingClientRect().top;
+        // diff positivo = el label ya pasó el tope del contenedor
+        const diff = refTop - elTop;
+        if (diff >= -4 && diff < bestDiff) {
+          bestDiff = diff;
+          best = key.split(':')[0];
+        }
       }
-    }
-    if (best !== activeSectionRef.current) {
-      activeSectionRef.current = best;
-      setActiveSection(best);
-    }
-  }, []);
+      if (best !== activeSectionRef.current) {
+        activeSectionRef.current = best;
+        setActiveSection(best);
+      }
+    };
+    tick(); // primera llamada inmediata
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, [scrolling]);
 
   // Persistir velocidad en localStorage al cambiar
   useEffect(() => {
@@ -725,7 +736,6 @@ export default function CancioneroSongDetail() {
         if (intPx >= 1) {
           scrollRef.current.scrollTop += intPx;
           accumRef.current -= intPx;
-          computeActiveSection();
         }
 
         // Detener al llegar al fondo
@@ -746,7 +756,7 @@ export default function CancioneroSongDetail() {
       lastTs.current   = null;
       accumRef.current = 0;
     };
-  }, [scrolling, computeActiveSection]); // scrollSpeed se lee a través del ref, sin reiniciar el loop
+  }, [scrolling]); // scrollSpeed se lee a través del ref, sin reiniciar el loop
 
   if (loading) {
     return (
@@ -1073,10 +1083,14 @@ export default function CancioneroSongDetail() {
                 {/* Label de sección */}
                 {isNewSection && slide.label && (
                   <p
-                    className={`font-bold uppercase tracking-widest mb-2 transition-all ${
-                      scrolling && slide.label === activeSection ? 'animate-pulse' : ''
-                    }`}
-                    style={{ fontSize: `${Math.round(fontSize * 0.62)}px`, color: sectionColor(slide.label) }}
+                    className="font-bold uppercase tracking-widest mb-2"
+                    style={{
+                      fontSize: `${Math.round(fontSize * 0.62)}px`,
+                      color: sectionColor(slide.label),
+                      ...(scrolling && slide.label === activeSection ? {
+                        animation: 'sectionPulse 0.8s ease-in-out infinite',
+                      } : {}),
+                    }}
                   >
                     {slide.label}
                   </p>
