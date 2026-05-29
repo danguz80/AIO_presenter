@@ -317,16 +317,19 @@ router.get('/org/members', requireAuth, async (req, res) => {
           ORDER BY created_at DESC`,
         [req.user.orgId]
       );
-      const pendingMembers = pending.map(inv => ({
-        id           : `inv:${inv.id}`,
-        display_name : inv.display_name || inv.email,
-        avatar_url   : null,
-        email        : inv.email,
-        instruments  : inv.instruments || [],
-        role         : 'invited',
-        is_pending   : true,
-        invitation_id: inv.id,
-      }));
+      const realEmails = new Set(real.map(m => m.email?.toLowerCase()).filter(Boolean));
+      const pendingMembers = pending
+        .filter(inv => !realEmails.has(inv.email?.toLowerCase()))
+        .map(inv => ({
+          id           : `inv:${inv.id}`,
+          display_name : inv.display_name || inv.email,
+          avatar_url   : null,
+          email        : inv.email,
+          instruments  : inv.instruments || [],
+          role         : 'invited',
+          is_pending   : true,
+          invitation_id: inv.id,
+        }));
       return res.json([...real, ...pendingMembers]);
     }
     res.json(real);
