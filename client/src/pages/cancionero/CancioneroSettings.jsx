@@ -334,6 +334,11 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
             <div className="rounded-xl border border-green-400/15 bg-green-500/5 px-4 py-3 space-y-3 text-xs text-white/60">
               <p className="font-semibold text-green-300/80 text-[11px] uppercase tracking-wider">Configuración de Spotify — paso a paso</p>
 
+              {/* Requisito: cuenta gratuita basta */}
+              <div className="rounded-lg bg-green-500/10 border border-green-400/20 px-3 py-2 text-green-200/70 text-[10px]">
+                ✅ <strong className="text-green-300">Cuenta gratuita o Premium</strong> — la creación de playlists via API funciona con cualquier cuenta de Spotify, no se requiere Premium.
+              </div>
+
               <ol className="space-y-2.5 list-none">
                 <li className="flex gap-2">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">1</span>
@@ -345,9 +350,11 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
                 </li>
                 <li className="flex gap-2">
                   <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-500/20 text-green-300 text-[10px] font-bold flex items-center justify-center">3</span>
-                  <div className="flex flex-col gap-1">
-                    <span>En <strong className="text-white/80">Redirect URIs</strong> agrega la URL de esta app:</span>
-                    <code className="block bg-black/30 rounded px-2 py-1 text-green-200/70 text-[10px] break-all">{window.location.origin}/cancionero/spotify-callback</code>
+                  <div className="flex flex-col gap-1.5">
+                    <span>En <strong className="text-white/80">Redirect URIs</strong> agrega <em>ambas</em> URLs (producción y local si vas a desarrollar):</span>
+                    <code className="block bg-black/30 rounded px-2 py-1 text-green-200/80 text-[10px] break-all font-mono">{window.location.origin}/cancionero/spotify-callback</code>
+                    <code className="block bg-black/30 rounded px-2 py-1 text-white/30 text-[10px] break-all font-mono">http://localhost:5173/cancionero/spotify-callback</code>
+                    <p className="text-[10px] text-white/30">La primera es la URL de producción de esta instancia. La segunda solo es necesaria si también vas a probar en local.</p>
                   </div>
                 </li>
                 <li className="flex gap-2">
@@ -361,7 +368,7 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
               </ol>
 
               <div className="rounded-lg bg-yellow-500/10 border border-yellow-400/20 px-3 py-2 text-yellow-200/70 text-[10px]">
-                <strong className="text-yellow-300">Modo desarrollo:</strong> Spotify limita a 25 usuarios. Para que otros puedan usarlo ve a <strong className="text-white/70">Settings → User Management</strong> dentro de tu app y agrega sus correos de Spotify.
+                <strong className="text-yellow-300">Modo desarrollo (límite 25 usuarios):</strong> Una app nueva en Spotify solo permite los usuarios que tú agreges explícitamente. Ve a <strong className="text-white/70">Settings → User Management</strong> dentro de tu app y añade los correos de las cuentas de Spotify que van a usarla.
               </div>
             </div>
           )}
