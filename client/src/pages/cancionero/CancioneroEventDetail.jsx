@@ -24,8 +24,9 @@ function abbr(label) {
 }
 
 // ─── Generación de PDF ────────────────────────────────────────────────────────
-async function generateSetlistPDF(event, allItems, occurrenceDate) {
+async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlaylistUrl) {
   const { jsPDF } = await import('jspdf');
+  const QRCode = spotifyPlaylistUrl ? (await import('qrcode')).default : null;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
   const pageW = 210;
@@ -125,6 +126,30 @@ async function generateSetlistPDF(event, allItems, occurrenceDate) {
 
       y += 2;
     }
+  }
+
+  // ─── QR de playlist Spotify ───────────────────────────────────────────────
+  if (spotifyPlaylistUrl && QRCode) {
+    checkPage(52);
+    y += 4;
+    doc.setDrawColor(200, 200, 220);
+    doc.setLineWidth(0.3);
+    doc.line(marginL, y, pageW - marginR, y);
+    y += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 185, 84); // verde Spotify
+    doc.text('Playlist en Spotify', marginL, y);
+    y += 5;
+    const qrDataUrl = await QRCode.toDataURL(spotifyPlaylistUrl, { margin: 1, width: 200, color: { dark: '#000000', light: '#ffffff' } });
+    const qrSize = 40;
+    doc.addImage(qrDataUrl, 'PNG', marginL, y, qrSize, qrSize);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(90, 90, 120);
+    const urlLines = doc.splitTextToSize(spotifyPlaylistUrl, contentW - qrSize - 5);
+    doc.text(urlLines, marginL + qrSize + 4, y + 5);
+    y += qrSize + 4;
   }
 
   // Footer
@@ -542,6 +567,9 @@ export default function CancioneroEventDetail() {
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [spotifyLoading, setSpotifyLoading] = useState(false);
   const [orgSpotifyClientId, setOrgSpotifyClientId] = useState(null);
+  const [spotifyPlaylistUrl, setSpotifyPlaylistUrl] = useState(
+    () => localStorage.getItem(`aio-spotify-playlist:${id}`) || null
+  );
   const [bandConfigs,  setBandConfigs] = useState([]);
   const [savingBand,   setSavingBand]  = useState(false);
 
@@ -666,7 +694,7 @@ export default function CancioneroEventDetail() {
           } catch { return item; }
         })
       );
-      await generateSetlistPDF(event, enriched, occurrenceDate);
+      await generateSetlistPDF(event, enriched, occurrenceDate, spotifyPlaylistUrl);
     } finally { setGeneratingPdf(false); }
   };
 

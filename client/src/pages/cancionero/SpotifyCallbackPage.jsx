@@ -40,6 +40,8 @@ export default function SpotifyCallbackPage() {
         redirectUri  = payload.redirectUri;
         playlistName = payload.playlistName ?? 'Setlist';
         songs        = Array.isArray(payload.songs) ? payload.songs : [];
+        // eventId guardado para asociar la playlist URL al evento
+        if (payload.eventId) window._spotifyEventId = payload.eventId;
       } catch (e) {
         setStatus('error');
         setMessage('No se pudo leer los datos del flujo de autorización.');
@@ -130,7 +132,12 @@ export default function SpotifyCallbackPage() {
         const skipMsg = skipped.length
           ? ` (${skipped.length} sin link: ${skipped.slice(0, 3).join(', ')}${skipped.length > 3 ? '…' : ''})`
           : '';
-        setPlaylistUrl(playlist.external_urls?.spotify || `https://open.spotify.com/playlist/${playlist.id}`);
+        const finalUrl = playlist.external_urls?.spotify || `https://open.spotify.com/playlist/${playlist.id}`;
+        setPlaylistUrl(finalUrl);
+        // Guardar URL en localStorage asociada al evento para usarla en el PDF
+        if (window._spotifyEventId) {
+          localStorage.setItem(`aio-spotify-playlist:${window._spotifyEventId}`, finalUrl);
+        }
         setMessage(`¡Playlist creada con ${uris.length} de ${songs.length} canciones!${skipMsg}`);
         setStatus('success');
       } catch (err) {
