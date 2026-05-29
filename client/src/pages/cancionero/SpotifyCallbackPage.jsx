@@ -146,7 +146,15 @@ export default function SpotifyCallbackPage() {
             });
             if (!addRes.ok) {
               const addErr = await addRes.text().catch(() => '(sin cuerpo)');
-              throw new Error(`Error agregando tracks (${addRes.status}): ${addErr}\nCuenta Spotify: ${accountProduct}\nURIs enviadas: ${uris.slice(i, i + 100).join(', ')}`);
+              throw new Error(
+                `Error agregando tracks (${addRes.status}): ${addErr}\n` +
+                `Cuenta: ${accountProduct}\n` +
+                `Scopes del token: ${grantedScopes}\n` +
+                `Playlist ID: ${playlist.id ?? '(null/undefined)'}\n` +
+                `Playlist public: ${playlist.public}\n` +
+                `Token inicio: ${accessToken.substring(0, 20)}\n` +
+                `URIs (${uris.slice(i, i+3).join(', ')}…)`
+              );
             }
           }
         }
