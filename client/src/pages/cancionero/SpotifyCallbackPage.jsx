@@ -84,7 +84,7 @@ export default function SpotifyCallbackPage() {
         const createRes = await fetch('https://api.spotify.com/v1/me/playlists', {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: playlistName, public: true, description: 'Generado con AIO Presenter' }),
+          body: JSON.stringify({ name: playlistName, public: false, description: 'Generado con AIO Presenter' }),
         });
         if (!createRes.ok) {
           const errBody = await createRes.json().catch(() => ({}));
