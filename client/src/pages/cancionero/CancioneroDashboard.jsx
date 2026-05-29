@@ -362,78 +362,6 @@ export default function CancioneroDashboard() {
         </section>
       )}
 
-      {/* ── Banner: asignaciones de banda ───────────────────────────── */}
-      {(() => {
-        if (!user?.id) return null;
-        const myId = Number(user.id);
-        const myAssignments = events
-          .filter(ev => ev.band_config_id)
-          .flatMap(ev => {
-            const cfg = bandConfigs.find(c => c.id === Number(ev.band_config_id));
-            if (!cfg) return [];
-            const slot = (cfg.slots || []).find(s => Number(s.userId) === myId);
-            if (!slot?.instrument) return [];
-            const evDate = toDateStr(ev.date);
-            const hasConflict = myBlockedDates.includes(evDate);
-            return [{ ev, cfg, instrument: slot.instrument, hasConflict }];
-          });
-        if (!myAssignments.length) return null;
-        return (
-          <section className="px-5 pb-4">
-            <div className="space-y-2">
-              {myAssignments.map(({ ev, cfg, instrument, hasConflict }) => (
-                <button
-                  key={`${ev.id}-${ev.date}`}
-                  onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } })}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-colors ${
-                    hasConflict
-                      ? 'border-red-500/60 bg-red-500/15 hover:bg-red-500/25 animate-pulse'
-                      : 'border-yellow-500/40 bg-yellow-500/10 hover:bg-yellow-500/20'
-                  }`}
-                >
-                  <div className={`p-2 rounded-lg border shrink-0 ${
-                    hasConflict
-                      ? 'bg-red-500/20 border-red-400/40'
-                      : 'bg-yellow-500/20 border-yellow-400/30'
-                  }`}>
-                    {hasConflict
-                      ? <AlertTriangle size={14} className="text-red-300" />
-                      : <Users size={14} className="text-yellow-300" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {hasConflict ? (
-                      <>
-                        <p className="text-xs font-extrabold text-red-300 truncate uppercase tracking-wide">
-                          ⚠ Conflicto urgente
-                        </p>
-                        <p className="text-[11px] text-red-200/70 mt-0.5 truncate">
-                          Estás bloqueado ese día pero asignado como {instrument} en {ev.title}
-                        </p>
-                        <p className="text-[10px] text-red-400/60 mt-0.5">
-                          {formatDate(ev.date)} · Actualiza la asignación de banda
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs font-bold text-yellow-300 truncate">
-                          Estás asignado como {instrument}
-                        </p>
-                        <p className="text-[11px] text-white/50 mt-0.5 truncate">
-                          {ev.title} · {formatDate(ev.date)}
-                        </p>
-                      </>
-                    )}
-                  </div>
-                  <ChevronRight size={14} className={`shrink-0 ${
-                    hasConflict ? 'text-red-400/50' : 'text-yellow-400/50'
-                  }`} />
-                </button>
-              ))}
-            </div>
-          </section>
-        );
-      })()}
-
       {/* ── Próximos eventos ─────────────────────────────────────────── */}
       <section className="px-5 pb-10">
         <div className="flex items-center justify-between mb-4">
@@ -457,14 +385,30 @@ export default function CancioneroDashboard() {
               const badge = daysUntil(ev.date);
               const isToday = badge === 'Hoy';
               const isDraft = isAdmin && !ev.is_published;
+
+              // Asignación del usuario en este evento
+              let assignment = null;
+              if (user?.id && ev.band_config_id) {
+                const cfg = bandConfigs.find(c => c.id === Number(ev.band_config_id));
+                if (cfg) {
+                  const slot = (cfg.slots || []).find(s => Number(s.userId) === Number(user.id));
+                  if (slot?.instrument) {
+                    const hasConflict = myBlockedDates.includes(toDateStr(ev.date));
+                    assignment = { instrument: slot.instrument, hasConflict };
+                  }
+                }
+              }
+
               return (
                 <button
                   key={`${ev.id}-${ev.date}`}
                   onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } })}
                   className={`group flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 active:scale-[0.98] ${
-                    isDraft
-                      ? 'border-amber-400/25 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10'
-                      : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                    assignment?.hasConflict
+                      ? 'border-red-500/40 bg-red-500/5 hover:border-red-400/60 hover:bg-red-500/10'
+                      : isDraft
+                        ? 'border-amber-400/25 bg-amber-500/5 hover:border-amber-400/40 hover:bg-amber-500/10'
+                        : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
                   }`}
                 >
                   {/* Date badge */}
@@ -505,6 +449,19 @@ export default function CancioneroDashboard() {
                         </>
                       )}
                     </div>
+                    {/* Badge de asignación */}
+                    {assignment && (
+                      <div className={`mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                        assignment.hasConflict
+                          ? 'bg-red-500/20 border-red-400/40 text-red-300'
+                          : 'bg-yellow-500/15 border-yellow-400/30 text-yellow-300'
+                      }`}>
+                        {assignment.hasConflict
+                          ? <><AlertTriangle size={9} /> Conflicto · {assignment.instrument}</>
+                          : <><Users size={9} /> {assignment.instrument}</>
+                        }
+                      </div>
+                    )}
                   </div>
                   <ChevronRight size={16} className="text-white/20 group-hover:text-white/40 flex-shrink-0 self-center group-hover:translate-x-0.5 transition-transform" />
                 </button>
