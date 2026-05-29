@@ -40,6 +40,9 @@ async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlayli
   };
 
   // ─── Encabezado ───────────────────────────────────────────────────────────
+  const qrSize = 22; // mm — cabe junto al título
+  const textMaxW = spotifyPlaylistUrl ? contentW - qrSize - 4 : contentW;
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(20, 20, 60);
@@ -56,6 +59,19 @@ async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlayli
   doc.setFontSize(10);
   doc.setTextColor(90, 90, 120);
   doc.text(dateStr, marginL, y);
+
+  // QR Spotify — siempre arriba a la derecha si hay URL
+  if (spotifyPlaylistUrl && QRCode) {
+    const qrDataUrl = await QRCode.toDataURL(spotifyPlaylistUrl, { margin: 1, width: 150, color: { dark: '#000000', light: '#ffffff' } });
+    const qrX = pageW - marginR - qrSize;
+    const qrY = 16; // alineado con la primera línea del header
+    doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6.5);
+    doc.setTextColor(30, 185, 84);
+    doc.text('Spotify', qrX + qrSize / 2, qrY + qrSize + 3, { align: 'center' });
+  }
+
   y += 2;
   doc.setDrawColor(200, 200, 220);
   doc.setLineWidth(0.4);
@@ -178,30 +194,6 @@ async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlayli
 
       y += 2;
     }
-  }
-
-  // ─── QR de playlist Spotify ───────────────────────────────────────────────
-  if (spotifyPlaylistUrl && QRCode) {
-    checkPage(52);
-    y += 4;
-    doc.setDrawColor(200, 200, 220);
-    doc.setLineWidth(0.3);
-    doc.line(marginL, y, pageW - marginR, y);
-    y += 6;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8.5);
-    doc.setTextColor(30, 185, 84); // verde Spotify
-    doc.text('Playlist en Spotify', marginL, y);
-    y += 5;
-    const qrDataUrl = await QRCode.toDataURL(spotifyPlaylistUrl, { margin: 1, width: 200, color: { dark: '#000000', light: '#ffffff' } });
-    const qrSize = 40;
-    doc.addImage(qrDataUrl, 'PNG', marginL, y, qrSize, qrSize);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(90, 90, 120);
-    const urlLines = doc.splitTextToSize(spotifyPlaylistUrl, contentW - qrSize - 5);
-    doc.text(urlLines, marginL + qrSize + 4, y + 5);
-    y += qrSize + 4;
   }
 
   // Footer
