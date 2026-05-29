@@ -954,6 +954,7 @@ export default function CancioneroEventDetail() {
                   {generatingPdf ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
                   PDF
                 </button>
+                {isAdmin && (
                 <button
                   onClick={handleCreateSpotifyPlaylist}
                   disabled={spotifyLoading}
@@ -963,6 +964,7 @@ export default function CancioneroEventDetail() {
                   {spotifyLoading ? <Loader2 size={12} className="animate-spin" /> : <ListMusic size={12} />}
                   Spotify
                 </button>
+                )}
               </>
             )}
           </div>
