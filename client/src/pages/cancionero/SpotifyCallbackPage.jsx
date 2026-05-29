@@ -79,28 +79,9 @@ export default function SpotifyCallbackPage() {
           );
         }
 
-        // 2. Obtener user ID del usuario autenticado
-        setMessage('Obteniendo perfil de Spotify…');
-        const meRes = await fetch('https://api.spotify.com/v1/me', {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        if (!meRes.ok) {
-          const errRaw = await meRes.text().catch(() => '(sin cuerpo)');
-          throw new Error(
-            `[DEBUG] Status: ${meRes.status}\n` +
-            `Scopes concedidos: ${grantedScopes}\n` +
-            `Client ID usado: ${clientId}\n` +
-            `redirect_uri usado: ${redirectUri}\n` +
-            `Token (inicio): ${accessToken.substring(0, 30)}…\n` +
-            `Respuesta Spotify (raw): ${errRaw}`
-          );
-        }
-        const meData = await meRes.json();
-        const spotifyUserId = meData.id;
-
-        // 3. Crear playlist usando el endpoint correcto
+        // 2. Crear playlist (endpoint /me/playlists — no requiere user ID)
         setMessage(`Creando playlist "${playlistName}"…`);
-        const createRes = await fetch(`https://api.spotify.com/v1/users/${spotifyUserId}/playlists`, {
+        const createRes = await fetch('https://api.spotify.com/v1/me/playlists', {
           method: 'POST',
           headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({ name: playlistName, public: true, description: 'Generado con AIO Presenter' }),
