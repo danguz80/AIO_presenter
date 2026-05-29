@@ -138,16 +138,18 @@ export default function SpotifyCallbackPage() {
         if (uris.length) {
           setMessage('Agregando canciones a la playlist…');
           // Spotify acepta máx 100 URIs por llamada
+          // Usamos PUT (replace) en el primer chunk y POST para los siguientes
           for (let i = 0; i < uris.length; i += 100) {
+            const method = i === 0 ? 'PUT' : 'POST';
             const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
-              method: 'POST',
+              method,
               headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
             });
             if (!addRes.ok) {
               const addErr = await addRes.text().catch(() => '(sin cuerpo)');
               throw new Error(
-                `Error agregando tracks (${addRes.status}): ${addErr}\n` +
+                `Error agregando tracks (${addRes.status}) [${method}]: ${addErr}\n` +
                 `Cuenta: ${accountProduct}\n` +
                 `Scopes del token: ${grantedScopes}\n` +
                 `Playlist ID: ${playlist.id ?? '(null/undefined)'}\n` +
