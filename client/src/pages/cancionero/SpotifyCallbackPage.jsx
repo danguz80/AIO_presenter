@@ -80,6 +80,13 @@ export default function SpotifyCallbackPage() {
         }
 
         // 2. Crear playlist (endpoint /me/playlists — no requiere user ID)
+        setMessage('Verificando perfil de Spotify…');
+        const meRes = await fetch('https://api.spotify.com/v1/me', {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        const meData = meRes.ok ? await meRes.json() : {};
+        const accountProduct = meData.product ?? 'desconocido'; // 'premium', 'free', 'open'
+
         setMessage(`Creando playlist "${playlistName}"…`);
         const createRes = await fetch('https://api.spotify.com/v1/me/playlists', {
           method: 'POST',
@@ -139,7 +146,7 @@ export default function SpotifyCallbackPage() {
             });
             if (!addRes.ok) {
               const addErr = await addRes.text().catch(() => '(sin cuerpo)');
-              throw new Error(`Error agregando tracks (${addRes.status}): ${addErr}\nURIs enviadas: ${uris.slice(i, i + 100).join(', ')}`);
+              throw new Error(`Error agregando tracks (${addRes.status}): ${addErr}\nCuenta Spotify: ${accountProduct}\nURIs enviadas: ${uris.slice(i, i + 100).join(', ')}`);
             }
           }
         }
