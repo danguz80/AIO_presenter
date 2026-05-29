@@ -19,7 +19,7 @@ function authHeaders() {
 const INSTRUMENTS = [
   'Voz (soprano)', 'Voz (alto)', 'Voz (tenor)', 'Voz (barítono)',
   'Coros', 'Guitarra eléctrica', 'Guitarra acústica',
-  'Bajo eléctrico', 'Batería', 'Teclado', 'Piano',
+  'Bajo eléctrico', 'Batería', 'Teclado', 'Piano', 'Sintetizador',
   'Violín', 'Trompeta', 'Saxofón', 'Trombón',
   'Percusión', 'Cajón', 'Ukulele', 'Mandolina', 'Otro',
 ];
@@ -497,6 +497,24 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
       return { ...c, slots: c.slots.map(s => s.userId === userId ? { ...s, instrument } : s) };
     }));
 
+  const addSlot = (configId, member) =>
+    setConfigs(prev => prev.map(c => {
+      if (c.id !== configId) return c;
+      if (c.slots.some(s => s.userId === member.id)) return c;
+      return { ...c, slots: [...c.slots, {
+        userId:     member.id,
+        userName:   member.display_name,
+        avatarUrl:  member.avatar_url,
+        instrument: (member.instruments || [])[0] || '',
+      }]};
+    }));
+
+  const removeSlot = (configId, userId) =>
+    setConfigs(prev => prev.map(c => {
+      if (c.id !== configId) return c;
+      return { ...c, slots: c.slots.filter(s => s.userId !== userId) };
+    }));
+
   const updateName = (configId, name) =>
     setConfigs(prev => prev.map(c => c.id === configId ? { ...c, name } : c));
 
@@ -696,21 +714,51 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
                       style={{ maxWidth: '9rem' }}
                     >
                       <option value="">— Sin instrumento —</option>
-                      {/* Mostrar solo los instrumentos configurados en el perfil del músico */}
                       {(() => {
                         const member = members.find(m => m.id === slot.userId);
                         const opts   = (member?.instruments?.length)
                           ? member.instruments
                           : INSTRUMENTS;
-                        // Si el valor actual no está en la lista, incluirlo igual
                         const list = (slot.instrument && !opts.includes(slot.instrument))
                           ? [slot.instrument, ...opts]
                           : opts;
                         return list.map(i => <option key={i} value={i}>{i}</option>);
                       })()}
                     </select>
+                    <button
+                      onClick={() => removeSlot(config.id, slot.userId)}
+                      title="Quitar músico"
+                      className="p-1 rounded-lg hover:bg-red-500/20 text-white/20 hover:text-red-400 transition-colors flex-shrink-0"
+                    >
+                      <X size={13} />
+                    </button>
                   </div>
                 ))}
+
+                {/* Agregar músico que no está en la config */}
+                {(() => {
+                  const slotIds = new Set((config.slots || []).map(s => s.userId));
+                  const available = members.filter(m => !m.is_pending && !slotIds.has(m.id));
+                  if (!available.length) return null;
+                  return (
+                    <div className="flex items-center gap-2 pt-1">
+                      <UserPlus size={13} className="text-white/25 flex-shrink-0" />
+                      <select
+                        defaultValue=""
+                        onChange={e => {
+                          const m = members.find(mb => String(mb.id) === e.target.value);
+                          if (m) { addSlot(config.id, m); e.target.value = ''; }
+                        }}
+                        className="flex-1 text-xs bg-white/5 border border-dashed border-white/15 rounded-lg px-2 py-1.5 text-white/40 focus:outline-none focus:border-yellow-400/40"
+                      >
+                        <option value="">Agregar músico…</option>
+                        {available.map(m => (
+                          <option key={m.id} value={m.id}>{m.display_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })()}
               </div>
 
               <button
