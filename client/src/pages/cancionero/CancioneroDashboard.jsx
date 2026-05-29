@@ -402,7 +402,7 @@ export default function CancioneroDashboard() {
               return (
                 <button
                   key={`${ev.id}-${ev.date}`}
-                  onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } })}
+                  onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.is_recurring ? toDateStr(ev.date) : (ev.occurrence_date ? toDateStr(ev.occurrence_date) : null) } })}
                   className={`group flex items-start gap-4 p-4 rounded-2xl border-2 text-left transition-all duration-200 active:scale-[0.98] ${
                     assignment?.hasConflict
                       ? 'border-red-500/40 bg-red-500/5 hover:border-red-400/60 hover:bg-red-500/10'

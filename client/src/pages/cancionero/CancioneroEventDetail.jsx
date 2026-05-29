@@ -608,7 +608,7 @@ export default function CancioneroEventDetail() {
       .catch(() => setLoading(false));
   };
 
-  useEffect(() => { loadEvent(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { loadEvent(); }, [id, occurrenceDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cargar spotify_client_id de la org
   useEffect(() => {
