@@ -141,7 +141,7 @@ export default function SpotifyCallbackPage() {
           // Usamos PUT (replace) en el primer chunk y POST para los siguientes
           for (let i = 0; i < uris.length; i += 100) {
             const method = i === 0 ? 'PUT' : 'POST';
-            const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/tracks`, {
+            const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/items`, {
               method,
               headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
