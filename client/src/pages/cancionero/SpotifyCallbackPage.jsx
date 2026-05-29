@@ -67,26 +67,12 @@ export default function SpotifyCallbackPage() {
         });
         if (!tokenRes.ok) {
           const errData = await tokenRes.json().catch(() => ({}));
-          throw new Error(`Error obteniendo token (${tokenRes.status}): ${errData.error} — ${errData.error_description ?? tokenRes.status}\nredirect_uri usado: ${redirectUri}`);
+          throw new Error(`Error obteniendo token (${tokenRes.status}): ${errData.error} — ${errData.error_description ?? tokenRes.status}`);
         }
         const tokenData = await tokenRes.json();
         const accessToken = tokenData.access_token;
-        const grantedScopes = tokenData.scope ?? '(sin scopes)';
 
-        if (!accessToken) {
-          throw new Error(
-            `Token vacío tras intercambio.\nRespuesta completa: ${JSON.stringify(tokenData)}`
-          );
-        }
-
-        // 2. Crear playlist (endpoint /me/playlists — no requiere user ID)
-        setMessage('Verificando perfil de Spotify…');
-        const meRes = await fetch('https://api.spotify.com/v1/me', {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const meData = meRes.ok ? await meRes.json() : {};
-        const accountProduct = meData.product ?? 'desconocido'; // 'premium', 'free', 'open'
-
+        // 2. Crear playlist
         setMessage(`Creando playlist "${playlistName}"…`);
         const createRes = await fetch('https://api.spotify.com/v1/me/playlists', {
           method: 'POST',
@@ -100,26 +86,20 @@ export default function SpotifyCallbackPage() {
         }
         const playlist = await createRes.json();
 
-        // 4. Extraer track URIs desde los links guardados
+        // 3. Extraer track URIs desde los links guardados
         setMessage('Procesando canciones…');
-
-        // Helper: convierte URL de Spotify en URI
-        // https://open.spotify.com/track/TRACK_ID?... → spotify:track:TRACK_ID
         const urlToUri = (url) => {
           if (!url) return null;
           try {
             const u = new URL(url);
-            // Acepta: open.spotify.com/track/ID  o  spotify:track:ID directamente
             if (u.hostname === 'open.spotify.com') {
               const parts = u.pathname.split('/').filter(Boolean);
-              // partes: ['track', 'TRACK_ID'] o ['intl-XX', 'track', 'TRACK_ID']
               const trackIdx = parts.indexOf('track');
               if (trackIdx !== -1 && parts[trackIdx + 1]) {
                 return `spotify:track:${parts[trackIdx + 1]}`;
               }
             }
           } catch { /* URL malformada */ }
-          // Si ya es un URI spotify:track:...
           if (url.startsWith('spotify:track:')) return url;
           return null;
         };
@@ -128,35 +108,21 @@ export default function SpotifyCallbackPage() {
         const skipped = [];
         for (const song of songs) {
           const uri = urlToUri(song.link);
-          if (uri) {
-            uris.push(uri);
-          } else {
-            skipped.push(song.title);
-          }
+          if (uri) uris.push(uri);
+          else skipped.push(song.title);
         }
 
         if (uris.length) {
           setMessage('Agregando canciones a la playlist…');
-          // Spotify acepta máx 100 URIs por llamada
-          // Usamos PUT (replace) en el primer chunk y POST para los siguientes
           for (let i = 0; i < uris.length; i += 100) {
-            const method = i === 0 ? 'PUT' : 'POST';
             const addRes = await fetch(`https://api.spotify.com/v1/playlists/${playlist.id}/items`, {
-              method,
+              method: 'POST',
               headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ uris: uris.slice(i, i + 100) }),
             });
             if (!addRes.ok) {
-              const addErr = await addRes.text().catch(() => '(sin cuerpo)');
-              throw new Error(
-                `Error agregando tracks (${addRes.status}) [${method}]: ${addErr}\n` +
-                `Cuenta: ${accountProduct}\n` +
-                `Scopes del token: ${grantedScopes}\n` +
-                `Playlist ID: ${playlist.id ?? '(null/undefined)'}\n` +
-                `Playlist public: ${playlist.public}\n` +
-                `Token inicio: ${accessToken.substring(0, 20)}\n` +
-                `URIs (${uris.slice(i, i+3).join(', ')}…)`
-              );
+              const errBody = await addRes.json().catch(() => ({}));
+              throw new Error(`Error agregando canciones (${addRes.status}): ${errBody?.error?.message ?? addRes.status}`);
             }
           }
         }
