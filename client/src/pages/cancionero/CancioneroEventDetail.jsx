@@ -220,6 +220,8 @@ function EventEditModal({ event, occurrenceDate, onClose, onSaved }) {
   const [templates,        setTemplates]        = useState([]);
   const [templatePicker,   setTemplatePicker]   = useState(false);
   const [loadedTplMsg,     setLoadedTplMsg]     = useState('');
+  const [dragOver,         setDragOver]         = useState(null); // índice sobre el que se hace hover
+  const dragIndexRef = useRef(null);
   const searchRef = useRef(null);
 
   const openTemplatePicker = async () => {
@@ -260,6 +262,21 @@ function EventEditModal({ event, occurrenceDate, onClose, onSaved }) {
     if (ni < 0 || ni >= arr.length) return;
     [arr[idx], arr[ni]] = [arr[ni], arr[idx]];
     setPlaylist(arr);
+  };
+
+  const handleDragStart = (i) => { dragIndexRef.current = i; };
+  const handleDragEnter = (i) => { setDragOver(i); };
+  const handleDragEnd   = ()  => {
+    const from = dragIndexRef.current;
+    const to   = dragOver;
+    if (from !== null && to !== null && from !== to) {
+      const arr = [...playlist];
+      const [moved] = arr.splice(from, 1);
+      arr.splice(to, 0, moved);
+      setPlaylist(arr);
+    }
+    dragIndexRef.current = null;
+    setDragOver(null);
   };
 
   const save = async () => {
@@ -508,7 +525,23 @@ function EventEditModal({ event, occurrenceDate, onClose, onSaved }) {
               <div className="flex flex-col gap-1">
                 {playlist.map((item, i) => (
                   item.item_type === 'separator' ? (
-                    <div key={i} className="flex items-center gap-2 bg-surface-700/60 rounded-lg px-2 py-1.5 group border-l-2" style={{ borderColor: item.separator_color || '#6366f1' }}>
+                    <div
+                      key={i}
+                      draggable
+                      onDragStart={() => handleDragStart(i)}
+                      onDragEnter={() => handleDragEnter(i)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={e => e.preventDefault()}
+                      className={`flex items-center gap-2 rounded-lg px-2 py-1.5 group border-l-2 transition-all ${
+                        dragOver === i && dragIndexRef.current !== i
+                          ? 'bg-accent/20 border-accent scale-[1.01]'
+                          : 'bg-surface-700/60'
+                      }`}
+                      style={{ borderColor: dragOver === i && dragIndexRef.current !== i ? undefined : (item.separator_color || '#6366f1') }}
+                    >
+                      <span className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 transition-colors px-0.5 shrink-0" title="Arrastrar">
+                        <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>
+                      </span>
                       <span className="text-zinc-500 text-xs w-5 text-center shrink-0">—</span>
                       <span className="text-xs italic flex-1 truncate" style={{ color: item.separator_color || '#a5b4fc' }}>{item.separator_label || 'Separador'}</span>
                       <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -518,7 +551,22 @@ function EventEditModal({ event, occurrenceDate, onClose, onSaved }) {
                       </div>
                     </div>
                   ) : (
-                    <div key={i} className="flex items-center gap-2 bg-surface-700 rounded-lg px-2 py-1.5 group">
+                    <div
+                      key={i}
+                      draggable
+                      onDragStart={() => handleDragStart(i)}
+                      onDragEnter={() => handleDragEnter(i)}
+                      onDragEnd={handleDragEnd}
+                      onDragOver={e => e.preventDefault()}
+                      className={`flex items-center gap-2 rounded-lg px-2 py-1.5 group transition-all ${
+                        dragOver === i && dragIndexRef.current !== i
+                          ? 'bg-accent/20 scale-[1.01]'
+                          : 'bg-surface-700'
+                      }`}
+                    >
+                      <span className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-400 transition-colors px-0.5 shrink-0" title="Arrastrar">
+                        <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor"><circle cx="3" cy="2" r="1.2"/><circle cx="7" cy="2" r="1.2"/><circle cx="3" cy="7" r="1.2"/><circle cx="7" cy="7" r="1.2"/><circle cx="3" cy="12" r="1.2"/><circle cx="7" cy="12" r="1.2"/></svg>
+                      </span>
                       <span className="text-zinc-500 text-xs w-5 text-center shrink-0">{i + 1}</span>
                       <Music size={12} className="text-accent shrink-0" />
                       <span className="text-sm flex-1 truncate">{item.title}</span>
