@@ -92,14 +92,19 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
 
   // Calcula estilos de posición para el logo
   const logoContainerStyle = (() => {
-    const [v, h] = logoPosition.split('-');
+    const parts = logoPosition.split('-');
+    const v = parts[0];
+    const h = parts[1] ?? 'center';
     const top    = v === 'top'    ? '5%'  : v === 'bottom' ? 'auto' : '50%';
     const bottom = v === 'bottom' ? '5%'  : 'auto';
-    const left   = h === 'left'   ? '5%'  : h === 'right' ? 'auto' : '50%';
+    const left   = h === 'left'   ? '5%'  : h === 'right'  ? 'auto' : '50%';
     const right  = h === 'right'  ? '5%'  : 'auto';
-    const transform = v === 'center'
-      ? (h === 'center' ? 'translate(-50%, -50%)' : 'translateY(-50%)')
-      : h === 'center' ? 'translateX(-50%)' : 'none';
+    const tx     = h === 'center';
+    const ty     = v === 'center';
+    const transform = tx && ty ? 'translate(-50%, -50%)'
+                   : tx       ? 'translateX(-50%)'
+                   : ty       ? 'translateY(-50%)'
+                   : 'none';
     return { position: 'absolute', top, bottom, left, right, transform, width: `${logoSize}%`, zIndex: 1 };
   })();
 
