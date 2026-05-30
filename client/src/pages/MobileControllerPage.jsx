@@ -166,6 +166,7 @@ export default function MobileControllerPage() {
   const touchStart      = useRef(null);
   const songEditBodyRef  = useRef(null);
   const savedCursorPos   = useRef(null);
+  const slideGridRef     = useRef(null);
 
   const insertChord = (chord) => {
     const ta  = songEditBodyRef.current;
@@ -433,11 +434,17 @@ export default function MobileControllerPage() {
     }
   }, [slideData]);
 
-  // Auto-scroll a la diapo activa cuando cambia
+  // Auto-scroll a la diapo activa cuando cambia (centrada dentro del panel)
   useEffect(() => {
-    if (!activeSongSlideId) return;
-    const el = document.querySelector(`[data-slide-id="${activeSongSlideId}"]`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!activeSongSlideId || !slideGridRef.current) return;
+    const container = slideGridRef.current;
+    const el = container.querySelector(`[data-slide-id="${activeSongSlideId}"]`);
+    if (!el) return;
+    const containerTop    = container.getBoundingClientRect().top;
+    const elTop           = el.getBoundingClientRect().top;
+    const elOffsetInCont  = elTop - containerTop + container.scrollTop;
+    const targetScroll    = elOffsetInCont - container.clientHeight / 2 + el.offsetHeight / 2;
+    container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
   }, [activeSongSlideId]);
 
   // Cargar versiones de Biblia al abrir el panel acordeón
@@ -884,7 +891,7 @@ export default function MobileControllerPage() {
             <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('grid') ? 'rotate-180' : ''}`} />
           </button>
           {openPanels.has('grid') && (
-            <div className="overflow-y-auto" style={{ maxHeight: '60vh' }}>
+            <div ref={slideGridRef} className="overflow-y-auto" style={{ maxHeight: '60vh' }}>
               {!songDetail ? (
                 <p className="text-zinc-500 text-sm p-4 text-center italic">Selecciona una canción para ver sus diapositivas</p>
               ) : (
@@ -911,6 +918,7 @@ export default function MobileControllerPage() {
                     return (
                       <div
                         key={idx}
+                        data-slide-id={slide.id}
                         onClick={() => sendSlide(songDetail, slide, songDetail.slides, idx)}
                         className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
                           isActive ? 'bg-accent/15 border-accent' : 'bg-surface-800 border-surface-700'
@@ -922,8 +930,8 @@ export default function MobileControllerPage() {
                             {slide.label}
                           </span>
                         )}
-                        <p className="flex-1 text-xs text-zinc-300 leading-relaxed whitespace-pre-line line-clamp-3"
-                          style={{ fontSize: 'clamp(0.7rem, 1.2vw, 0.875rem)' }}>
+                        <p className="flex-1 text-zinc-300 leading-relaxed whitespace-pre-line line-clamp-3"
+                          style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)' }}>
                           {stripChords(stripComments(slide.content || ''))}
                         </p>
                         {isActive && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 mt-1.5" />}
