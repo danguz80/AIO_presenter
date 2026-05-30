@@ -96,20 +96,26 @@ export default function LivePreview() {
     if (ref.current && !ref.current.closed) { ref.current.focus(); return; }
     const res = resolution ?? { width: 1920, height: 1080 };
     const url = `${path}?fs=1`;
+    const openAndFocus = (features) => {
+      const win = window.open(url, windowName, features);
+      ref.current = win;
+      // Focus inmediato → la ventana recibe teclado sin que el usuario tenga que hacer click
+      try { win?.focus(); } catch(e) {}
+    };
     if (screenId && 'getScreenDetails' in window) {
       window.getScreenDetails().then(sd => {
         const [, sLeft, sTop] = (screenId ?? '').split(':');
         const target = Array.from(sd.screens).find(
           s => String(s.left ?? 0) === sLeft && String(s.top ?? 0) === sTop
         );
-        ref.current = target
-          ? window.open(url, windowName, `left=${target.left},top=${target.top},width=${target.width},height=${target.height},menubar=no,toolbar=no,location=no`)
-          : window.open(url, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+        openAndFocus(target
+          ? `left=${target.left},top=${target.top},width=${target.width},height=${target.height},menubar=no,toolbar=no,location=no`
+          : `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
       }).catch(() => {
-        ref.current = window.open(url, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+        openAndFocus(`width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
       });
     } else {
-      ref.current = window.open(url, windowName, `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+      openAndFocus(`width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
     }
   };
 

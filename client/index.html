@@ -15,14 +15,27 @@
       })();
     </script>
     <!-- Pantalla completa automática para ventanas de salida/escenario/virtual.
-         Debe ejecutarse ANTES de que React monte, mientras la user-activation
-         heredada de window.open() todavía está vigente. -->
+         Chrome no transfiere transient-activation a popups, así que el primer
+         click o keydown (ej: avanzar diapositiva) dispara el fullscreen. -->
     <script>
       ;(function(){
         if (location.search.indexOf('fs=1') === -1) return;
         var el = document.documentElement;
         var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-        if (req) req.call(el).catch(function(){});
+        if (!req) return;
+        function tryFS() {
+          req.call(el).catch(function(){});
+        }
+        // Intento síncrono (funciona en Firefox y algunos contextos de Chrome)
+        tryFS();
+        // Fallback: primer click O primera tecla dispara fullscreen
+        function onFirst() {
+          document.removeEventListener('click',   onFirst, true);
+          document.removeEventListener('keydown', onFirst, true);
+          if (!document.fullscreenElement) tryFS();
+        }
+        document.addEventListener('click',   onFirst, true);
+        document.addEventListener('keydown', onFirst, true);
       })();
     </script>
     <title>AIO Presenter — Proyección de letras y Biblias para iglesias</title>
