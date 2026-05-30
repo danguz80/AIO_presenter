@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Users, Calendar, Building2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Check, Plus, Trash2, Save, Loader2, Lock, X, CheckCircle2, HelpCircle,
-  Mail, Send, ShieldCheck, UserPlus, Clock, Copy,
+  Mail, Send, ShieldCheck, UserPlus, Clock, Copy, LogOut,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -35,6 +35,7 @@ function dateStr(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
 
 // ─── Mi Perfil ────────────────────────────────────────────────────────────────
 function ProfileSection({ user, onSaved }) {
+  const navigate = useNavigate();
   const [instruments, setInstruments] = useState(user?.instruments || []);
   const [savedInstruments, setSavedInstruments] = useState(user?.instruments || []);
   const [saving, setSaving] = useState(false);
@@ -133,6 +134,13 @@ function ProfileSection({ user, onSaved }) {
             ? <><Check size={14} /> Perfil guardado</>
             : <><Save size={14} /> Guardar perfil</>
         }
+      </button>
+
+      <button
+        onClick={() => { localStorage.removeItem('sync_token'); navigate('/'); }}
+        className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 border border-red-500/20 text-red-400/60 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
+      >
+        <LogOut size={14} /> Cerrar sesión
       </button>
     </div>
   );
