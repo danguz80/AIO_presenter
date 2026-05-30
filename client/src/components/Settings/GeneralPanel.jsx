@@ -1,7 +1,17 @@
-import { useState, useEffect } from 'react';
-import { Film, Image, X, Trash2 } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Film, Image, X, Trash2, AlertTriangle } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
-import api from '../../hooks/useApi';
+import {
+  FSA_SUPPORTED,
+  listFolders as fsaListFolders,
+  listMediaFiles,
+  generateThumbnail,
+  cacheMediaFile,
+  verifyPermission,
+  fetchFoldersFromDb,
+} from '../../utils/fsaUtils';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const SERVER_BASE = (() => {
   const savedIp   = localStorage.getItem('aio_server_ip');
@@ -28,28 +38,141 @@ function posStyle(pos) {
   return { position: 'absolute', top, bottom, left, right, transform };
 }
 
-// ─── Modal selector de media ─────────────────────────────────────────────────
-function LogoPickerModal({ onSelect, onClose }) {
-  const [folders,   setFolders]   = useState([]);
-  const [selFolder, setSelFolder] = useState(null);
-  const [files,     setFiles]     = useState([]);
-  const [loading,   setLoading]   = useState(false);
-
+// ─── Thumbnail con blob URL temporal para FSA ─────────────────────────────────
+function FsaThumb({ fileHandle, type, className }) {
+  const [src, setSrc] = useState(null);
   useEffect(() => {
-    api.get('/media/folders').then(r => {
-      setFolders(r.data);
-      if (r.data.length > 0) setSelFolder(r.data[0]);
+    let cancelled = false;
+    generateThumbnail(fileHandle, type).then(url => {
+      if (!cancelled) setSrc(url);
     }).catch(() => {});
-  }, []);
+    return () => { cancelled = true; };
+  }, [fileHandle, type]);
+  if (!src) return null;
+  return <img src={src} alt="" className={className} />;
+}
 
+// ─── Modal selector de media (FSA + servidor) ────────────────────────────────
+function LogoPickerModal({ onSelect, onClose }) {
+  const [folders,    setFolders]    = useState([]);
+  const [selFolder,  setSelFolder]  = useState(null);
+  const [files,      setFiles]      = useState([]);
+  const [loading,    setLoading]    = useState(false);
+  const [thumbs,     setThumbs]     = useState({});  // name → dataURL (server mode)
+  const [selecting,  setSelecting]  = useState(null); // nombre del archivo en proceso
+
+  const mode = FSA_SUPPORTED ? 'fsa' : 'server';
+
+  // ── Cargar carpetas ────────────────────────────────────────────────────────
+  const loadFolders = useCallback(async () => {
+    if (mode === 'fsa') {
+      const token   = localStorage.getItem('aio_sync_token');
+      const handles = await fsaListFolders();
+
+      if (token) {
+        const dbFolders = await fetchFoldersFromDb(API_BASE, token);
+        if (dbFolders.length > 0) {
+          const merged = await Promise.all(
+            dbFolders.map(async ({ id, name }) => {
+              const idbKey = `db-folder:${id}`;
+              const entry  = handles.find(h => h.key === idbKey) ?? handles.find(h => h.name === name);
+              if (entry) {
+                try {
+                  const perm = await entry.handle.queryPermission({ mode: 'read' });
+                  return { key: idbKey, dbId: id, name, handle: entry.handle, permissionState: perm };
+                } catch {
+                  return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
+                }
+              }
+              return { key: idbKey, dbId: id, name, handle: null, permissionState: 'prompt' };
+            })
+          );
+          setFolders(merged);
+          setSelFolder(merged[0] ?? null);
+          return;
+        }
+      }
+      // Sin token o BD vacía → solo IndexedDB
+      const withPerms = await Promise.all(handles.map(async h => {
+        try {
+          const perm = await h.handle.queryPermission({ mode: 'read' });
+          return { ...h, permissionState: perm };
+        } catch { return { ...h, permissionState: 'error' }; }
+      }));
+      setFolders(withPerms);
+      setSelFolder(withPerms[0] ?? null);
+    } else {
+      // Modo servidor
+      try {
+        const res = await fetch(`${SERVER_BASE}/api/media/folders`);
+        const data = res.ok ? await res.json() : [];
+        setFolders(data);
+        setSelFolder(data[0] ?? null);
+      } catch { setFolders([]); }
+    }
+  }, [mode]);
+
+  useEffect(() => { loadFolders(); }, [loadFolders]);
+
+  // ── Cargar archivos al cambiar carpeta ─────────────────────────────────────
   useEffect(() => {
-    if (!selFolder) return;
+    if (!selFolder) { setFiles([]); return; }
     setLoading(true);
-    api.get(`/media/files?folder=${encodeURIComponent(selFolder.path)}`)
-      .then(r => setFiles(r.data))
-      .catch(() => setFiles([]))
-      .finally(() => setLoading(false));
-  }, [selFolder]);
+    if (mode === 'fsa') {
+      if (!selFolder.handle) { setFiles([]); setLoading(false); return; }
+      listMediaFiles(selFolder.handle)
+        .then(data => setFiles(data))
+        .catch(() => setFiles([]))
+        .finally(() => setLoading(false));
+    } else {
+      fetch(`${SERVER_BASE}/api/media/files?folder=${encodeURIComponent(selFolder.path)}`)
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(data => setFiles(data))
+        .catch(() => setFiles([]))
+        .finally(() => setLoading(false));
+    }
+  }, [selFolder, mode]);
+
+  // ── Seleccionar carpeta FSA (puede necesitar permiso) ─────────────────────
+  const handleSelectFolder = async (folder) => {
+    if (mode !== 'fsa') { setSelFolder(folder); return; }
+    if (!folder.handle || folder.permissionState !== 'granted') {
+      try {
+        const perm = await verifyPermission(folder.handle);
+        if (perm !== 'granted') return;
+        folder = { ...folder, permissionState: 'granted' };
+        setFolders(prev => prev.map(f => f.key === folder.key ? folder : f));
+      } catch { return; }
+    }
+    setSelFolder(folder);
+  };
+
+  // ── Seleccionar archivo ────────────────────────────────────────────────────
+  const handleSelectFile = async (file) => {
+    if (selecting) return;
+    setSelecting(file.name);
+    try {
+      if (mode === 'fsa') {
+        // Cachear el archivo para que OutputRenderer lo sirva vía SW
+        const cacheUrl = await cacheMediaFile(file.handle);
+        onSelect({ url: cacheUrl, mediaType: file.type, fileName: file.name });
+      } else {
+        onSelect({
+          url:      `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`,
+          filePath: file.path,
+          mediaType: file.type,
+          fileName:  file.name,
+        });
+      }
+      onClose();
+    } catch (e) {
+      console.error('Error seleccionando logo:', e);
+    } finally {
+      setSelecting(null);
+    }
+  };
+
+  const folderKey = mode === 'fsa' ? 'key' : 'path';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70" onClick={onClose}>
@@ -65,16 +188,30 @@ function LogoPickerModal({ onSelect, onClose }) {
         <div className="flex gap-1 px-3 pt-2 flex-wrap shrink-0">
           {folders.map(f => (
             <button
-              key={f.path}
-              onClick={() => setSelFolder(f)}
+              key={f[folderKey]}
+              onClick={() => handleSelectFolder(f)}
               className={`text-[11px] px-2 py-1 rounded border transition-colors ${
-                selFolder?.path === f.path
+                selFolder?.[folderKey] === f[folderKey]
                   ? 'bg-accent/20 text-accent border-accent/40'
                   : 'bg-surface-700 text-zinc-400 border-surface-600 hover:text-zinc-200'
               }`}
-            >{f.name}</button>
+            >
+              {f.name}
+              {mode === 'fsa' && f.permissionState !== 'granted' && (
+                <AlertTriangle size={9} className="inline ml-1 text-yellow-500" />
+              )}
+            </button>
           ))}
+          {folders.length === 0 && (
+            <p className="text-xs text-zinc-500 italic py-1 px-1">Sin carpetas configuradas</p>
+          )}
         </div>
+        {/* Aviso permiso necesario */}
+        {mode === 'fsa' && selFolder && selFolder.permissionState !== 'granted' && (
+          <p className="text-[11px] text-yellow-400 px-4 pt-2">
+            Clic en la carpeta para conceder acceso de lectura
+          </p>
+        )}
         {/* Grid de archivos */}
         <div className="flex-1 overflow-y-auto p-3">
           {loading ? (
@@ -85,29 +222,34 @@ function LogoPickerModal({ onSelect, onClose }) {
             <div className="grid grid-cols-4 gap-2">
               {files.map(file => (
                 <button
-                  key={file.path}
-                  onClick={() => {
-                    onSelect({
-                      url:       `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`,
-                      mediaType: file.type,
-                      fileName:  file.name,
-                      filePath:  file.path,
-                    });
-                    onClose();
-                  }}
-                  className="relative aspect-video rounded-lg overflow-hidden border-2 border-surface-600 hover:border-accent bg-surface-700 flex items-center justify-center group"
+                  key={file.name}
+                  onClick={() => handleSelectFile(file)}
+                  disabled={!!selecting}
+                  className="relative aspect-video rounded-lg overflow-hidden border-2 border-surface-600 hover:border-accent bg-surface-700 flex items-center justify-center group disabled:opacity-60"
                   title={file.name}
                 >
-                  <img
-                    src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(file.path)}`}
-                    alt={file.name}
-                    className="w-full h-full object-cover"
-                    onError={e => { e.currentTarget.style.display = 'none'; }}
-                  />
+                  {mode === 'fsa' ? (
+                    <FsaThumb
+                      fileHandle={file.handle}
+                      type={file.type}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <img
+                      src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(file.path)}`}
+                      alt={file.name}
+                      className="w-full h-full object-cover"
+                      onError={e => { e.currentTarget.style.display = 'none'; }}
+                    />
+                  )}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
-                    {file.type === 'video'
-                      ? <Film  size={14} className="text-white opacity-0 group-hover:opacity-100" />
-                      : <Image size={14} className="text-white opacity-0 group-hover:opacity-100" />}
+                    {selecting === file.name ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : file.type === 'video' ? (
+                      <Film  size={14} className="text-white opacity-0 group-hover:opacity-100" />
+                    ) : (
+                      <Image size={14} className="text-white opacity-0 group-hover:opacity-100" />
+                    )}
                   </div>
                   <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                     <p className="text-[8px] text-white truncate">{file.name}</p>
