@@ -575,6 +575,23 @@ router.delete('/invitations/:id', requireAuth, async (req, res) => {
   }
 });
 
+/** DELETE /auth/members/:id — eliminar miembro activo de la organización (solo admin) */
+router.delete('/members/:id', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });
+  if (String(req.params.id) === String(req.user.userId)) {
+    return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' });
+  }
+  try {
+    await pool.query(
+      'DELETE FROM user_organizations WHERE user_id=$1 AND organization_id=$2',
+      [req.params.id, req.user.orgId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /** PATCH /auth/invitations/:id — actualizar nombre e instrumentos de invitación pendiente (solo admin) */
 router.patch('/invitations/:id', requireAuth, async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });

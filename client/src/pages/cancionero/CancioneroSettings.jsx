@@ -228,6 +228,12 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
     onMembersUpdated?.();
   };
 
+  const removeMember = async (id) => {
+    await fetch(`${API}/auth/members/${id}`, { method: 'DELETE', headers: authHeaders() });
+    setMembers(prev => prev.filter(m => m.id !== id));
+    onMembersUpdated?.();
+  };
+
   // Toggle instrumento — funciona para miembros reales e invitados pendientes
   const toggleInstrument = (id, inst, current, isPending) => {
     const next = current.includes(inst) ? current.filter(i => i !== inst) : [...current, inst];
@@ -398,6 +404,13 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
                     title="Copiar link de invitación"
                   >
                     {copiedId === `reinv:${member.id}` ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); removeMember(member.id); }}
+                    className="p-1 hover:text-red-400 text-white/15 transition-colors flex-shrink-0"
+                    title="Eliminar miembro"
+                  >
+                    <X size={13} />
                   </button>
                   {isEditing ? <ChevronUp size={14} className="text-white/30 flex-shrink-0" /> : <ChevronDown size={14} className="text-white/30 flex-shrink-0" />}
                 </div>
