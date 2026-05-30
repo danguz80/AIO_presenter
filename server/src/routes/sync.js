@@ -435,6 +435,17 @@ router.patch('/config', async (req, res) => {
   }
 });
 
+// ─── Helper: ejecuta tareas en paralelo con límite de concurrencia ────────────
+async function runConcurrently(items, concurrency, fn) {
+  const results = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const batchResults = await Promise.allSettled(batch.map(fn));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 // ─── POST /sync/smart — sincronización bidireccional (gana el más reciente) ──
 router.post('/smart', async (req, res) => {
   if (!req.user.canPush && !req.user.isAdmin) {
@@ -458,9 +469,9 @@ router.post('/smart', async (req, res) => {
       FROM songs s LEFT JOIN song_slides ss ON ss.song_id=s.id
       WHERE s.organization_id = $1
       GROUP BY s.id
-    `, [req.user.orgId]);;
+    `, [req.user.orgId]);
 
-    // Obtener archivos de Drive
+    // Obtener archivos de Drive (solo metadatos — una sola llamada paginada)
     const driveFiles = await getDriveFiles(drive, folderId);
     const driveByFileId = {};
     const driveByName   = {};
@@ -472,7 +483,8 @@ router.post('/smart', async (req, res) => {
     let uploadedCount = 0, downloadedCount = 0, skippedCount = 0;
     const processedDriveIds = new Set();
 
-    for (const song of localSongs) {
+    // Procesar canciones locales en paralelo (5 a la vez para no saturar Drive API)
+    await runConcurrently(localSongs, 5, async (song) => {
       const localTime = song.updated_at ? new Date(song.updated_at) : new Date(0);
       const fileName  = `song_${song.id}.json`;
       const driveFile = song.drive_file_id ? driveByFileId[song.drive_file_id] : driveByName[fileName];
@@ -484,15 +496,15 @@ router.post('/smart', async (req, res) => {
           [uploaded.id, song.id]);
         uploadedCount++;
         processedDriveIds.add(uploaded.id);
-        continue;
+        return;
       }
 
       processedDriveIds.add(driveFile.id);
       const driveTime = new Date(driveFile.modifiedTime);
       const syncedAt  = song.drive_synced_at ? new Date(song.drive_synced_at) : new Date(0);
 
-      // Sin cambios en ningún lado desde el último sync
-      if (localTime <= syncedAt && driveTime <= syncedAt) { skippedCount++; continue; }
+      // Sin cambios en ningún lado desde el último sync → saltar
+      if (localTime <= syncedAt && driveTime <= syncedAt) { skippedCount++; return; }
 
       if (driveTime > localTime) {
         // Drive es más reciente → descargar y actualizar local
@@ -500,7 +512,7 @@ router.post('/smart', async (req, res) => {
         try {
           songData = await downloadDriveFile(drive, driveFile.id);
           if (typeof songData === 'string') songData = JSON.parse(songData);
-        } catch { skippedCount++; continue; }
+        } catch { skippedCount++; return; }
 
         await pool.query(
           `UPDATE songs SET title=$1, author=$2, copyright=$3, ccli=$4, song_key=$5, tags=$6,
@@ -519,23 +531,25 @@ router.post('/smart', async (req, res) => {
           [driveFile.id, song.id]);
         uploadedCount++;
       }
-    }
+    });
 
-    // Canciones en Drive que no existen localmente → descargar
-    for (const driveFile of driveFiles) {
-      if (processedDriveIds.has(driveFile.id)) continue;
+    // Canciones en Drive que no existen localmente → descargar (también en paralelo)
+    const newDriveFiles = driveFiles.filter(f => !processedDriveIds.has(f.id));
+    await runConcurrently(newDriveFiles, 5, async (driveFile) => {
       let songData;
       try {
         songData = await downloadDriveFile(drive, driveFile.id);
         if (typeof songData === 'string') songData = JSON.parse(songData);
-      } catch { continue; }
+      } catch { return; }
       const result = await importSongFromData(songData, driveFile.id);
       if (result) downloadedCount++;
-    }
+    });
 
-    // Sincronizar plantillas y eventos
-    await syncTemplates(drive, folderId, lastSyncAt);
-    await syncEvents(drive, folderId, req.user.orgId, lastSyncAt);
+    // Sincronizar plantillas y eventos (en paralelo entre sí)
+    await Promise.all([
+      syncTemplates(drive, folderId, lastSyncAt),
+      syncEvents(drive, folderId, req.user.orgId, lastSyncAt),
+    ]);
 
     await pool.query('UPDATE sync_users SET last_sync_at=NOW() WHERE id=$1', [req.user.userId]);
     res.json({ ok: true, uploaded: uploadedCount, downloaded: downloadedCount, skipped: skippedCount });
