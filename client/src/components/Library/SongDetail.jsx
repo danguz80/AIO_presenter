@@ -311,8 +311,8 @@ export default function SongDetail() {
   }
 
   const handleSlideClick = (slide, index) => {
-    const isAlreadySelected = localSelectedId === slide.id;
-    const isAlreadyLive     = isLive(slide);
+    const isAlreadySelected = localSelectedId === slide.id && liveState.slideIndex !== index;
+    const isAlreadyLive     = isLive(slide, index);
 
     if (isAlreadySelected || isAlreadyLive) {
       // Deseleccionar y apagar live si estaba proyectando
@@ -396,9 +396,10 @@ export default function SongDetail() {
     }
   };
 
-  const isLive = (slide) =>
+  const isLive = (slide, index) =>
     liveState.slideData?.slideId === slide.id &&
-    liveState.slideData?.type    === 'song' &&
+    liveState.slideIndex         === index     &&
+    liveState.slideData?.type    === 'song'    &&
     !liveState.isBlank;
 
   return (
@@ -599,8 +600,8 @@ export default function SongDetail() {
             })()}
 
             {orderedSlides.map((slide, index) => {
-              const active   = isLive(slide);
-              const selected = localSelectedId === slide.id;
+              const active   = isLive(slide, index);
+              const selected = localSelectedId === slide.id && liveState.slideIndex !== index;
               const labelColor = getLabelColor(slide.label);
               // Preprocesar líneas igual que el proyector: respetar saltos, filtrar comentarios
               const rawLines = (slide.content || '').split('\n');
@@ -765,8 +766,8 @@ export default function SongDetail() {
               );
             })()}
             {orderedSlides.map((slide, index) => {
-              const active     = isLive(slide);
-              const selected   = localSelectedId === slide.id;
+              const active     = isLive(slide, index);
+              const selected   = localSelectedId === slide.id && liveState.slideIndex !== index;
               const labelColor = getLabelColor(slide.label);
               const visibleLines = (slide.content || '').split('\n')
                 .map(line => {
