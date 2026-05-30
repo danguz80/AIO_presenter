@@ -103,7 +103,7 @@ router.get('/google/callback', async (req, res) => {
     if (inviteCode) {
       // Validar invitación y obtener orgId
       const { rows: invRows } = await pool.query(
-        `SELECT id, email, display_name, instruments, can_push, can_push_all, expires_at, used_by, organization_id
+        `SELECT id, email, display_name, instruments, can_push, can_push_all, can_pull, expires_at, used_by, organization_id
          FROM sync_invitations WHERE code = $1`, [inviteCode]
       );
       if (!invRows.length) {
@@ -123,14 +123,15 @@ router.get('/google/callback', async (req, res) => {
 
       // Upsert usuario con permisos de la invitación
       const { rows } = await pool.query(`
-        INSERT INTO sync_users (google_id, email, display_name, avatar_url, is_admin, can_push, can_push_all, organization_id, access_token, refresh_token, token_expiry)
-        VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10)
+        INSERT INTO sync_users (google_id, email, display_name, avatar_url, is_admin, can_push, can_push_all, can_pull, organization_id, access_token, refresh_token, token_expiry)
+        VALUES ($1, $2, $3, $4, false, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (google_id) DO UPDATE SET
           email         = EXCLUDED.email,
           display_name  = EXCLUDED.display_name,
           avatar_url    = EXCLUDED.avatar_url,
           can_push      = sync_users.can_push OR EXCLUDED.can_push,
           can_push_all  = sync_users.can_push_all OR EXCLUDED.can_push_all,
+          can_pull      = sync_users.can_pull OR EXCLUDED.can_pull,
           organization_id = COALESCE(sync_users.organization_id, EXCLUDED.organization_id),
           access_token  = EXCLUDED.access_token,
           refresh_token = COALESCE(EXCLUDED.refresh_token, sync_users.refresh_token),
@@ -139,7 +140,7 @@ router.get('/google/callback', async (req, res) => {
         RETURNING *
       `, [
         userInfo.id, userInfo.email, userInfo.name, userInfo.picture,
-        inv.can_push, inv.can_push_all, orgId,
+        inv.can_push, inv.can_push_all, inv.can_pull ?? true, orgId,
         tokens.access_token, tokens.refresh_token || null, tokens.expiry_date || null,
       ]);
 
@@ -171,7 +172,7 @@ router.get('/google/callback', async (req, res) => {
 
       const user = rows[0];
       const jwtToken = jwt.sign(
-        { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, canPush: user.can_push },
+        { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, canPush: user.can_push, canPull: user.can_pull ?? true },
         JWT_SECRET, { expiresIn: '30d' }
       );
       return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
@@ -199,7 +200,7 @@ router.get('/google/callback', async (req, res) => {
       );
       const user = existingRows[0];
       const jwtToken = jwt.sign(
-        { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, canPush: user.can_push },
+        { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, canPush: user.can_push, canPull: user.can_pull ?? true },
         JWT_SECRET, { expiresIn: '30d' }
       );
       return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
@@ -251,7 +252,7 @@ router.get('/google/callback', async (req, res) => {
       [user.id, orgId]
     );
     const jwtToken = jwt.sign(
-      { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true },
+        { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true, canPull: true },
       JWT_SECRET, { expiresIn: '30d' }
     );
     res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
@@ -441,7 +442,7 @@ router.post('/orgs', requireAuth, async (req, res) => {
       [org.id, req.user.userId]
     );
     const newToken = jwt.sign(
-      { userId: req.user.userId, orgId: org.id, email: req.user.email, isAdmin: true, canPush: true },
+      { userId: req.user.userId, orgId: org.id, email: req.user.email, isAdmin: true, canPush: true, canPull: true },
       JWT_SECRET, { expiresIn: '30d' }
     );
     res.json({ org, token: newToken });
@@ -468,7 +469,7 @@ router.post('/switch-org/:orgId', requireAuth, async (req, res) => {
       [orgId, role === 'admin', req.user.userId]
     );
     const newToken = jwt.sign(
-      { userId: req.user.userId, orgId, email: req.user.email, isAdmin: role === 'admin', canPush: true },
+      { userId: req.user.userId, orgId, email: req.user.email, isAdmin: role === 'admin', canPush: true, canPull: true },
       JWT_SECRET, { expiresIn: '30d' }
     );
     res.json({ token: newToken });

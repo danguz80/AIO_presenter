@@ -272,6 +272,9 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS band_config_id INTEGER REFERENCES band_configs(id) ON DELETE SET NULL`);
     // ─── Estructuras múltiples por canción ────────────────────────────────
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS structures JSONB DEFAULT '[]'`);
+    // ─── Sistema de roles de sincronización (can_pull) ─────────────────────
+    await pool.query(`ALTER TABLE sync_users      ADD COLUMN IF NOT EXISTS can_pull BOOLEAN NOT NULL DEFAULT true`);
+    await pool.query(`ALTER TABLE sync_invitations ADD COLUMN IF NOT EXISTS can_pull BOOLEAN NOT NULL DEFAULT true`);
     // ─── Notificaciones in-app ─────────────────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (

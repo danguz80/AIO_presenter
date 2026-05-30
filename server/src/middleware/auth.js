@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aio-presenter-secret-change-me';
 
-/** Verifica JWT y adjunta req.user = { userId, orgId, isAdmin, canPush } */
+/** Verifica JWT y adjunta req.user = { userId, orgId, isAdmin, canPush, canPull } */
 function requireAuth(req, res, next) {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {

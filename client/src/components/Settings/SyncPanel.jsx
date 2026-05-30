@@ -284,7 +284,7 @@ function InvitationsPanel() {
   const [invitations, setInvitations] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [creating, setCreating]       = useState(false);
-  const [form, setForm]               = useState({ label: '', email: '', can_push: false, can_push_all: false, expires_in_days: '' });
+  const [form, setForm]               = useState({ label: '', email: '', role: 'pull_only', expires_in_days: '' });
   const [copied, setCopied]           = useState(null);
 
   const load = useCallback(async () => {
@@ -300,18 +300,20 @@ function InvitationsPanel() {
   const create = async () => {
     setCreating(true);
     try {
+      const flags = roleToFlags(form.role);
       const body = {
         label: form.label || undefined,
         email: form.email || undefined,
-        can_push: form.can_push,
-        can_push_all: form.can_push_all,
+        can_push: flags.can_push,
+        can_push_all: flags.can_push_all,
+        can_pull: flags.can_pull,
         expires_in_days: form.expires_in_days ? parseInt(form.expires_in_days, 10) : undefined,
       };
       const res = await authFetch('/api/sync/invitations', { method: 'POST', body });
       if (res.ok) {
         const inv = await res.json();
         setInvitations(prev => [inv, ...prev]);
-        setForm({ label: '', email: '', can_push: false, can_push_all: false, expires_in_days: '' });
+        setForm({ label: '', email: '', role: 'pull_only', expires_in_days: '' });
       }
     } finally { setCreating(false); }
   };
@@ -349,9 +351,9 @@ function InvitationsPanel() {
           placeholder="Email (opcional, restringe a esa cuenta)"
           className="w-full bg-surface-600 text-white text-xs rounded px-2 py-1.5 border border-surface-500 focus:border-accent outline-none"
         />
-        <div className="flex gap-2 flex-wrap">
-          <PermToggle label="Puede subir" value={form.can_push} onChange={v => setForm(f => ({ ...f, can_push: v }))} />
-          <PermToggle label="Reemplazar todo" value={form.can_push_all} onChange={v => setForm(f => ({ ...f, can_push_all: v }))} />
+        <div>
+          <p className="text-[9px] text-zinc-500 mb-1">Permisos</p>
+          <RoleSelector value={form.role} onChange={role => setForm(f => ({ ...f, role }))} />
         </div>
         <div className="flex gap-2 items-center">
           <input
@@ -402,8 +404,7 @@ function InvitationsPanel() {
                     </div>
                   </div>
                   <div className="flex gap-1.5 flex-wrap">
-                    {inv.can_push     && <span className="text-[9px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-full">Puede subir</span>}
-                    {inv.can_push_all && <span className="text-[9px] bg-orange-900/30 text-orange-300 px-1.5 py-0.5 rounded-full">Reemplazar todo</span>}
+                    <RoleBadge u={inv} />
                     {isUsed(inv)
                       ? <span className="text-[9px] bg-green-900/30 text-green-400 px-1.5 py-0.5 rounded-full">Usada · {inv.used_by_name || inv.used_by_email}</span>
                       : isExpired(inv)
@@ -437,9 +438,10 @@ function UsersPanel() {
 
   useEffect(() => { load(); }, [load]);
 
-  const toggle = async (id, field, value) => {
-    await authFetch(`/api/sync/users/${id}`, { method: 'PATCH', body: { [field]: value } });
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, [field]: value } : u));
+  const setRole = async (id, role) => {
+    const flags = roleToFlags(role);
+    await authFetch(`/api/sync/users/${id}`, { method: 'PATCH', body: flags });
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...flags } : u));
   };
 
   const removeUser = async (id, name) => {
@@ -472,14 +474,72 @@ function UsersPanel() {
                 >✕ Eliminar</button>
             }
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <PermToggle label="Puede subir" value={u.can_push} onChange={v => toggle(u.id, 'can_push', v)} />
-            <PermToggle label="Reemplazar todo" value={u.can_push_all} onChange={v => toggle(u.id, 'can_push_all', v)} />
-            <PermToggle label="Admin" value={u.is_admin} onChange={v => toggle(u.id, 'is_admin', v)} />
+          <div className="mt-1">
+            <RoleSelector value={flagsToRole(u)} onChange={role => setRole(u.id, role)} disabled={u.is_admin && !u.id} />
           </div>
         </div>
       ))}
     </div>
+  );
+}
+
+// ─── Sistema de roles ─────────────────────────────────────────────────────────
+const ROLES = [
+  { id: 'pull_only',     label: 'Puede bajar'      },
+  { id: 'push_only',     label: 'Puede subir'       },
+  { id: 'bidirectional', label: 'Puede subir/bajar' },
+  { id: 'admin',         label: 'Admin'             },
+];
+
+function roleToFlags(role) {
+  switch (role) {
+    case 'admin':         return { can_pull: true,  can_push: true,  can_push_all: true,  is_admin: true  };
+    case 'bidirectional': return { can_pull: true,  can_push: true,  can_push_all: false, is_admin: false };
+    case 'push_only':     return { can_pull: false, can_push: true,  can_push_all: false, is_admin: false };
+    case 'pull_only':
+    default:              return { can_pull: true,  can_push: false, can_push_all: false, is_admin: false };
+  }
+}
+
+function flagsToRole(u) {
+  if (u.is_admin || u.can_push_all) return 'admin';
+  if (u.can_push && (u.can_pull ?? true)) return 'bidirectional';
+  if (u.can_push) return 'push_only';
+  return 'pull_only';
+}
+
+function RoleSelector({ value, onChange, disabled }) {
+  return (
+    <div className="grid grid-cols-2 gap-1">
+      {ROLES.map(r => (
+        <button
+          key={r.id}
+          type="button"
+          onClick={() => !disabled && onChange(r.id)}
+          className={`px-2 py-1.5 rounded-lg border text-[10px] font-medium transition-colors ${
+            value === r.id
+              ? 'bg-accent/20 border-accent/50 text-accent'
+              : 'bg-surface-600 border-surface-500 text-zinc-400 hover:text-white hover:border-zinc-500'
+          } ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RoleBadge({ u }) {
+  const role = flagsToRole(u);
+  const r = ROLES.find(x => x.id === role) || ROLES[0];
+  const colors = {
+    pull_only:     'bg-blue-900/30 text-blue-300',
+    push_only:     'bg-green-900/30 text-green-300',
+    bidirectional: 'bg-accent/15 text-accent',
+    admin:         'bg-orange-900/30 text-orange-300',
+  };
+  return (
+    <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${colors[role]}`}>{r.label}</span>
   );
 }
 
@@ -732,6 +792,7 @@ export default function SyncPanel() {
     );
   }
 
+  const canPull    = user.can_pull ?? true;
   const canPush    = user.can_push || user.is_admin;
   const canPushAll = user.can_push_all || user.is_admin;
 
@@ -809,17 +870,40 @@ export default function SyncPanel() {
 
       {/* Acciones de sincronización */}
       <div className="space-y-1.5">
-        <button
-          onClick={() => syncAction('smart', 'Sincronización')}
-          disabled={loading || !syncInfo?.configured || !canPush}
-          className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-accent hover:bg-accent-hover rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          Sincronizar
-          {syncInfo?.pendingCount > 0 && <span className="bg-white/20 px-1.5 rounded-full text-[10px]">{syncInfo.pendingCount}</span>}
-        </button>
-        {!canPush && (
-          <p className="text-[10px] text-zinc-500 text-center">Para sincronizar, solicita permisos al administrador.</p>
+        {canPush && canPull && (
+          <button
+            onClick={() => syncAction('smart', 'Sincronización')}
+            disabled={loading || !syncInfo?.configured}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-accent hover:bg-accent-hover rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Sincronizar
+            {syncInfo?.pendingCount > 0 && <span className="bg-white/20 px-1.5 rounded-full text-[10px]">{syncInfo.pendingCount}</span>}
+          </button>
+        )}
+        {canPull && !canPush && (
+          <button
+            onClick={() => syncAction('pull', 'Descarga')}
+            disabled={loading || !syncInfo?.configured}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-accent hover:bg-accent-hover rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Bajar canciones
+          </button>
+        )}
+        {canPush && !canPull && (
+          <button
+            onClick={() => syncAction('push', 'Subida')}
+            disabled={loading || !syncInfo?.configured}
+            className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-accent hover:bg-accent-hover rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Subir canciones
+            {syncInfo?.pendingCount > 0 && <span className="bg-white/20 px-1.5 rounded-full text-[10px]">{syncInfo.pendingCount}</span>}
+          </button>
+        )}
+        {!canPush && !canPull && (
+          <p className="text-[10px] text-zinc-500 text-center py-1">Sin permisos de sincronización. Solicita acceso al administrador.</p>
         )}
 
         {canPushAll && (

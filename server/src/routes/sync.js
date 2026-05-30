@@ -371,7 +371,7 @@ async function importSongFromData(songData, driveFileId) {
 router.get('/status', async (req, res) => {
   try {
     const { rows: [user] } = await pool.query(
-      'SELECT id, is_admin, can_push, can_push_all, drive_folder_id, last_sync_at FROM sync_users WHERE id=$1',
+      'SELECT id, is_admin, can_push, can_push_all, can_pull, drive_folder_id, last_sync_at FROM sync_users WHERE id=$1',
       [req.user.userId]
     );
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -527,6 +527,7 @@ router.post('/smart', async (req, res) => {
 // ─── POST /sync/pull — descargar canciones nuevas/actualizadas desde Drive ───
 // (mantenido por compatibilidad; preferir /smart)
 router.post('/pull', async (req, res) => {
+  if (!req.user.canPull && !req.user.isAdmin) return res.status(403).json({ error: 'Sin permisos para descargar' });
   try {
     const { auth, folderId } = await getAdminDriveClient();
     const drive = google.drive({ version: 'v3', auth });
@@ -858,7 +859,7 @@ router.post('/backup/restore', async (req, res) => {
 router.get('/users', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede ver usuarios' });
   const { rows } = await pool.query(
-    `SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all,
+    `SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, can_pull,
             last_sync_at, created_at FROM sync_users ORDER BY created_at`
   );
   res.json(rows);
@@ -882,12 +883,13 @@ router.delete('/users/:id', async (req, res) => {
 // ─── PATCH /sync/users/:id — actualizar permisos (solo admin) ────────────────
 router.patch('/users/:id', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede cambiar permisos' });
-  const { can_push, can_push_all, is_admin } = req.body;
+  const { can_push, can_push_all, can_pull, is_admin } = req.body;
   try {
     const fields = [], vals = [];
     let i = 1;
     if (can_push     !== undefined) { fields.push(`can_push=$${i++}`);     vals.push(can_push); }
     if (can_push_all !== undefined) { fields.push(`can_push_all=$${i++}`); vals.push(can_push_all); }
+    if (can_pull     !== undefined) { fields.push(`can_pull=$${i++}`);     vals.push(can_pull); }
     if (is_admin     !== undefined) { fields.push(`is_admin=$${i++}`);     vals.push(is_admin); }
     if (!fields.length) return res.json({ ok: true });
     vals.push(req.params.id);
@@ -920,7 +922,7 @@ router.get('/invitations', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede ver invitaciones' });
   try {
     const { rows } = await pool.query(`
-      SELECT i.id, i.code, i.label, i.email, i.can_push, i.can_push_all,
+      SELECT i.id, i.code, i.label, i.email, i.can_push, i.can_push_all, i.can_pull,
              i.expires_at, i.used_at, i.created_at,
              u.display_name AS used_by_name, u.email AS used_by_email
       FROM sync_invitations i
@@ -935,7 +937,7 @@ router.get('/invitations', async (req, res) => {
 // ─── POST /sync/invitations — crear invitación (solo admin) ──────────────────
 router.post('/invitations', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede crear invitaciones' });
-  const { label, email, can_push = false, can_push_all = false, expires_in_days } = req.body;
+  const { label, email, can_push = false, can_push_all = false, can_pull = true, expires_in_days } = req.body;
   try {
     // Generar código único de 10 chars alfanuméricos
     const code = Array.from({ length: 10 }, () =>
@@ -945,9 +947,9 @@ router.post('/invitations', async (req, res) => {
       ? new Date(Date.now() + expires_in_days * 86400000)
       : null;
     const { rows: [inv] } = await pool.query(
-      `INSERT INTO sync_invitations (code, label, email, can_push, can_push_all, created_by, expires_at, organization_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, code, label, email, can_push, can_push_all, expires_at, created_at`,
-      [code, label || null, email || null, can_push, can_push_all, req.user.userId, expiresAt, req.user.orgId]
+      `INSERT INTO sync_invitations (code, label, email, can_push, can_push_all, can_pull, created_by, expires_at, organization_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, code, label, email, can_push, can_push_all, can_pull, expires_at, created_at`,
+      [code, label || null, email || null, can_push, can_push_all, can_pull, req.user.userId, expiresAt, req.user.orgId]
     );
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
     const link = `${clientUrl}/?invite=${inv.code}`;
