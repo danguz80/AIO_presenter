@@ -7,7 +7,15 @@ import { Maximize2 } from 'lucide-react';
 export default function VirtualPage() {
   const { state } = usePresenter();
   const { liveState, virtualConfig } = state;
-  const [showFsHint, setShowFsHint] = useState(false);
+  const [showFsHint, setShowFsHint] = useState(() =>
+    new URLSearchParams(window.location.search).get('fs') === '1' && !document.fullscreenElement
+  );
+  useEffect(() => {
+    if (!showFsHint) return;
+    const onFsChange = () => { if (document.fullscreenElement) setShowFsHint(false); };
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, [showFsHint]);
 
   useKeyboardRelay();
 
@@ -15,17 +23,6 @@ export default function VirtualPage() {
     document.title = 'AIO Presenter — Virtual/NDI';
     document.documentElement.classList.add('virtual-mode');
     return () => document.documentElement.classList.remove('virtual-mode');
-  }, []);
-
-  // Pantalla completa automática cuando se abre con ?fs=1
-  useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('fs') !== '1') return;
-    document.documentElement.requestFullscreen?.()
-      .then(() => setShowFsHint(false))
-      .catch(() => setShowFsHint(true));
-    const onFsChange = () => { if (document.fullscreenElement) setShowFsHint(false); };
-    document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
 
   return (

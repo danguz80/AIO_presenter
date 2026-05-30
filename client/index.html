@@ -14,6 +14,17 @@
         document.write('<meta name="viewport" content="' + content + '">');
       })();
     </script>
+    <!-- Pantalla completa automática para ventanas de salida/escenario/virtual.
+         Debe ejecutarse ANTES de que React monte, mientras la user-activation
+         heredada de window.open() todavía está vigente. -->
+    <script>
+      ;(function(){
+        if (location.search.indexOf('fs=1') === -1) return;
+        var el = document.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (req) req.call(el).catch(function(){});
+      })();
+    </script>
     <title>AIO Presenter — Proyección de letras y Biblias para iglesias</title>
     <meta name="description" content="La plataforma completa para gestionar las alabanzas y proyecciones de tu iglesia. Modo Presenter para proyecciones en tiempo real y Modo Cancionero para músicos." />
     <meta name="keywords" content="proyección iglesia, letras alabanza, acordes iglesia, cancionero digital, presenter iglesia, AIO Presenter" />

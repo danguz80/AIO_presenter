@@ -57,17 +57,17 @@ export default function OutputPage() {
 
   const { slideData, isBlank, background, slideIndex, totalSlides, backgroundMedia } = liveState;
 
-  // Pantalla completa automática cuando se abre con ?fs=1 (desde "Activar salidas")
-  const [showFsHint, setShowFsHint] = useState(false);
+  // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
+  // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
+  const [showFsHint, setShowFsHint] = useState(() =>
+    new URLSearchParams(window.location.search).get('fs') === '1' && !document.fullscreenElement
+  );
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('fs') !== '1') return;
-    document.documentElement.requestFullscreen?.()
-      .then(() => setShowFsHint(false))
-      .catch(() => setShowFsHint(true));
+    if (!showFsHint) return;
     const onFsChange = () => { if (document.fullscreenElement) setShowFsHint(false); };
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, []);
+  }, [showFsHint]);
 
   return (
     <div
