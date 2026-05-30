@@ -66,12 +66,12 @@ export default function SongDetail() {
 
   // Resetear cuando cambia la canción (nueva canción = ningún slide seleccionado)
   useEffect(() => {
-    setLocalSelectedId(null);
+    setLocalSelectedKey(null);
     seenSlideIds.current = new Set();
   }, [selectedSong?.id]);
 
   // ── Estado local de selección (para el toggle deseleccionar) ────────────
-  const [localSelectedId, setLocalSelectedId] = useState(null);
+  const [localSelectedKey, setLocalSelectedKey] = useState(null);
 
   // ── Historial deshacer ────────────────────────────────────────────────────
   const undoStack = useRef([]);
@@ -205,7 +205,7 @@ export default function SongDetail() {
     if (nextIndex !== null && nextIndex !== currentIndex) {
       const slide = slides[nextIndex];
       const nextSlide = slides[nextIndex + 1] || null;
-      setLocalSelectedId(slide.id);
+      setLocalSelectedKey(`${slide.id}-${nextIndex}`);
       actions.selectSlide(slide);
       actions.showSlide({
         type:       'song',
@@ -249,7 +249,7 @@ export default function SongDetail() {
         if (!nextSong?.slides?.length) return;
         const firstSlide = nextSong.slides[0];
         const secondSlide = nextSong.slides[1] || null;
-        setLocalSelectedId(firstSlide.id);
+        setLocalSelectedKey(`${firstSlide.id}-0`);
         actions.selectSlide(firstSlide);
         actions.showSlide({
           type:       'song',
@@ -311,17 +311,17 @@ export default function SongDetail() {
   }
 
   const handleSlideClick = (slide, index) => {
-    const isAlreadySelected = localSelectedId === slide.id && liveState.slideIndex !== index;
+    const isAlreadySelected = localSelectedKey === `${slide.id}-${index}`;
     const isAlreadyLive     = isLive(slide, index);
 
     if (isAlreadySelected || isAlreadyLive) {
       // Deseleccionar y apagar live si estaba proyectando
-      setLocalSelectedId(null);
+      setLocalSelectedKey(null);
       actions.selectSlide(null);
       if (isAlreadyLive) actions.toggleBlank(true);
       return;
     }
-    setLocalSelectedId(slide.id);
+    setLocalSelectedKey(`${slide.id}-${index}`);
     const slides    = orderedSlides;
     const nextSlide = slides[index + 1] || null;
     actions.selectSlide(slide);
@@ -601,7 +601,7 @@ export default function SongDetail() {
 
             {orderedSlides.map((slide, index) => {
               const active   = isLive(slide, index);
-              const selected = localSelectedId === slide.id && liveState.slideIndex !== index;
+              const selected = localSelectedKey === `${slide.id}-${index}`;
               const labelColor = getLabelColor(slide.label);
               // Preprocesar líneas igual que el proyector: respetar saltos, filtrar comentarios
               const rawLines = (slide.content || '').split('\n');
@@ -767,7 +767,7 @@ export default function SongDetail() {
             })()}
             {orderedSlides.map((slide, index) => {
               const active     = isLive(slide, index);
-              const selected   = localSelectedId === slide.id && liveState.slideIndex !== index;
+              const selected   = localSelectedKey === `${slide.id}-${index}`;
               const labelColor = getLabelColor(slide.label);
               const visibleLines = (slide.content || '').split('\n')
                 .map(line => {
