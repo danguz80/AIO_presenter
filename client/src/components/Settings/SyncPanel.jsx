@@ -424,7 +424,7 @@ function InvitationsPanel() {
 }
 
 // ─── Panel de usuarios (admin) ────────────────────────────────────────────────
-function UsersPanel() {
+function UsersPanel({ currentUserId }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -475,7 +475,7 @@ function UsersPanel() {
             }
           </div>
           <div className="mt-1">
-            <RoleSelector value={flagsToRole(u)} onChange={role => setRole(u.id, role)} disabled={u.is_admin && !u.id} />
+            <RoleSelector value={flagsToRole(u)} onChange={role => setRole(u.id, role)} disabled={u.id === currentUserId} />
           </div>
         </div>
       ))}
@@ -600,7 +600,16 @@ export default function SyncPanel() {
     try {
       const res = await authFetch('/auth/me');
       if (!res.ok) { localStorage.removeItem('aio_sync_token'); setCheckingAuth(false); return; }
-      setUser(await res.json());
+      const userData = await res.json();
+      // Si el JWT dice isAdmin pero la DB devolvió false, intentar restaurar
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.isAdmin && !userData.is_admin) {
+          await authFetch('/auth/restore-admin', { method: 'POST' });
+          userData.is_admin = true;
+        }
+      } catch { /* ignorar errores de parse */ }
+      setUser(userData);
     } catch { /* servidor no configurado */ }
     setCheckingAuth(false);
   }, []);
@@ -995,7 +1004,7 @@ export default function SyncPanel() {
             </button>
             {showUsers && (
               <div className="mt-2">
-                <UsersPanel />
+                <UsersPanel currentUserId={user?.id} />
               </div>
             )}
           </div>

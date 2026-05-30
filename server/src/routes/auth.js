@@ -385,6 +385,21 @@ router.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+/** POST /auth/restore-admin — restaura is_admin=true si el JWT afirma que es admin */
+router.post('/restore-admin', requireAuth, async (req, res) => {
+  // Solo permite si el JWT original tenía isAdmin=true (token previo al error de UI)
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Sin permiso' });
+  try {
+    await pool.query(
+      'UPDATE sync_users SET is_admin=true, can_push=true, can_push_all=true, can_pull=true WHERE id=$1',
+      [req.user.userId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Endpoints multi-organización ───────────────────────────────────────────
 
 /** GET /auth/my-orgs — lista todas las orgs a las que pertenece el usuario */

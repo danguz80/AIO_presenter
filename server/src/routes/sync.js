@@ -896,6 +896,10 @@ router.delete('/users/:id', async (req, res) => {
 // ─── PATCH /sync/users/:id — actualizar permisos (solo admin) ────────────────
 router.patch('/users/:id', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede cambiar permisos' });
+  // Impedir que el admin se quite a sí mismo el rol de admin
+  if (String(req.params.id) === String(req.user.userId) && req.body.is_admin === false) {
+    return res.status(400).json({ error: 'No puedes quitarte el rol de admin a ti mismo' });
+  }
   const { can_push, can_push_all, can_pull, is_admin } = req.body;
   try {
     const fields = [], vals = [];
