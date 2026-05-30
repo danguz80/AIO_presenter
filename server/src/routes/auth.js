@@ -1,8 +1,8 @@
-const express = require('express');
+const express    = require('express');
 const { google } = require('googleapis');
-const jwt = require('jsonwebtoken');
-const pool = require('../config/database');
+const jwt        = require('jsonwebtoken');
 const { Resend } = require('resend');
+const pool       = require('../config/database');
 
 const router = express.Router();
 
@@ -25,9 +25,9 @@ async function notifyAdminInviteAccepted({ orgId, newUserName, newUserEmail, new
     );
     if (!rows.length) return;
     const admin = rows[0];
-    const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
+    const from = process.env.RESEND_FROM || `AIO Presenter <${process.env.ADMIN_EMAIL || 'no-reply@aiopresenter.com'}>`;
     await resend.emails.send({
-      from   : `AIO Presenter <${fromDomain}>`,
+      from,
       to     : admin.email,
       subject: `${newUserName || newUserEmail} aceptó tu invitación a AIO Presenter`,
       html   : `
@@ -482,13 +482,14 @@ router.get('/invitations', requireAuth, async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, display_name, instruments, can_push, can_push_all, created_at, expires_at, used_at, used_by
+      `SELECT id, code, email, display_name, instruments, can_push, can_push_all, created_at, expires_at, used_at, used_by
          FROM sync_invitations
         WHERE organization_id = $1
         ORDER BY created_at DESC`,
       [req.user.orgId]
     );
-    res.json(rows);
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    res.json(rows.map(r => ({ ...r, inviteUrl: `${clientUrl}/?invite=${r.code}` })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -554,7 +555,7 @@ router.post('/invite', requireAuth, async (req, res) => {
       });
     }
 
-    res.json({ ok: true, invitation, emailSent: !!resend });
+    res.json({ ok: true, invitation, inviteUrl, emailSent: !!resend });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

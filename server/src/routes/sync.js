@@ -1,10 +1,10 @@
-const express    = require('express');
-const { google } = require('googleapis');
-const { Resend } = require('resend');
-const pool       = require('../config/database');
+const express      = require('express');
+const { google }   = require('googleapis');
+const { Resend }   = require('resend');
+const pool         = require('../config/database');
 const { requireAuth } = require('./auth');
 
-// ─── Mailer (Resend — HTTPS, nunca bloqueado por Railway) ────────────────────
+// ─── Mailer (Resend — HTTPS, no bloqueado por Railway) ───────────────────────
 function getResend() {
   const key = process.env.RESEND_API_KEY;
   if (!key) return null;
@@ -13,12 +13,13 @@ function getResend() {
 
 async function sendInviteEmail({ to, label, link, expiresAt, canPush, canPushAll, inviterName, inviterEmail }) {
   const resend = getResend();
-  if (!resend) return; // RESEND_API_KEY no configurada → silencioso
-  const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
-  const displayName = inviterName ? `${inviterName} (vía AIO Presenter)` : 'AIO Presenter';
-  const from    = `${displayName} <${fromDomain}>`;
-  const expiry  = expiresAt ? `Expira el ${new Date(expiresAt).toLocaleDateString('es')}.` : 'Sin fecha de expiración.';
-  const perms   = [canPush && 'subir canciones', canPushAll && 'reemplazar toda la biblioteca'].filter(Boolean).join(', ') || 'solo lectura';
+  if (!resend) {
+    console.warn('[Mail] RESEND_API_KEY no configurada — no se enviará el correo de invitación');
+    return;
+  }
+  const from   = process.env.RESEND_FROM || `AIO Presenter <${process.env.ADMIN_EMAIL || 'no-reply@aiopresenter.com'}>`;
+  const expiry = expiresAt ? `Expira el ${new Date(expiresAt).toLocaleDateString('es')}.` : 'Sin fecha de expiración.';
+  const perms  = [canPush && 'subir canciones', canPushAll && 'reemplazar toda la biblioteca'].filter(Boolean).join(', ') || 'solo lectura';
   await resend.emails.send({
     from,
     to,
@@ -973,17 +974,17 @@ router.post('/invitations', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ─── GET /sync/test-email — test envío con Resend (solo admin) ───────────────
+// ─── GET /sync/test-email — test envío con Resend (solo admin) ──────────────
 router.get('/test-email', async (req, res) => {
   if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admin' });
   const resend = getResend();
-  if (!resend) return res.status(500).json({ error: 'RESEND_API_KEY no configurada en Railway' });
+  if (!resend) return res.status(500).json({ error: 'RESEND_API_KEY no configurada' });
   try {
-    const fromDomain = process.env.RESEND_FROM || 'no-reply@aiopresenter.com';
+    const from = process.env.RESEND_FROM || `AIO Presenter <${process.env.ADMIN_EMAIL || 'no-reply@aiopresenter.com'}>`;
     const result = await resend.emails.send({
-      from   : `AIO Presenter <${fromDomain}>`,
+      from,
       to     : req.user.email,
-      subject: '[AIO Presenter] Test Resend desde Railway',
+      subject: '[AIO Presenter] Test Resend',
       text   : `Resend OK. Enviado a: ${req.user.email}`,
     });
     res.json({ ok: true, id: result.data?.id, to: req.user.email });

@@ -4,7 +4,7 @@ import {
   ArrowLeft, User, Users, Calendar, Building2,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Check, Plus, Trash2, Save, Loader2, Lock, X, CheckCircle2, HelpCircle,
-  Mail, Send, ShieldCheck, UserPlus, Clock,
+  Mail, Send, ShieldCheck, UserPlus, Clock, Copy,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -142,6 +142,9 @@ function ProfileSection({ user, onSaved }) {
 function TeamSection({ members: initialMembers, onMembersUpdated }) {
   const [members, setMembers]       = useState(initialMembers || []);
   const [invitations, setInvitations] = useState([]);
+  const [inviteLink, setInviteLink]     = useState(null);
+  const [copied, setCopied]             = useState(false);
+  const [copiedId, setCopiedId]         = useState(null);
   const [loadingInv, setLoadingInv] = useState(true);
 
   // Campos del formulario de invitación
@@ -181,7 +184,14 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
       });
       const d = await r.json();
       if (r.ok) {
-        setSendResult({ ok: true, msg: d.emailSent ? `Invitación enviada a ${email.trim()}` : `Invitación creada (email no configurado)` });
+        const link = d.inviteUrl || (d.invitation?.code
+          ? `${window.location.origin}/?invite=${d.invitation.code}`
+          : null);
+        const msg = d.emailSent
+          ? `Email enviado a ${email.trim()}. También puedes copiar el link:`
+          : 'Invitación creada. Copia el link y envíalo manualmente:';
+        setSendResult({ ok: true, msg });
+        setInviteLink(link);
         setEmail(''); setFirstName(''); setLastName('');
         loadInvitations();
         onMembersUpdated?.();
@@ -192,6 +202,24 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
       setSendResult({ ok: false, msg: 'Error de conexión' });
     }
     setSending(false);
+  };
+
+  const copyLink = (id, url) => {
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const reinviteMember = async (member) => {
+    try {
+      const r = await fetch(`${API}/auth/invite`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ email: member.email, display_name: member.display_name, instruments: member.instruments || [] }),
+      });
+      const d = await r.json();
+      if (r.ok && d.inviteUrl) { copyLink(`reinv:${member.id}`, d.inviteUrl); loadInvitations(); onMembersUpdated?.(); }
+    } catch {}
   };
 
   const revokeInvite = async (id) => {
@@ -320,9 +348,23 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
           </button>
         </div>
         {sendResult && (
-          <p className={`mt-1.5 text-xs ${sendResult.ok ? 'text-green-400' : 'text-red-400'}`}>
-            {sendResult.ok ? '✓ ' : '✗ '}{sendResult.msg}
-          </p>
+          <div className="mt-1.5 space-y-1.5">
+            <p className={`text-xs ${sendResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {sendResult.ok ? '✓ ' : '✗ '}{sendResult.msg}
+            </p>
+            {inviteLink && (
+              <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                <p className="flex-1 text-xs text-white/50 truncate">{inviteLink}</p>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(inviteLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                  className="flex-shrink-0 flex items-center gap-1 text-xs text-yellow-300 hover:text-yellow-200 transition-colors"
+                >
+                  {copied ? <Check size={12} /> : <Copy size={12} />}
+                  {copied ? 'Copiado' : 'Copiar'}
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
@@ -350,6 +392,13 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
                       {(member.instruments || []).length > 0 ? (member.instruments || []).join(', ') : 'Sin instrumentos'}
                     </p>
                   </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); reinviteMember(member); }}
+                    className="p-1.5 hover:text-yellow-300 text-white/20 transition-colors flex-shrink-0"
+                    title="Copiar link de invitación"
+                  >
+                    {copiedId === `reinv:${member.id}` ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                  </button>
                   {isEditing ? <ChevronUp size={14} className="text-white/30 flex-shrink-0" /> : <ChevronDown size={14} className="text-white/30 flex-shrink-0" />}
                 </div>
                 {isEditing && renderInstrumentPanel(member.id, member.display_name, member.instruments, false, null)}
@@ -380,6 +429,13 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
                       {(inv.instruments || []).length > 0 ? (inv.instruments || []).join(', ') : 'Sin instrumentos pre-configurados'}
                     </p>
                   </div>
+                  <button
+                    onClick={e => { e.stopPropagation(); if (inv.inviteUrl) copyLink(inv.id, inv.inviteUrl); }}
+                    className="p-1.5 hover:text-yellow-300 text-white/20 transition-colors flex-shrink-0"
+                    title="Copiar link de invitación"
+                  >
+                    {copiedId === inv.id ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                  </button>
                   <button
                     onClick={e => { e.stopPropagation(); revokeInvite(inv.id); }}
                     className="p-1 hover:text-red-400 text-white/15 transition-colors flex-shrink-0"
