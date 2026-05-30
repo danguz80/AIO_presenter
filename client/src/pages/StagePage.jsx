@@ -38,7 +38,6 @@ export default function StagePage() {
   const outputCfg = state.outputConfig ?? {};
   const [time, setTime] = useState(new Date());
   const [lastLabel, setLastLabel] = useState(null);
-  const [showFsHint, setShowFsHint] = useState(false);
 
   // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
   // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
