@@ -577,6 +577,22 @@ export default function CancioneroSongDetail() {
     const saved = localStorage.getItem(`aio_scroll_speed_${id}`);
     return saved ? parseFloat(saved) : 2.0;
   });
+  // Sincronizar diapositivas del presentador con el auto-scroll
+  const [syncToPresenter, setSyncToPresenter] = useState(() =>
+    localStorage.getItem('aio_scroll_sync_presenter') === '1'
+  );
+  const syncToPresenterRef = useRef(syncToPresenter);
+  useEffect(() => {
+    syncToPresenterRef.current = syncToPresenter;
+    localStorage.setItem('aio_scroll_sync_presenter', syncToPresenter ? '1' : '0');
+  }, [syncToPresenter]);
+
+  // Refs para cada bloque de slide (índice en orderedSlides)
+  const slideBlockRefs = useRef({});
+  // Índice del slide activo proyectado via scroll
+  const [scrollSlideIdx, setScrollSlideIdx] = useState(null);
+  const scrollSlideIdxRef = useRef(null);
+
   const scrollRef      = useRef(null);
   const rafRef         = useRef(null);
   const lastTs         = useRef(null);
@@ -757,6 +773,61 @@ export default function CancioneroSongDetail() {
     };
   }, [scrolling]); // scrollSpeed se lee a través del ref, sin reiniciar el loop
 
+  // ── Sincronización scroll → presentador ─────────────────────────────────────
+  // Mientras scrolling && syncToPresenter, detecta cada 150ms qué slide del
+  // cancionero está visible en la parte superior del container y lo proyecta.
+  useEffect(() => {
+    if (!scrolling || !syncToPresenterRef.current) {
+      setScrollSlideIdx(null);
+      scrollSlideIdxRef.current = null;
+      return;
+    }
+    const tick = () => {
+      const container = scrollRef.current;
+      if (!container || !syncToPresenterRef.current) return;
+      const containerTop = container.getBoundingClientRect().top;
+      const entries = Object.entries(slideBlockRefs.current);
+      let bestIdx = null;
+      let bestDiff = Infinity;
+      for (const [idxStr, el] of entries) {
+        const diff = containerTop - el.getBoundingClientRect().top;
+        // diff positivo = el bloque ya pasó el tope; queremos el más reciente (diff más pequeño >= -4)
+        if (diff >= -4 && diff < bestDiff) {
+          bestDiff = diff;
+          bestIdx  = parseInt(idxStr, 10);
+        }
+      }
+      if (bestIdx !== null && bestIdx !== scrollSlideIdxRef.current) {
+        scrollSlideIdxRef.current = bestIdx;
+        setScrollSlideIdx(bestIdx);
+        // Emitir al presentador
+        const slide = orderedSlides[bestIdx];
+        if (slide && socketRef.current) {
+          const allSlides = orderedSlides.map(s => ({ id: s.id, label: s.label, content: s.content }));
+          socketRef.current.emit('live:show', {
+            type:          'song',
+            slideData:     {
+              type:       'song',
+              label:      slide.label,
+              content:    slide.content,
+              slideId:    slide.id,
+              songId:     song?.id,
+              songTitle:  song?.title,
+              songAuthor: song?.author,
+              songKey:    song?.song_key,
+            },
+            slides:        allSlides,
+            slideIndex:    bestIdx,
+          });
+        }
+      }
+    };
+    tick();
+    const intervalId = setInterval(tick, 150);
+    return () => clearInterval(intervalId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scrolling, orderedSlides, song]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0f1a2e] flex items-center justify-center">
@@ -863,6 +934,18 @@ export default function CancioneroSongDetail() {
             {scrolling ? <Pause size={11} /> : <Play size={11} />}
             {scrolling ? 'Pausar' : 'Scroll'}
           </button>
+          {/* Toggle sync presentador (compacto) */}
+          <button
+            onClick={() => setSyncToPresenter(v => !v)}
+            title={syncToPresenter ? 'Desactivar sync proyector' : 'Sincronizar proyector con scroll'}
+            className={`flex-shrink-0 px-2 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              syncToPresenter
+                ? 'bg-green-500/20 border-green-400/40 text-green-300'
+                : 'bg-white/5 border-white/10 text-white/25'
+            }`}
+          >
+            📡
+          </button>
           {/* Expand ⚙ */}
           <button
             onClick={() => setToolbarOpen(v => !v)}
@@ -956,6 +1039,18 @@ export default function CancioneroSongDetail() {
             }`}
           >
             {scrolling ? <><Pause size={12} /> Pausar</> : <><Play size={12} /> Auto-scroll</>}
+          </button>
+          {/* Toggle: sincronizar scroll con presentador */}
+          <button
+            onClick={() => setSyncToPresenter(v => !v)}
+            title={syncToPresenter ? 'Desactivar sincronización con proyector' : 'Sincronizar diapositivas del proyector con el scroll'}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              syncToPresenter
+                ? 'bg-green-500/20 border-green-400/40 text-green-300'
+                : 'bg-white/5 border-white/10 text-white/30 hover:text-white/60'
+            }`}
+          >
+            📡 {syncToPresenter ? 'Sync ON' : 'Sync OFF'}
           </button>
           {/* Key */}
           <div className="flex-shrink-0 flex items-center gap-1 bg-yellow-500/10 border border-yellow-400/25 rounded-lg px-1.5 py-1">
@@ -1070,10 +1165,15 @@ export default function CancioneroSongDetail() {
               ? orderedSlides.slice(0, idx).filter(s => s.label === slide.label).length
               : -1;
             const sectionKey = isNewSection ? `${slide.label}:${occurrenceIdx}` : null;
+            const isScrollActive = scrollSlideIdx === idx;
             return (
               <div
                 key={`${slide.id}-${idx}`}
-                ref={sectionKey ? el => { if (el) sectionRefs.current[sectionKey] = el; } : null}
+                ref={el => {
+                  if (el) slideBlockRefs.current[idx] = el;
+                  if (el && sectionKey) sectionRefs.current[sectionKey] = el;
+                }}
+                className={isScrollActive && syncToPresenter ? 'ring-1 ring-green-400/30 rounded-lg' : ''}
               >
                 {/* Separador entre secciones */}
                 {isNewSection && idx > 0 && (
