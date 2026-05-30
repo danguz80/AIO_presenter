@@ -240,11 +240,16 @@ async function syncTemplates(drive, folderId, lastSyncAt) {
       if (typeof data === 'string') data = JSON.parse(data);
       for (const tpl of data.templates || []) {
         if (!tpl.name) continue;
-        await pool.query(
-          `INSERT INTO event_templates (name, items) VALUES ($1, $2)
-           ON CONFLICT (name) DO UPDATE SET items = EXCLUDED.items`,
-          [tpl.name, JSON.stringify(tpl.items || [])]
+        const { rows: existing } = await pool.query(
+          'SELECT id FROM event_templates WHERE name=$1', [tpl.name]
         );
+        if (existing.length) {
+          await pool.query('UPDATE event_templates SET items=$1 WHERE id=$2',
+            [JSON.stringify(tpl.items || []), existing[0].id]);
+        } else {
+          await pool.query('INSERT INTO event_templates (name, items) VALUES ($1,$2)',
+            [tpl.name, JSON.stringify(tpl.items || [])]);
+        }
       }
     } catch (e) {
       console.warn('[Sync] Error importando plantillas:', e.message);
@@ -448,7 +453,9 @@ async function runConcurrently(items, concurrency, fn) {
 
 // ─── POST /sync/smart — sincronización bidireccional (gana el más reciente) ──
 router.post('/smart', async (req, res) => {
-  if (!req.user.canPush && !req.user.isAdmin) {
+  const canUpload   = req.user.isAdmin || req.user.canPush;
+  const canDownload = req.user.isAdmin || req.user.canPull;
+  if (!canUpload && !canDownload) {
     return res.status(403).json({ error: 'Sin permiso para sincronizar. Solicita acceso al admin.' });
   }
   try {
@@ -460,6 +467,15 @@ router.post('/smart', async (req, res) => {
       'SELECT last_sync_at FROM sync_users WHERE id=$1', [req.user.userId]
     );
     const lastSyncAt = userRow?.last_sync_at || null;
+
+    // Bootstrap: canciones que ya existen en Drive pero nunca tuvieron drive_synced_at.
+    // Sin esto, cada sync las procesaría todas (syncedAt=epoch → skip nunca se cumple).
+    // Las marcamos con updated_at para que solo se detecten cambios POSTERIORES a esa fecha.
+    await pool.query(
+      `UPDATE songs SET drive_synced_at = updated_at
+       WHERE organization_id = $1 AND drive_file_id IS NOT NULL AND drive_synced_at IS NULL`,
+      [req.user.orgId]
+    );
 
     // Obtener todas las canciones locales con slides
     const { rows: localSongs } = await pool.query(`
@@ -490,7 +506,8 @@ router.post('/smart', async (req, res) => {
       const driveFile = song.drive_file_id ? driveByFileId[song.drive_file_id] : driveByName[fileName];
 
       if (!driveFile) {
-        // No existe en Drive → subir
+        // No existe en Drive → subir (solo si tiene permiso)
+        if (!canUpload) { skippedCount++; return; }
         const uploaded = await uploadSongToDrive(drive, song, folderId, null);
         await pool.query('UPDATE songs SET drive_file_id=$1, drive_synced_at=NOW() WHERE id=$2',
           [uploaded.id, song.id]);
@@ -507,7 +524,8 @@ router.post('/smart', async (req, res) => {
       if (localTime <= syncedAt && driveTime <= syncedAt) { skippedCount++; return; }
 
       if (driveTime > localTime) {
-        // Drive es más reciente → descargar y actualizar local
+        // Drive es más reciente → descargar (solo si tiene permiso)
+        if (!canDownload) { skippedCount++; return; }
         let songData;
         try {
           songData = await downloadDriveFile(drive, driveFile.id);
@@ -525,7 +543,8 @@ router.post('/smart', async (req, res) => {
         await bulkInsertSlides(pool, song.id, songData.slides || []);
         downloadedCount++;
       } else {
-        // Local es más reciente → subir a Drive
+        // Local es más reciente → subir (solo si tiene permiso)
+        if (!canUpload) { skippedCount++; return; }
         await uploadSongToDrive(drive, song, folderId, driveFile.id);
         await pool.query('UPDATE songs SET drive_file_id=$1, drive_synced_at=NOW() WHERE id=$2',
           [driveFile.id, song.id]);
@@ -533,17 +552,19 @@ router.post('/smart', async (req, res) => {
       }
     });
 
-    // Canciones en Drive que no existen localmente → descargar (también en paralelo)
-    const newDriveFiles = driveFiles.filter(f => !processedDriveIds.has(f.id));
-    await runConcurrently(newDriveFiles, 5, async (driveFile) => {
-      let songData;
-      try {
-        songData = await downloadDriveFile(drive, driveFile.id);
-        if (typeof songData === 'string') songData = JSON.parse(songData);
-      } catch { return; }
-      const result = await importSongFromData(songData, driveFile.id);
-      if (result) downloadedCount++;
-    });
+    // Canciones en Drive que no existen localmente → descargar (solo si tiene permiso)
+    if (canDownload) {
+      const newDriveFiles = driveFiles.filter(f => !processedDriveIds.has(f.id));
+      await runConcurrently(newDriveFiles, 5, async (driveFile) => {
+        let songData;
+        try {
+          songData = await downloadDriveFile(drive, driveFile.id);
+          if (typeof songData === 'string') songData = JSON.parse(songData);
+        } catch { return; }
+        const result = await importSongFromData(songData, driveFile.id);
+        if (result) downloadedCount++;
+      });
+    }
 
     // Sincronizar plantillas y eventos (en paralelo entre sí)
     await Promise.all([
