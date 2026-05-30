@@ -16,8 +16,10 @@ const getAllSongs = async (req, res) => {
 
     let query = `
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.language, s.tags,
-             s.song_key, s.bpm, s.time_sig, s.link, s.structure, s.created_at
+             s.song_key, s.bpm, s.time_sig, s.link, s.structure, s.created_at,
+             s.updated_at, su.email AS updated_by_email, su.display_name AS updated_by_name
       FROM songs s
+      LEFT JOIN sync_users su ON su.id = s.updated_by
       WHERE s.organization_id = $1
     `;
 
@@ -75,10 +77,11 @@ const createSong = async (req, res) => {
     await client.query('BEGIN');
 
     const songResult = await client.query(
-      `INSERT INTO songs (title, author, copyright, ccli, language, tags, song_key, bpm, time_sig, link, organization_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+      `INSERT INTO songs (title, author, copyright, ccli, language, tags, song_key, bpm, time_sig, link, organization_id, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
       [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
-       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null, orgId]
+       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null, orgId,
+       req.user?.userId || null]
     );
     const song = songResult.rows[0];
 
@@ -119,10 +122,11 @@ const updateSong = async (req, res) => {
 
     const result = await client.query(
       `UPDATE songs SET title=$1, author=$2, copyright=$3, ccli=$4, language=$5, tags=$6,
-       song_key=$7, bpm=$8, time_sig=$9, link=$10, updated_at=NOW()
-       WHERE id=$11 AND organization_id=$12 RETURNING *`,
+       song_key=$7, bpm=$8, time_sig=$9, link=$10, updated_at=NOW(), updated_by=$11
+       WHERE id=$12 AND organization_id=$13 RETURNING *`,
       [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
-       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null, id, orgId]
+       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null,
+       req.user?.userId || null, id, orgId]
     );
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');

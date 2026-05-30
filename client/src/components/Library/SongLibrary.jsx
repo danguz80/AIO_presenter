@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { usePresenter }  from '../../context/usePresenter';
 import SongFormModal     from './SongFormModal';
 import ImportModal       from './ImportModal';
-import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check } from 'lucide-react';
+import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check, Clock } from 'lucide-react';
 import api from '../../hooks/useApi';
 
 // ─── Modal de asignación de etiquetas ────────────────────────────────────────
@@ -105,6 +105,18 @@ function LabelPickerModal({ selectedSongs, allTags, onClose, onApply, onRefreshT
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
+function formatRelativeDate(dateStr) {
+  if (!dateStr) return null;
+  const d    = new Date(dateStr);
+  const now  = new Date();
+  const diff = Math.floor((now - d) / 1000); // segundos
+  if (diff < 60)           return 'hace un momento';
+  if (diff < 3600)         return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 86400)        return `hace ${Math.floor(diff / 3600)} h`;
+  if (diff < 86400 * 7)    return `hace ${Math.floor(diff / 86400)} días`;
+  return d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: diff > 86400 * 365 ? 'numeric' : undefined });
+}
+
 export default function SongLibrary() {
   const { state, actions } = usePresenter();
   const [search,      setSearch]      = useState('');
@@ -325,6 +337,21 @@ export default function SongLibrary() {
                     <p className="text-sm text-zinc-100 truncate">{song.title}</p>
                     {song.author && (
                       <p className="text-xs text-zinc-500 truncate">{song.author}</p>
+                    )}
+                    {/* Última edición */}
+                    {song.updated_at && (
+                      <p className="text-[10px] text-zinc-600 truncate flex items-center gap-1 mt-0.5">
+                        <Clock size={9} className="shrink-0" />
+                        {formatRelativeDate(song.updated_at)}
+                        {(song.updated_by_name || song.updated_by_email) && (
+                          <span className="text-zinc-700">·</span>
+                        )}
+                        {song.updated_by_name
+                          ? <span className="truncate max-w-[100px]">{song.updated_by_name}</span>
+                          : song.updated_by_email
+                            ? <span className="truncate max-w-[100px]">{song.updated_by_email.split('@')[0]}</span>
+                            : null}
+                      </p>
                     )}
                     {song.tags && song.tags.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-0.5">
