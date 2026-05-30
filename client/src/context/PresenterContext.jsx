@@ -152,6 +152,13 @@ const initialState = {
     bibleRefFontFamily:   'sans',
     bibleRefFontSize:     24,
     bibleVersionPosition: 'inline-right',
+    // Logo en pantalla en negro (blank)
+    logoEnabled:   false,
+    logoMedia:     null,   // { url, mediaType, fileName }
+    logoSize:      30,     // % del ancho de pantalla
+    logoPosition:  'center',
+    logoBgColor:   '#000000',
+    logoFit:       'contain',
   },
 
   // Plantillas de la pantalla principal

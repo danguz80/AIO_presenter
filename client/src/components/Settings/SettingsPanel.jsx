@@ -7,12 +7,14 @@ import VirtualControls from '../Controls/VirtualControls';
 import DisplaysPanel   from './DisplaysPanel';
 import ThemePanel      from './ThemePanel';
 import SyncPanel       from './SyncPanel';
+import GeneralPanel    from './GeneralPanel';
 
 export default function SettingsPanel({ mobileUrl, onClose }) {
-  const [showQR, setShowQR]             = useState(false);
-  const [showSalidas, setShowSalidas]   = useState(false);
-  const [showTema, setShowTema]         = useState(false);
-  const [showSync, setShowSync]         = useState(false);
+  const [showQR,      setShowQR]      = useState(false);
+  const [showGeneral, setShowGeneral] = useState(false);
+  const [showSalidas, setShowSalidas] = useState(false);
+  const [showTema,    setShowTema]    = useState(false);
+  const [showSync,    setShowSync]    = useState(false);
 
   return (
     <>
@@ -71,6 +73,25 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
           <OutputControls />
           <StageControls />
           <VirtualControls />
+
+          {/* Sección: General (colapsable) */}
+          <div className="border-b border-surface-700">
+            <button
+              onClick={() => setShowGeneral(v => !v)}
+              className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-surface-700/50 transition-colors"
+            >
+              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">General</span>
+              <ChevronDown
+                size={14}
+                className={`text-zinc-500 transition-transform duration-200 ${showGeneral ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {showGeneral && (
+              <div className="px-4 pb-4">
+                <GeneralPanel />
+              </div>
+            )}
+          </div>
 
           {/* Sección: Tema (colapsable) */}
           <div className="border-b border-surface-700">

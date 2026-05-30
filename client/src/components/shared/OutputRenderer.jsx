@@ -81,8 +81,30 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
   const effectiveBgMedia = bibleTemplateActive ? cfg.bibleBackground : (hasBgMedia ? backgroundMedia : null);
   const hasBg = !!effectiveBgMedia && (effectiveBgMedia.mediaType !== 'video' || (cfg.showVideo ?? true));
 
+  // Logo en pantalla en negro
+  const logoEnabled  = cfg.logoEnabled  ?? false;
+  const logoMedia    = cfg.logoMedia    ?? null;
+  const logoSize     = cfg.logoSize     ?? 30;
+  const logoPosition = cfg.logoPosition ?? 'center';
+  const logoBgColor  = cfg.logoBgColor  ?? '#000000';
+  const logoFit      = cfg.logoFit      ?? 'contain';
+  const showLogo     = isBlank && logoEnabled && !!logoMedia;
+
+  // Calcula estilos de posición para el logo
+  const logoContainerStyle = (() => {
+    const [v, h] = logoPosition.split('-');
+    const top    = v === 'top'    ? '5%'  : v === 'bottom' ? 'auto' : '50%';
+    const bottom = v === 'bottom' ? '5%'  : 'auto';
+    const left   = h === 'left'   ? '5%'  : h === 'right' ? 'auto' : '50%';
+    const right  = h === 'right'  ? '5%'  : 'auto';
+    const transform = v === 'center'
+      ? (h === 'center' ? 'translate(-50%, -50%)' : 'translateY(-50%)')
+      : h === 'center' ? 'translateX(-50%)' : 'none';
+    return { position: 'absolute', top, bottom, left, right, transform, width: `${logoSize}%`, zIndex: 1 };
+  })();
+
   return (
-    <div style={{ ...(hasBg ? { backgroundColor: '#000' } : bgStyle), width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+    <div style={{ ...(showLogo ? { backgroundColor: logoBgColor } : hasBg ? { backgroundColor: '#000' } : bgStyle), width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
       {/* Capa de fondo multimedia */}
       {hasBg && (
         effectiveBgMedia.mediaType === 'video'
@@ -97,6 +119,29 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
           <SlideContent slideData={slideData} cfg={cfg} />
         </div>
       ) : null}
+      {/* Logo en pantalla en negro */}
+      {showLogo && (
+        <div style={logoContainerStyle}>
+          {logoMedia.mediaType === 'video' ? (
+            <video
+              key={logoMedia.url}
+              src={logoMedia.url}
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{ width: '100%', objectFit: logoFit, display: 'block' }}
+            />
+          ) : (
+            <img
+              key={logoMedia.url}
+              src={logoMedia.url}
+              alt="logo"
+              style={{ width: '100%', objectFit: logoFit, display: 'block' }}
+            />
+          )}
+        </div>
+      )}
       {showProgress && (
         <div style={{ ...progressPosStyle, zIndex: 2 }}>
           {(slideIndex ?? 0) + 1} / {totalSlides}
