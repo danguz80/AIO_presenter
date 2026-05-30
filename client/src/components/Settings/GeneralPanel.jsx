@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Film, Image, X, Trash2, AlertTriangle } from 'lucide-react';
+import { Film, Image, X, Trash2, AlertTriangle, Check } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import {
   FSA_SUPPORTED,
@@ -282,8 +282,15 @@ export default function GeneralPanel() {
   const logoFit      = cfg.logoFit      ?? 'contain';
 
   const [showPicker, setShowPicker] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   const update = (patch) => actions.setOutputConfig({ ...cfg, ...patch });
+
+  const handleSave = () => {
+    actions.setOutputConfig({ ...cfg });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   const thumbSrc = logoMedia?.filePath
     ? `${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(logoMedia.filePath)}`
@@ -395,11 +402,11 @@ export default function GeneralPanel() {
               />
             </div>
 
-            {/* Ajuste (contain / cover) */}
+            {/* Ajuste (contain / cover / fill) */}
             <div className="flex items-center justify-between">
               <span className="text-xs text-zinc-300">Ajuste</span>
               <div className="flex gap-1">
-                {['contain', 'cover'].map(f => (
+                {[['contain','Ajustar'], ['cover','Rellenar'], ['fill','Estirar']].map(([f, label]) => (
                   <button
                     key={f}
                     onClick={() => update({ logoFit: f })}
@@ -409,7 +416,7 @@ export default function GeneralPanel() {
                         : 'bg-surface-700 text-zinc-400 border-surface-600 hover:text-zinc-200'
                     }`}
                   >
-                    {f === 'contain' ? 'Ajustar' : 'Rellenar'}
+                    {label}
                   </button>
                 ))}
               </div>
@@ -439,6 +446,18 @@ export default function GeneralPanel() {
                 ))}
               </div>
             </div>
+
+            {/* Botón Guardar */}
+            <button
+              onClick={handleSave}
+              className={`w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                saved
+                  ? 'bg-green-500/20 border-green-500/40 text-green-300'
+                  : 'bg-accent/15 border-accent/40 text-accent hover:bg-accent/25'
+              }`}
+            >
+              {saved ? <><Check size={12} /> Guardado y sincronizado</> : 'Guardar configuración'}
+            </button>
           </div>
         )}
       </div>
