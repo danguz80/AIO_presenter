@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import { Music, ZoomIn, ZoomOut, LayoutList, LayoutGrid } from 'lucide-react';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
@@ -23,6 +23,43 @@ export default function SongDetail() {
     injectGoogleFont(outputCfg.titleFontFamily);
     injectGoogleFont(outputCfg.artistFontFamily);
   }, [outputCfg.fontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
+
+  // ── Estructura activa (misma lógica que cancionero) ───────────────────────
+  const [activeStructIdx, setActiveStructIdx] = useState(0);
+  // Reiniciar índice al cambiar de canción y cargar el guardado en localStorage
+  useEffect(() => {
+    if (!selectedSong?.id) return;
+    const saved = localStorage.getItem(`aio_active_struct_${selectedSong.id}`);
+    setActiveStructIdx(saved !== null ? Math.max(0, parseInt(saved, 10)) : 0);
+  }, [selectedSong?.id]);
+  useEffect(() => {
+    if (!selectedSong?.id) return;
+    localStorage.setItem(`aio_active_struct_${selectedSong.id}`, String(activeStructIdx));
+  }, [activeStructIdx, selectedSong?.id]);
+
+  const allStructures = useMemo(() => {
+    if (!selectedSong) return [];
+    if (Array.isArray(selectedSong.structures) && selectedSong.structures.length > 0)
+      return selectedSong.structures;
+    if (Array.isArray(selectedSong.structure) && selectedSong.structure.length > 0)
+      return [{ name: 'Estructura 1', items: selectedSong.structure }];
+    return [];
+  }, [selectedSong?.id, selectedSong?.structures, selectedSong?.structure]);
+
+  const orderedSlides = useMemo(() => {
+    const rawSlides = selectedSong?.slides ?? [];
+    const items = allStructures[Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))]?.items ?? [];
+    if (!items.length || !rawSlides.length) return rawSlides;
+    const byLabel = {};
+    for (const s of rawSlides) {
+      const lbl = s.label?.trim() ?? '';
+      if (!byLabel[lbl]) byLabel[lbl] = [];
+      byLabel[lbl].push(s);
+    }
+    const result = [];
+    for (const lbl of items) result.push(...(byLabel[lbl] ?? []));
+    return result.length > 0 ? result : rawSlides;
+  }, [selectedSong?.id, selectedSong?.slides, allStructures, activeStructIdx]);
 
   // ── Tracking slides vistos para auto-marcar ──────────────────────────────
   const seenSlideIds = useRef(new Set());
@@ -155,7 +192,7 @@ export default function SongDetail() {
 
   // Función central de navegación (reutilizada por teclado, relay y móvil)
   const navigate = async (dir) => {
-    const slides = selectedSong?.slides;
+    const slides = orderedSlides;
     if (!slides || slides.length === 0) return;
     const currentIndex = selectedSlide
       ? slides.findIndex(s => s.id === selectedSlide.id)
@@ -285,7 +322,7 @@ export default function SongDetail() {
       return;
     }
     setLocalSelectedId(slide.id);
-    const slides    = selectedSong.slides;
+    const slides    = orderedSlides;
     const nextSlide = slides[index + 1] || null;
     actions.selectSlide(slide);
     actions.showSlide({
@@ -322,7 +359,7 @@ export default function SongDetail() {
     }
     actions.showSlide({
       type: 'title-direct',
-      slides: selectedSong?.slides,
+      slides: orderedSlides,
       slideIndex: -1,
       slideData: {
         type:            'title',
@@ -332,8 +369,8 @@ export default function SongDetail() {
         songKey:         selectedSong?.song_key || null,
         slideBackground: outputCfg?.titleBackground || null,
       },
-      nextSlideData: selectedSong?.slides?.[0]
-        ? { type: 'song', label: selectedSong.slides[0].label, content: selectedSong.slides[0].content }
+      nextSlideData: orderedSlides[0]
+        ? { type: 'song', label: orderedSlides[0].label, content: orderedSlides[0].content }
         : null,
     });
   };
@@ -342,7 +379,7 @@ export default function SongDetail() {
   const trackSlide = (slideId) => {
     if (!selectedSong || !eventPlaysContext) return;
     seenSlideIds.current.add(slideId);
-    const total = selectedSong.slides?.length || 0;
+    const total = orderedSlides?.length || 0;
     const seen  = seenSlideIds.current.size;
     if (total === 0) return;
     const alreadyPlayed = eventPlays?.has(selectedSong.id);
@@ -414,8 +451,24 @@ export default function SongDetail() {
               ><ZoomIn size={13} /></button>
             </div>
           )}
+          {allStructures.length > 1 && (
+            <div className="flex items-center gap-1 border border-surface-600 rounded overflow-hidden">
+              {allStructures.map((s, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveStructIdx(i)}
+                  className={`px-2 py-1 text-[10px] font-semibold transition-colors ${
+                    i === activeStructIdx
+                      ? 'bg-accent text-white'
+                      : 'text-zinc-500 hover:text-zinc-300 hover:bg-surface-600'
+                  }`}
+                  title={`Estructura: ${s.name}`}
+                >{s.name}</button>
+              ))}
+            </div>
+          )}
           <span className="text-xs text-zinc-600">
-            {selectedSong.slides?.length || 0} diapositivas
+            {orderedSlides.length} diapositivas
           </span>
         </div>
       </div>
@@ -423,7 +476,7 @@ export default function SongDetail() {
       {/* Panel de grupos / etiquetas */}
       {(() => {
         const seen = new Set();
-        const labels = (selectedSong.slides || []).reduce((acc, s) => {
+        const labels = (orderedSlides).reduce((acc, s) => {
           const lbl = s.label?.trim();
           if (lbl && !seen.has(lbl)) { seen.add(lbl); acc.push(lbl); }
           return acc;
@@ -433,8 +486,8 @@ export default function SongDetail() {
           <div className="px-3 pt-2 pb-1 border-b border-surface-700 flex flex-wrap gap-1 shrink-0">
             {labels.map(lbl => {
               const color = getLabelColor(lbl);
-              const count = selectedSong.slides.filter(s => s.label?.trim() === lbl).length;
-              const firstSlide = selectedSong.slides.find(s => s.label?.trim() === lbl);
+              const count = orderedSlides.filter(s => s.label?.trim() === lbl).length;
+              const firstSlide = orderedSlides.find(s => s.label?.trim() === lbl);
               return (
                 <button
                   key={lbl}
@@ -447,9 +500,10 @@ export default function SongDetail() {
                   onDragEnd={() => { setDragLabel(null); setDropBefore(null); }}
                   onClick={() => {
                     // Insertar después del slide seleccionado, o al final
+                    const rawSlides = selectedSong.slides ?? [];
                     const insertIdx = selectedSlide
-                      ? selectedSong.slides.findIndex(s => s.id === selectedSlide.id) + 1
-                      : selectedSong.slides.length;
+                      ? rawSlides.findIndex(s => s.id === selectedSlide.id) + 1
+                      : rawSlides.length;
                     handleGroupDrop(lbl, insertIdx);
                   }}
                   className="px-2 py-0.5 rounded text-[10px] font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity cursor-grab active:cursor-grabbing text-white"
@@ -467,7 +521,7 @@ export default function SongDetail() {
 
       {/* Grid / Lista de slides */}
       <div className={`flex-1 overflow-y-auto ${viewMode === 'grid' ? 'p-3' : ''}`}>
-        {!selectedSong.slides || selectedSong.slides.length === 0 ? (
+        {orderedSlides.length === 0 ? (
           <p className="text-zinc-600 text-sm p-4">Esta canción no tiene secciones.</p>
         ) : viewMode === 'grid' ? (
           <div
@@ -478,7 +532,7 @@ export default function SongDetail() {
               e.preventDefault();
               const lbl = e.dataTransfer.getData('text/plain');
               // Si soltó en el contenedor (no en un slide específico), agrega al final
-              if (dropBefore === null) handleGroupDrop(lbl, selectedSong.slides.length);
+              if (dropBefore === null) handleGroupDrop(lbl, (selectedSong.slides ?? []).length);
             }}
           >
             {/* ── Thumbnail de título (si está habilitado) ─────────── */}
@@ -544,7 +598,7 @@ export default function SongDetail() {
               );
             })()}
 
-            {selectedSong.slides.map((slide, index) => {
+            {orderedSlides.map((slide, index) => {
               const active   = isLive(slide);
               const selected = localSelectedId === slide.id;
               const labelColor = getLabelColor(slide.label);
@@ -710,7 +764,7 @@ export default function SongDetail() {
                 </div>
               );
             })()}
-            {selectedSong.slides.map((slide, index) => {
+            {orderedSlides.map((slide, index) => {
               const active     = isLive(slide);
               const selected   = localSelectedId === slide.id;
               const labelColor = getLabelColor(slide.label);
