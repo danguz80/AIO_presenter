@@ -270,7 +270,7 @@ router.get('/google/callback', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, sync_direction, drive_folder_id, organization_id, instruments FROM sync_users WHERE id = $1',
+      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, can_pull, sync_direction, drive_folder_id, organization_id, instruments FROM sync_users WHERE id = $1',
       [req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });

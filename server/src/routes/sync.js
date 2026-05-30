@@ -141,10 +141,22 @@ async function downloadDriveFile(drive, fileId) {
 }
 
 // ─── Helper: cliente Drive del admin (todos los usuarios usan su carpeta) ─────
-async function getAdminDriveClient() {
-  const { rows: [admin] } = await pool.query(
-    'SELECT id, access_token, refresh_token, token_expiry, drive_folder_id FROM sync_users WHERE is_admin=true LIMIT 1'
-  );
+async function getAdminDriveClient(orgId) {
+  // Buscar admin de la org específica; si no hay, buscar cualquier admin
+  let admin;
+  if (orgId) {
+    const { rows } = await pool.query(
+      'SELECT id, access_token, refresh_token, token_expiry, drive_folder_id FROM sync_users WHERE organization_id=$1 AND is_admin=true LIMIT 1',
+      [orgId]
+    );
+    admin = rows[0];
+  }
+  if (!admin) {
+    const { rows } = await pool.query(
+      'SELECT id, access_token, refresh_token, token_expiry, drive_folder_id FROM sync_users WHERE is_admin=true LIMIT 1'
+    );
+    admin = rows[0];
+  }
   if (!admin) throw new Error('No hay ningún admin configurado');
   if (!admin.drive_folder_id) throw new Error('El admin no ha configurado la carpeta de Drive en Configuración → Sincronización');
   const oauth2Client = new google.auth.OAuth2(
@@ -384,7 +396,8 @@ router.get('/status', async (req, res) => {
     `, [req.user.orgId]);
 
     const { rows: [adminRow] } = await pool.query(
-      'SELECT drive_folder_id FROM sync_users WHERE is_admin=true LIMIT 1'
+      'SELECT drive_folder_id FROM sync_users WHERE organization_id=$1 AND is_admin=true LIMIT 1',
+      [req.user.orgId]
     );
     res.json({
       user,
@@ -417,7 +430,7 @@ router.post('/smart', async (req, res) => {
     return res.status(403).json({ error: 'Sin permiso para sincronizar. Solicita acceso al admin.' });
   }
   try {
-    const { auth, folderId } = await getAdminDriveClient();
+    const { auth, folderId } = await getAdminDriveClient(req.user.orgId);
     const drive = google.drive({ version: 'v3', auth });
 
     // Obtener last_sync_at antes de actualizar
@@ -529,7 +542,7 @@ router.post('/smart', async (req, res) => {
 router.post('/pull', async (req, res) => {
   if (!req.user.canPull && !req.user.isAdmin) return res.status(403).json({ error: 'Sin permisos para descargar' });
   try {
-    const { auth, folderId } = await getAdminDriveClient();
+    const { auth, folderId } = await getAdminDriveClient(req.user.orgId);
     const drive = google.drive({ version: 'v3', auth });
 
     const driveFiles = await getDriveFiles(drive, folderId);
@@ -627,7 +640,7 @@ router.post('/push', async (req, res) => {
 
     if (!songsToSync.length) return res.json({ ok: true, pushed: 0, message: 'No hay cambios que sincronizar' });
 
-    const { auth, folderId } = await getAdminDriveClient();
+    const { auth, folderId } = await getAdminDriveClient(req.user.orgId);
     const drive = google.drive({ version: 'v3', auth });
 
     let pushed = 0;
@@ -659,7 +672,7 @@ router.post('/replace-all', async (req, res) => {
     return res.status(403).json({ error: 'Operación no autorizada. Solo el admin puede reemplazar toda la biblioteca en la nube.' });
   }
   try {
-    const { auth, folderId } = await getAdminDriveClient();
+    const { auth, folderId } = await getAdminDriveClient(req.user.orgId);
     const drive = google.drive({ version: 'v3', auth });
 
     // Obtener todas las canciones locales con sus slides
@@ -702,7 +715,7 @@ router.post('/backup/drive', async (req, res) => {
     return res.status(403).json({ error: 'Sin permiso para crear backups en Drive.' });
   }
   try {
-    const { auth, folderId } = await getAdminDriveClient();
+    const { auth, folderId } = await getAdminDriveClient(req.user.orgId);
     const drive = google.drive({ version: 'v3', auth });
 
     const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
