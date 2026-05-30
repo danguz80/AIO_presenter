@@ -4,6 +4,23 @@ const { Resend }   = require('resend');
 const pool         = require('../config/database');
 const { requireAuth } = require('./auth');
 
+// ─── Helper: bulk insert de slides (evita N queries individuales) ─────────────
+async function bulkInsertSlides(client, songId, slides) {
+  if (!slides || slides.length === 0) return;
+  // Construye un único INSERT con todos los valores
+  const values = [];
+  const params = [];
+  slides.forEach((slide, idx) => {
+    const base = idx * 4;
+    params.push(`($${base+1},$${base+2},$${base+3},$${base+4})`);
+    values.push(songId, slide.label || '', slide.content || '', slide.position ?? idx);
+  });
+  await client.query(
+    `INSERT INTO song_slides (song_id, label, content, position) VALUES ${params.join(',')}`,
+    values
+  );
+}
+
 // ─── Mailer (Resend — HTTPS, no bloqueado por Railway) ───────────────────────
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -359,10 +376,7 @@ async function importSongFromData(songData, driveFileId) {
        songData.ccli || null, songData.song_key || null, songData.tags || [], driveFileId, songId]
     );
     await pool.query('DELETE FROM song_slides WHERE song_id=$1', [songId]);
-    for (const [idx, slide] of songData.slides.entries()) {
-      await pool.query('INSERT INTO song_slides (song_id,label,content,position) VALUES ($1,$2,$3,$4)',
-        [songId, slide.label || '', slide.content || '', slide.position ?? idx]);
-    }
+    await bulkInsertSlides(pool, songId, songData.slides);
     return { action: 'updated', id: songId };
   } else {
     const { rows: [newSong] } = await pool.query(
@@ -371,10 +385,7 @@ async function importSongFromData(songData, driveFileId) {
       [songData.title, songData.author || null, songData.copyright || null,
        songData.ccli || null, songData.song_key || null, songData.tags || [], driveFileId]
     );
-    for (const [idx, slide] of songData.slides.entries()) {
-      await pool.query('INSERT INTO song_slides (song_id,label,content,position) VALUES ($1,$2,$3,$4)',
-        [newSong.id, slide.label || '', slide.content || '', slide.position ?? idx]);
-    }
+    await bulkInsertSlides(pool, newSong.id, songData.slides);
     return { action: 'created', id: newSong.id };
   }
 }
@@ -499,10 +510,7 @@ router.post('/smart', async (req, res) => {
            driveFile.id, song.id]
         );
         await pool.query('DELETE FROM song_slides WHERE song_id=$1', [song.id]);
-        for (const [idx, slide] of (songData.slides || []).entries()) {
-          await pool.query('INSERT INTO song_slides (song_id,label,content,position) VALUES ($1,$2,$3,$4)',
-            [song.id, slide.label || '', slide.content || '', slide.position ?? idx]);
-        }
+        await bulkInsertSlides(pool, song.id, songData.slides || []);
         downloadedCount++;
       } else {
         // Local es más reciente → subir a Drive
@@ -585,12 +593,7 @@ router.post('/pull', async (req, res) => {
         );
         // Reemplazar slides
         await pool.query('DELETE FROM song_slides WHERE song_id=$1', [songId]);
-        for (const [idx, slide] of (songData.slides || []).entries()) {
-          await pool.query(
-            'INSERT INTO song_slides (song_id, label, content, position) VALUES ($1,$2,$3,$4)',
-            [songId, slide.label || '', slide.content || '', slide.position ?? idx]
-          );
-        }
+        await bulkInsertSlides(pool, songId, songData.slides || []);
         updated++;
       } else {
         // Crear nueva canción
@@ -601,12 +604,7 @@ router.post('/pull', async (req, res) => {
            songData.ccli || null, songData.song_key || null,
            songData.tags || [], file.id, req.user.orgId]
         );
-        for (const [idx, slide] of (songData.slides || []).entries()) {
-          await pool.query(
-            'INSERT INTO song_slides (song_id, label, content, position) VALUES ($1,$2,$3,$4)',
-            [newSong.id, slide.label || '', slide.content || '', slide.position ?? idx]
-          );
-        }
+        await bulkInsertSlides(pool, newSong.id, songData.slides || []);
         created++;
       }
     }
@@ -838,12 +836,7 @@ router.post('/backup/restore', async (req, res) => {
            song.song_key || null, song.tags || [], songId]
         );
         await pool.query('DELETE FROM song_slides WHERE song_id=$1', [songId]);
-        for (const [idx, slide] of song.slides.entries()) {
-          await pool.query(
-            'INSERT INTO song_slides (song_id, label, content, position) VALUES ($1,$2,$3,$4)',
-            [songId, slide.label || '', slide.content || '', slide.position ?? idx]
-          );
-        }
+        await bulkInsertSlides(pool, songId, song.slides);
         updated++;
       } else {
         const { rows: [newSong] } = await pool.query(
@@ -852,12 +845,7 @@ router.post('/backup/restore', async (req, res) => {
           [song.title, song.author || null, song.copyright || null,
            song.ccli || null, song.song_key || null, song.tags || []]
         );
-        for (const [idx, slide] of song.slides.entries()) {
-          await pool.query(
-            'INSERT INTO song_slides (song_id, label, content, position) VALUES ($1,$2,$3,$4)',
-            [newSong.id, slide.label || '', slide.content || '', slide.position ?? idx]
-          );
-        }
+        await bulkInsertSlides(pool, newSong.id, song.slides);
         created++;
       }
     }
