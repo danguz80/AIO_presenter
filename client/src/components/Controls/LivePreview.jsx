@@ -139,6 +139,29 @@ export default function LivePreview() {
 
   const toggleOutputs = () => outputsActive ? deactivateOutputs() : activateOutputs();
 
+  // Cuando la ventana de output entra a fullscreen, hacer focus a la de escenario
+  // para que el siguiente spacebar la ponga en fullscreen también.
+  useEffect(() => {
+    if (!outputsActive) return;
+    let ch;
+    try {
+      ch = new BroadcastChannel('aio_fullscreen');
+      ch.onmessage = (e) => {
+        if (e.data?.type !== 'window:fullscreen') return;
+        const path = e.data.path ?? '';
+        // Si fue la pantalla principal (/output) → focus a escenario
+        if (path.includes('/output') && stageWinRef.current && !stageWinRef.current.closed) {
+          try { stageWinRef.current.focus(); } catch(_) {}
+        }
+        // Si fue escenario (/stage) → devolver focus al controlador
+        if (path.includes('/stage')) {
+          try { window.focus(); } catch(_) {}
+        }
+      };
+    } catch(_) {}
+    return () => { try { ch?.close(); } catch(_) {} };
+  }, [outputsActive]);
+
   // Abrir una ventana de salida de forma individual (clic en preview)
   const openWindow = (path, screenId, windowName, resolution) => {
     const res = resolution ?? { width: 1920, height: 1080 };

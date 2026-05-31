@@ -16,15 +16,27 @@
     </script>
     <!-- Pantalla completa automática para ventanas de salida/escenario/virtual.
          Chrome no transfiere transient-activation a popups, así que el primer
-         click o keydown (ej: avanzar diapositiva) dispara el fullscreen. -->
+         click o keydown (ej: avanzar diapositiva) dispara el fullscreen.
+         Al entrar a fullscreen, notifica al controlador via BroadcastChannel
+         para que haga focus a la siguiente ventana pendiente. -->
     <script>
       ;(function(){
         if (location.search.indexOf('fs=1') === -1) return;
         var el = document.documentElement;
         var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
         if (!req) return;
+        var notified = false;
+        function notifyFullscreen() {
+          if (notified) return;
+          notified = true;
+          try {
+            var ch = new BroadcastChannel('aio_fullscreen');
+            ch.postMessage({ type: 'window:fullscreen', path: location.pathname });
+            ch.close();
+          } catch(e) {}
+        }
         function tryFS() {
-          req.call(el).catch(function(){});
+          req.call(el).then(function(){ notifyFullscreen(); }).catch(function(){});
         }
         // Intento síncrono (funciona en Firefox y algunos contextos de Chrome)
         tryFS();
@@ -33,6 +45,7 @@
           document.removeEventListener('click',   onFirst, true);
           document.removeEventListener('keydown', onFirst, true);
           if (!document.fullscreenElement) tryFS();
+          else notifyFullscreen();
         }
         document.addEventListener('click',   onFirst, true);
         document.addEventListener('keydown', onFirst, true);
