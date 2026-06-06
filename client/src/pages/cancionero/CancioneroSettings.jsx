@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
-const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
+const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
   return {
     'Content-Type': 'application/json',

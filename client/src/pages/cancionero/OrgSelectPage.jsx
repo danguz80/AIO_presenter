@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, ChevronRight, Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
+const API = import.meta.env.VITE_API_URL || '';
 
 export default function OrgSelectPage() {
   const navigate = useNavigate();

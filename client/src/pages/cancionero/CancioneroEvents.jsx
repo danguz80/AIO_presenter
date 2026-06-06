@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History, AlertTriangle, Users } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
-const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
+const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
 }

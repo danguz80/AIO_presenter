@@ -45,7 +45,7 @@ function OAuthCallbackHandler() {
     if (subId) {
       const savedToken = token || localStorage.getItem('aio_sync_token');
       if (savedToken) {
-        const apiUrl = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
+        const apiUrl = import.meta.env.VITE_API_URL || '';
         fetch(`${apiUrl}/paypal/activate`, {
           method : 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },

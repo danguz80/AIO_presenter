@@ -25,7 +25,7 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelling,   setCancelling]   = useState(false);
 
-  const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
+  const API = import.meta.env.VITE_API_URL || '';
   function authHeaders() {
     return { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
   }

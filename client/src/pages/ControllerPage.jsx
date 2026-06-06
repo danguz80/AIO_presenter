@@ -16,7 +16,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 function authFetch(url, opts = {}) {
   const token = localStorage.getItem('aio_sync_token');

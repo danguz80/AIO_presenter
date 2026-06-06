@@ -221,7 +221,7 @@ async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlayli
   doc.save(`setlist_${fileDateStr}.pdf`);
 }
 
-const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
+const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
 }
