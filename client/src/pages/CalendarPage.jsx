@@ -8,7 +8,7 @@ import CancioneroNavbar from './cancionero/CancioneroNavbar';
 
 const DAYS_ES   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
 
 function authFetch(url, opts = {}) {
   const token = localStorage.getItem('aio_sync_token');

@@ -7,7 +7,7 @@ import {
 import { io as socketIo } from 'socket.io-client';
 import CancioneroNavbar from './CancioneroNavbar';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
 
 function authHeaders() {
   const token = localStorage.getItem('aio_sync_token');

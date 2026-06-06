@@ -10,7 +10,7 @@ import SongFormModal from '../../components/Library/SongFormModal';
 import AnnotationCanvas from '../../components/cancionero/AnnotationCanvas';
 import CancioneroNavbar from './CancioneroNavbar';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
 const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };

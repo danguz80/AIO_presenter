@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MonitorPlay, Music2, ChevronRight, LogOut, Loader2 } from 'lucide-react';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
 
 const MODES = [
   {

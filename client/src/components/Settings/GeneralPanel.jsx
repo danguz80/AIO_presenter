@@ -11,7 +11,7 @@ import {
   fetchFoldersFromDb,
 } from '../../utils/fsaUtils';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
 
 const SERVER_BASE = (() => {
   const savedIp   = localStorage.getItem('aio_server_ip');

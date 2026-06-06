@@ -25,7 +25,7 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelling,   setCancelling]   = useState(false);
 
-  const API = import.meta.env.VITE_API_URL || '';
+  const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
   function authHeaders() {
     return { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
   }
@@ -36,10 +36,8 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
       .then(r => r.ok ? r.json() : null).then(o => { if (o?.id) setOrg(o); }).catch(() => {});
     fetch(`${API}/auth/me`, { headers: h })
       .then(r => r.ok ? r.json() : null).then(u => { if (u?.id) setUser(u); }).catch(() => {});
-    fetch(`${API}/paypal/config`)
-      .then(r => { console.log('[PayPal SP] status:', r.status); return r.ok ? r.json() : r.text().then(t => { console.log('[PayPal SP] body:', t); return null; }); })
-      .then(pc => { console.log('[PayPal SP] data:', pc); if (pc?.clientId) setPaypalConfig(pc); })
-      .catch(e => { console.error('[PayPal SP] error:', e); });
+    fetch(`\${API}/paypal/config`)
+      .then(r => r.ok ? r.json() : null).then(pc => { if (pc?.clientId) setPaypalConfig(pc); }).catch(() => {});
   }, []);
 
   const subscribe = async (planType) => {

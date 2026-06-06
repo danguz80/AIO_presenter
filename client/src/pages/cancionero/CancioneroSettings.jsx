@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
-const API = import.meta.env.VITE_API_URL || '';
+const API = import.meta.env.VITE_API_URL || 'https://aiopresenter-production.up.railway.app';
 function authHeaders() {
   return {
     'Content-Type': 'application/json',
@@ -239,12 +239,10 @@ function PlanSection({ org, isAdmin }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   useEffect(() => {
-    const url = `${API}/paypal/config`;
-    console.log('[PayPal] fetching:', url);
-    fetch(url)
-      .then(r => { console.log('[PayPal] status:', r.status, r.ok); return r.ok ? r.json() : r.text().then(t => { console.log('[PayPal] body:', t); return null; }); })
-      .then(d => { console.log('[PayPal] data:', d); if (d?.clientId) setConfig(d); })
-      .catch(e => { console.error('[PayPal] fetch error:', e); });
+    fetch(`${API}/paypal/config`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.clientId) setConfig(d); })
+      .catch(() => {});
   }, []);
 
   const subscribe = async (planType) => {
