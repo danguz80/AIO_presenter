@@ -30,15 +30,22 @@ const app    = express();
 const server = http.createServer(app);
 
 // ─── CORS ───────────────────────────────────────────────────────────────────
-const allowedOrigins = process.env.ALLOWED_ORIGINS
+const allowedOriginsList = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : true;
+  : null;
 
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+// Función que refleja el Origin del request (o permite todo si no hay lista)
+function originHandler(origin, callback) {
+  if (!allowedOriginsList) return callback(null, origin || '*');
+  if (!origin || allowedOriginsList.includes(origin)) return callback(null, origin || true);
+  callback(new Error('Not allowed by CORS'));
+}
+
+app.use(cors({ origin: originHandler, credentials: true }));
 
 // ─── SOCKET.IO ──────────────────────────────────────────────────────────────
 const io = new Server(server, {
-  cors: { origin: allowedOrigins, methods: ['GET', 'POST'] },
+  cors: { origin: originHandler, methods: ['GET', 'POST'] },
 });
 
 // Exponer io globalmente para controladores (publish event → notificaciones)
