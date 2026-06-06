@@ -39,6 +39,21 @@ function OAuthCallbackHandler() {
       } catch { /* token mal formado — ignorar */ }
     }
 
+    // Activar suscripción PayPal si viene de redirect de aprobación
+    const subId    = params.get('subscription_id');
+    const planType = params.get('plan_type');
+    if (subId) {
+      const savedToken = token || localStorage.getItem('aio_sync_token');
+      if (savedToken) {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        fetch(`${apiUrl}/paypal/activate`, {
+          method : 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
+          body   : JSON.stringify({ subscriptionId: subId, planType: planType || 'monthly' }),
+        }).catch(() => {});
+      }
+    }
+
     // Redirigir a /app preservando solo el error si lo hay
     const dest = hasErr ? `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}` : '/app';
     navigate(dest, { replace: true });

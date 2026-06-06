@@ -5,6 +5,7 @@ import {
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   Check, Plus, Trash2, Save, Loader2, Lock, X, CheckCircle2, HelpCircle,
   Mail, Send, ShieldCheck, UserPlus, Clock, Copy, LogOut,
+  CreditCard, Smartphone, AlertCircle, ExternalLink,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 
@@ -137,11 +138,259 @@ function ProfileSection({ user, onSaved }) {
       </button>
 
       <button
-        onClick={() => { localStorage.removeItem('sync_token'); navigate('/'); }}
+        onClick={() => { localStorage.removeItem('aio_sync_token'); localStorage.removeItem('aio_org_id'); navigate('/'); }}
         className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 border border-red-500/20 text-red-400/60 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
       >
         <LogOut size={14} /> Cerrar sesión
       </button>
+    </div>
+  );
+}
+
+// ─── Mis dispositivos (sesiones activas) ─────────────────────────────────────
+function SessionsSection({ currentIat }) {
+  const [sessions, setSessions]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [closingId, setClosingId]   = useState(null);
+
+  const loadSessions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch(`${API}/auth/sessions`, { headers: authHeaders() });
+      if (r.ok) setSessions(await r.json());
+    } catch {}
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  const closeSession = async (id) => {
+    setClosingId(id);
+    try {
+      await fetch(`${API}/auth/sessions/${id}`, { method: 'DELETE', headers: authHeaders() });
+      setSessions(s => s.filter(x => x.id !== id));
+    } finally {
+      setClosingId(null);
+    }
+  };
+
+  const fmt = (dateStr) => {
+    if (!dateStr) return 'Sin actividad';
+    const d   = new Date(dateStr);
+    const now = Date.now();
+    const diff = now - d.getTime();
+    if (diff < 60000) return 'Hace un momento';
+    if (diff < 3600000) return `Hace ${Math.floor(diff / 60000)} min`;
+    if (diff < 86400000) return `Hace ${Math.floor(diff / 3600000)} h`;
+    return `Hace ${Math.floor(diff / 86400000)} días`;
+  };
+
+  if (loading) return (
+    <div className="flex justify-center py-4">
+      <Loader2 size={16} className="animate-spin text-white/30" />
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-3">
+        Mis dispositivos ({sessions.length}/{3})
+      </p>
+      {sessions.length === 0 && (
+        <p className="text-xs text-white/30 text-center py-2">Sin sesiones registradas</p>
+      )}
+      {sessions.map(s => (
+        <div key={s.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${
+          s.is_current ? 'border-green-500/30 bg-green-500/8' : 'border-white/8 bg-white/3'
+        }`}>
+          <Smartphone size={14} className={s.is_current ? 'text-green-400' : 'text-white/30'} />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-white/70 truncate">
+              {s.last_ip || 'IP desconocida'}
+              {s.is_current && <span className="ml-2 text-[10px] text-green-400 font-semibold">• este dispositivo</span>}
+            </p>
+            <p className="text-[10px] text-white/30">{fmt(s.last_seen)}</p>
+          </div>
+          {!s.is_current && (
+            <button
+              onClick={() => closeSession(s.id)}
+              disabled={closingId === s.id}
+              className="text-[10px] text-red-400/60 hover:text-red-400 transition-colors px-2 py-1 rounded-lg hover:bg-red-500/10 disabled:opacity-40"
+            >
+              {closingId === s.id ? <Loader2 size={10} className="animate-spin" /> : 'Cerrar'}
+            </button>
+          )}
+        </div>
+      ))}
+      {sessions.length >= 3 && (
+        <p className="text-[10px] text-yellow-400/60 text-center pt-1">
+          Límite de 3 dispositivos alcanzado. Cierra uno para poder iniciar sesión en otro.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Plan y suscripción ───────────────────────────────────────────────────────
+function PlanSection({ org, isAdmin }) {
+  const [config, setConfig]         = useState(null);
+  const [subscribing, setSubscribing] = useState(null); // 'monthly' | 'annual' | null
+  const [cancelling, setCancelling] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API}/paypal/config`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.clientId) setConfig(d); })
+      .catch(() => {});
+  }, []);
+
+  const subscribe = async (planType) => {
+    setSubscribing(planType);
+    try {
+      const r = await fetch(`${API}/paypal/create-subscription`, {
+        method : 'POST',
+        headers: authHeaders(),
+        body   : JSON.stringify({ planType }),
+      });
+      const d = await r.json();
+      if (r.ok && d.approvalUrl) {
+        window.location.href = d.approvalUrl;
+      } else {
+        alert(d.error || 'Error al iniciar suscripción');
+      }
+    } catch {
+      alert('Error de conexión');
+    }
+    setSubscribing(null);
+  };
+
+  const cancelSubscription = async () => {
+    setCancelling(true);
+    try {
+      const r = await fetch(`${API}/paypal/cancel`, { method: 'POST', headers: authHeaders() });
+      if (r.ok) window.location.reload();
+      else {
+        const d = await r.json();
+        alert(d.error || 'Error al cancelar');
+      }
+    } finally {
+      setCancelling(false);
+      setConfirmCancel(false);
+    }
+  };
+
+  const plan        = org?.plan || 'trial';
+  const trialEnds   = org?.trial_ends ? new Date(org.trial_ends) : null;
+  const daysLeft    = trialEnds ? Math.max(0, Math.ceil((trialEnds - Date.now()) / 86400000)) : 0;
+  const trialExpired = plan === 'trial' && daysLeft === 0;
+
+  const PLAN_LABELS = {
+    trial     : { label: 'Prueba gratuita', color: 'text-yellow-300', bg: 'bg-yellow-500/15 border-yellow-400/25' },
+    pro       : { label: 'Pro activo',       color: 'text-green-300',  bg: 'bg-green-500/15 border-green-400/25'  },
+    cancelled : { label: 'Cancelado',        color: 'text-red-300',    bg: 'bg-red-500/15 border-red-400/25'      },
+    suspended : { label: 'Suspendido',       color: 'text-orange-300', bg: 'bg-orange-500/15 border-orange-400/25'},
+    expired   : { label: 'Expirado',         color: 'text-red-300',    bg: 'bg-red-500/15 border-red-400/25'      },
+  };
+  const planInfo = PLAN_LABELS[plan] || PLAN_LABELS.trial;
+
+  return (
+    <div className="space-y-4">
+      {/* Estado actual del plan */}
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${planInfo.bg}`}>
+        <CreditCard size={16} className={planInfo.color} />
+        <div className="flex-1 min-w-0">
+          <p className={`text-sm font-semibold ${planInfo.color}`}>{planInfo.label}</p>
+          {plan === 'trial' && !trialExpired && (
+            <p className="text-xs text-white/40">Quedan {daysLeft} día{daysLeft !== 1 ? 's' : ''} de prueba</p>
+          )}
+          {trialExpired && (
+            <p className="text-xs text-red-300/70">Tu prueba ha terminado — suscríbete para continuar</p>
+          )}
+          {plan === 'pro' && (
+            <p className="text-xs text-white/40">Hasta 5 miembros · 3 dispositivos por usuario</p>
+          )}
+        </div>
+      </div>
+
+      {/* Botones de suscripción (solo admin, si no es pro activo) */}
+      {isAdmin && plan !== 'pro' && config?.clientId && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-widest text-white/35">
+            Suscribirse
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => subscribe('monthly')}
+              disabled={!!subscribing}
+              className="flex flex-col items-center py-3 px-2 rounded-xl border border-white/15 bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50"
+            >
+              {subscribing === 'monthly'
+                ? <Loader2 size={14} className="animate-spin text-yellow-400 mb-1" />
+                : <CreditCard size={14} className="text-yellow-400 mb-1" />
+              }
+              <span className="text-xs font-bold text-white">$5 / mes</span>
+              <span className="text-[10px] text-white/40">mensual</span>
+            </button>
+            <button
+              onClick={() => subscribe('annual')}
+              disabled={!!subscribing}
+              className="flex flex-col items-center py-3 px-2 rounded-xl border border-yellow-400/30 bg-yellow-500/8 hover:bg-yellow-500/15 transition-colors disabled:opacity-50 relative"
+            >
+              <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[9px] bg-yellow-500 text-black font-bold px-2 py-0.5 rounded-full">MÁS POPULAR</span>
+              {subscribing === 'annual'
+                ? <Loader2 size={14} className="animate-spin text-yellow-400 mb-1" />
+                : <CreditCard size={14} className="text-yellow-400 mb-1" />
+              }
+              <span className="text-xs font-bold text-white">$50 / año</span>
+              <span className="text-[10px] text-white/40">$4.17/mes</span>
+            </button>
+          </div>
+          <p className="text-[10px] text-white/30 text-center">
+            Pago seguro con PayPal · Cancela en cualquier momento
+          </p>
+        </div>
+      )}
+
+      {/* Sin PayPal configurado */}
+      {isAdmin && plan !== 'pro' && !config?.clientId && (
+        <p className="text-xs text-white/30 text-center py-2">
+          Suscripciones no disponibles aún
+        </p>
+      )}
+
+      {/* Cancelar suscripción activa */}
+      {isAdmin && plan === 'pro' && (
+        <div>
+          {!confirmCancel ? (
+            <button
+              onClick={() => setConfirmCancel(true)}
+              className="w-full py-2 rounded-xl text-xs text-red-400/50 hover:text-red-400 border border-red-500/15 hover:border-red-500/30 hover:bg-red-500/8 transition-colors"
+            >
+              Cancelar suscripción
+            </button>
+          ) : (
+            <div className="p-3 rounded-xl border border-red-500/25 bg-red-500/8 space-y-2">
+              <p className="text-xs text-red-300 text-center">¿Seguro que quieres cancelar?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setConfirmCancel(false)}
+                  className="flex-1 py-1.5 rounded-lg text-xs border border-white/15 text-white/50 hover:bg-white/8"
+                >
+                  No, volver
+                </button>
+                <button
+                  onClick={cancelSubscription}
+                  disabled={cancelling}
+                  className="flex-1 py-1.5 rounded-lg text-xs bg-red-500/20 border border-red-500/30 text-red-300 hover:bg-red-500/30 disabled:opacity-50"
+                >
+                  {cancelling ? <Loader2 size={10} className="animate-spin mx-auto" /> : 'Sí, cancelar'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1269,6 +1518,27 @@ export default function CancioneroSettings() {
             : <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-yellow-400" /></div>
           }
         </SectionCard>
+
+        <SectionCard
+          icon={Smartphone}
+          title="Mis dispositivos"
+          subtitle="Sesiones activas (máx. 3)"
+        >
+          <SessionsSection />
+        </SectionCard>
+
+        {(user?.is_admin || org?.plan) && (
+          <SectionCard
+            icon={CreditCard}
+            title="Plan y suscripción"
+            subtitle={org?.plan === 'pro' ? 'Pro activo' : org?.plan === 'trial' ? 'Prueba gratuita' : (org?.plan || 'Trial')}
+          >
+            {org
+              ? <PlanSection org={org} isAdmin={user?.is_admin} />
+              : <div className="flex justify-center py-4"><Loader2 size={16} className="animate-spin text-white/30" /></div>
+            }
+          </SectionCard>
+        )}
 
         <SectionCard
           icon={Users}

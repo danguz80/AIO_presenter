@@ -13,7 +13,7 @@ const PLANS = [
   {
     id: 'monthly',
     label: 'Mensual',
-    price: '$6',
+    price: '$5',
     period: '/mes',
     usdYear: null,
     badge: null,
@@ -32,9 +32,9 @@ const PLANS = [
   {
     id: 'annual',
     label: 'Anual',
-    price: '$60',
+    price: '$50',
     period: '/año',
-    usdYear: 'Equivale a $5/mes — ahorras $12',
+    usdYear: 'Equivale a $4.17/mes — ahorras $10',
     badge: 'Más popular',
     features: [
       'Todo lo del plan mensual',

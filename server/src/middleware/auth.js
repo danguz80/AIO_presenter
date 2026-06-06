@@ -1,6 +1,28 @@
-const jwt = require('jsonwebtoken');
+const jwt  = require('jsonwebtoken');
+const pool = require('../config/database');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aio-presenter-secret-change-me';
+
+// ─── Throttle para actualizar last_seen sin golpear la DB en cada request ────
+const sessionUpdateThrottle = new Map();
+const THROTTLE_MS = 5 * 60 * 1000; // 5 min
+
+function getClientIp(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+    || req.socket?.remoteAddress
+    || null;
+}
+
+function updateSessionAsync(userId, iat, ip) {
+  const key = `${userId}:${iat}`;
+  const now = Date.now();
+  if ((sessionUpdateThrottle.get(key) || 0) > now - THROTTLE_MS) return;
+  sessionUpdateThrottle.set(key, now);
+  pool.query(
+    'UPDATE user_sessions SET last_seen = NOW(), last_ip = $1 WHERE user_id = $2 AND jwt_iat = $3',
+    [ip, userId, iat]
+  ).catch(() => {});
+}
 
 /** Verifica JWT y adjunta req.user = { userId, orgId, isAdmin, canPush, canPull } */
 function requireAuth(req, res, next) {
@@ -10,9 +32,36 @@ function requireAuth(req, res, next) {
   }
   try {
     req.user = jwt.verify(header.slice(7), JWT_SECRET);
+    // Actualizar last_seen + last_ip de la sesión (throttled)
+    if (req.user.userId && req.user.iat) {
+      updateSessionAsync(req.user.userId, req.user.iat, getClientIp(req));
+    }
     next();
   } catch {
     res.status(401).json({ error: 'Token inválido o expirado' });
+  }
+}
+
+/** Verifica que la org tenga plan activo (pro) o trial vigente */
+async function requireActivePlan(req, res, next) {
+  try {
+    const { rows } = await pool.query(
+      'SELECT plan, trial_ends FROM organizations WHERE id = $1',
+      [req.user.orgId]
+    );
+    if (!rows.length) return res.status(403).json({ error: 'Organización no encontrada' });
+    const { plan, trial_ends } = rows[0];
+    if (plan === 'pro') return next();
+    if (plan === 'trial') {
+      if (trial_ends && new Date(trial_ends) >= new Date()) return next();
+      return res.status(402).json({
+        error: 'Tu período de prueba ha terminado. Suscríbete para continuar.',
+        code : 'TRIAL_EXPIRED',
+      });
+    }
+    return res.status(402).json({ error: 'Suscripción inactiva', code: 'SUBSCRIPTION_INACTIVE' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 }
 
@@ -37,4 +86,4 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, optionalAuth, requireAdmin, JWT_SECRET };
+module.exports = { requireAuth, optionalAuth, requireAdmin, requireActivePlan, JWT_SECRET, getClientIp };

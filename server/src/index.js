@@ -23,6 +23,7 @@ const bandConfigsRouter  = require('./routes/bandConfigs');
 const blockedDatesRouter = require('./routes/blockedDates');
 const notificationsRouter = require('./routes/notifications');
 const annotationsRouter = require('./routes/annotations');
+const paypalRouter = require('./routes/paypal');
 const ndi          = require('./ndi/ndiSender');
 
 const app    = express();
@@ -277,6 +278,26 @@ async function saveOrgSetting(orgId, key, value) {
     // ─── Sistema de roles de sincronización (can_pull) ─────────────────────
     await pool.query(`ALTER TABLE sync_users      ADD COLUMN IF NOT EXISTS can_pull BOOLEAN NOT NULL DEFAULT true`);
     await pool.query(`ALTER TABLE sync_invitations ADD COLUMN IF NOT EXISTS can_pull BOOLEAN NOT NULL DEFAULT true`);
+    // ─── Sesiones de usuario (seguridad multi-dispositivo) ──────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id         SERIAL PRIMARY KEY,
+        user_id    INTEGER NOT NULL REFERENCES sync_users(id) ON DELETE CASCADE,
+        jwt_iat    BIGINT  NOT NULL,
+        last_ip    TEXT,
+        last_seen  TIMESTAMPTZ DEFAULT NOW(),
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (user_id, jwt_iat)
+      )
+    `);
+    // ─── PayPal suscripciones ──────────────────────────────────────────────
+    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paypal_subscription_id TEXT`);
+    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paypal_plan_type VARCHAR(20)`);
+    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'trial'`);
+    // Cambiar trial de 7 a 30 días para nuevas orgs
+    await pool.query(`ALTER TABLE organizations ALTER COLUMN trial_ends SET DEFAULT (CURRENT_DATE + 30)`);
+    // Extender orgs en trial que aún no han vencido (o que vencieron muy reciente)
+    await pool.query(`UPDATE organizations SET trial_ends = created_at::date + 30 WHERE plan = 'trial' AND trial_ends < CURRENT_DATE + 7`);
     // ─── Notificaciones in-app ─────────────────────────────────────────────
     await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
@@ -664,6 +685,7 @@ app.use('/api/band-configs',  bandConfigsRouter);
 app.use('/api/blocked-dates', blockedDatesRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/songs',         annotationsRouter);  // anotaciones personales por canción
+app.use('/paypal',            paypalRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

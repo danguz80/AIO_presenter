@@ -10,6 +10,53 @@ const CLIENT_URL     = process.env.CLIENT_URL     || 'http://localhost:5173';
 const JWT_SECRET     = process.env.JWT_SECRET     || 'aio-presenter-secret-change-me';
 const ADMIN_EMAIL    = process.env.ADMIN_EMAIL     || null;
 
+const MAX_SESSIONS   = 3;          // máximo de dispositivos por usuario
+const ACTIVE_WINDOW  = 30 * 60 * 1000; // ventana de concurrencia: 30 min
+
+function getClientIp(req) {
+  return req.headers['x-forwarded-for']?.split(',')[0]?.trim()
+    || req.socket?.remoteAddress
+    || null;
+}
+
+/**
+ * Limpia sesiones expiradas (>30d) y verifica:
+ *  1. que el usuario no supere MAX_SESSIONS dispositivos
+ *  2. que las sesiones concurrentes (activas en los últimos 30 min) vengan de la misma red
+ * Devuelve { iat } si todo OK, o { error: string } si debe bloquearse.
+ */
+async function checkAndCreateSession(userId, ip) {
+  // Limpiar sesiones cuyo JWT ya expiró (30 días)
+  await pool.query(
+    "DELETE FROM user_sessions WHERE user_id = $1 AND created_at < NOW() - INTERVAL '30 days'",
+    [userId]
+  );
+  const { rows: sessions } = await pool.query(
+    'SELECT id, last_ip, last_seen FROM user_sessions WHERE user_id = $1 ORDER BY last_seen DESC',
+    [userId]
+  );
+  // Límite de dispositivos
+  if (sessions.length >= MAX_SESSIONS) {
+    return { error: `Límite de ${MAX_SESSIONS} dispositivos alcanzado. Cierra sesión en otro dispositivo para continuar.` };
+  }
+  // Misma red para sesiones concurrentes
+  if (ip) {
+    const now = Date.now();
+    const concurrent = sessions.filter(
+      s => s.last_seen && (now - new Date(s.last_seen).getTime()) < ACTIVE_WINDOW
+    );
+    if (concurrent.length > 0 && concurrent.some(s => s.last_ip !== ip)) {
+      return { error: 'Ya hay una sesión activa desde otra red. Espera 30 min o ciérrala primero desde Configuración → Mis dispositivos.' };
+    }
+  }
+  const iat = Math.floor(Date.now() / 1000);
+  await pool.query(
+    'INSERT INTO user_sessions (user_id, jwt_iat, last_ip) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+    [userId, iat, ip]
+  );
+  return { iat };
+}
+
 function getResend() {
   const key = process.env.RESEND_API_KEY;
   return key ? new Resend(key) : null;
@@ -171,8 +218,13 @@ router.get('/google/callback', async (req, res) => {
       }).catch(() => {});
 
       const user = rows[0];
+      const ip = getClientIp(req);
+      const sessionResult = await checkAndCreateSession(user.id, ip);
+      if (sessionResult.error) {
+        return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
+      }
       const jwtToken = jwt.sign(
-        { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, canPush: user.can_push, canPull: user.can_pull ?? true },
+        { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
         JWT_SECRET, { expiresIn: '30d' }
       );
       return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
@@ -199,8 +251,13 @@ router.get('/google/callback', async (req, res) => {
         [existingRows[0].id, orgId, existingRows[0].is_admin ? 'admin' : 'member']
       );
       const user = existingRows[0];
+      const ip = getClientIp(req);
+      const sessionResult = await checkAndCreateSession(user.id, ip);
+      if (sessionResult.error) {
+        return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
+      }
       const jwtToken = jwt.sign(
-        { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, canPush: user.can_push, canPull: user.can_pull ?? true },
+        { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
         JWT_SECRET, { expiresIn: '30d' }
       );
       return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
@@ -251,8 +308,13 @@ router.get('/google/callback', async (req, res) => {
        VALUES ($1, $2, 'admin') ON CONFLICT DO NOTHING`,
       [user.id, orgId]
     );
+    const ip = getClientIp(req);
+    const sessionResult = await checkAndCreateSession(user.id, ip);
+    if (sessionResult.error) {
+      return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
+    }
     const jwtToken = jwt.sign(
-        { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true, canPull: true },
+        { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true, canPull: true, iat: sessionResult.iat },
       JWT_SECRET, { expiresIn: '30d' }
     );
     res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
@@ -380,8 +442,20 @@ router.patch('/org', requireAuth, async (req, res) => {
   }
 });
 
-/** POST /auth/logout — instrucción al cliente para borrar token */
+/** POST /auth/logout — borrar sesión activa + instrucción al cliente para borrar token */
 router.post('/logout', (req, res) => {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(header.slice(7), JWT_SECRET);
+      if (payload?.userId && payload?.iat) {
+        pool.query(
+          'DELETE FROM user_sessions WHERE user_id = $1 AND jwt_iat = $2',
+          [payload.userId, payload.iat]
+        ).catch(() => {});
+      }
+    } catch (_) {}
+  }
   res.json({ ok: true });
 });
 
@@ -531,6 +605,22 @@ router.post('/invite', requireAuth, async (req, res) => {
     );
     if (existing.length) return res.status(409).json({ error: 'Ese email ya es miembro de la banda' });
 
+  // Verificar límite de miembros según plan
+    const { rows: orgPlan } = await pool.query(
+      'SELECT plan FROM organizations WHERE id = $1', [req.user.orgId]
+    );
+    const maxMembers = (orgPlan[0]?.plan === 'pro') ? 5 : 3;
+    const { rows: memberCount } = await pool.query(
+      'SELECT COUNT(*) FROM user_organizations WHERE organization_id = $1',
+      [req.user.orgId]
+    );
+    if (parseInt(memberCount[0].count, 10) >= maxMembers) {
+      return res.status(403).json({
+        error: `Has alcanzado el límite de ${maxMembers} miembros.${maxMembers < 5 ? ' Suscríbete al plan Pro para invitar hasta 5 miembros.' : ''}`,
+        code : 'MAX_MEMBERS_REACHED',
+      });
+    }
+
     // Generar código único
     const crypto = require('crypto');
     const code = crypto.randomBytes(20).toString('hex');
@@ -649,6 +739,68 @@ router.patch('/members/:memberId/instruments', requireAuth, async (req, res) => 
       [instruments, memberId]
     );
     res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Gestión de sesiones activas ─────────────────────────────────────────────
+
+/** GET /auth/sessions — listar sesiones activas del usuario */
+router.get('/sessions', requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      "DELETE FROM user_sessions WHERE user_id = $1 AND created_at < NOW() - INTERVAL '30 days'",
+      [req.user.userId]
+    );
+    const { rows } = await pool.query(
+      `SELECT id, jwt_iat, last_ip, last_seen, created_at
+         FROM user_sessions
+        WHERE user_id = $1
+        ORDER BY last_seen DESC NULLS LAST`,
+      [req.user.userId]
+    );
+    const sessions = rows.map(s => ({
+      id         : s.id,
+      last_ip    : s.last_ip,
+      last_seen  : s.last_seen,
+      created_at : s.created_at,
+      is_current : s.jwt_iat === req.user.iat,
+    }));
+    res.json(sessions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** DELETE /auth/sessions/:id — cerrar una sesión específica */
+router.delete('/sessions/:id', requireAuth, async (req, res) => {
+  const sessionId = parseInt(req.params.id, 10);
+  if (isNaN(sessionId)) return res.status(400).json({ error: 'ID inválido' });
+  try {
+    await pool.query(
+      'DELETE FROM user_sessions WHERE id = $1 AND user_id = $2',
+      [sessionId, req.user.userId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** DELETE /auth/sessions/force/:userId — admin cierra todas las sesiones de un miembro */
+router.delete('/sessions/force/:userId', requireAuth, async (req, res) => {
+  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo admins' });
+  const targetId = parseInt(req.params.userId, 10);
+  if (isNaN(targetId)) return res.status(400).json({ error: 'userId inválido' });
+  try {
+    const { rows } = await pool.query(
+      'SELECT 1 FROM user_organizations WHERE user_id = $1 AND organization_id = $2',
+      [targetId, req.user.orgId]
+    );
+    if (!rows.length) return res.status(403).json({ error: 'Ese usuario no pertenece a tu organización' });
+    await pool.query('DELETE FROM user_sessions WHERE user_id = $1', [targetId]);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
