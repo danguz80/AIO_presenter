@@ -239,7 +239,7 @@ function PlanSection({ org, isAdmin }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   useEffect(() => {
-    fetch(`${API}/paypal/config`, { headers: authHeaders() })
+    fetch(`${API}/paypal/config`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d?.clientId) setConfig(d); })
       .catch(() => {});

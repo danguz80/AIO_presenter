@@ -32,15 +32,12 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
 
   useEffect(() => {
     const h = authHeaders();
-    Promise.all([
-      fetch(`${API}/auth/org`,      { headers: h }).then(r => r.ok ? r.json() : null),
-      fetch(`${API}/auth/me`,       { headers: h }).then(r => r.ok ? r.json() : null),
-      fetch(`${API}/paypal/config`, { headers: h }).then(r => r.ok ? r.json() : null),
-    ]).then(([o, u, pc]) => {
-      if (o) setOrg(o);
-      if (u) setUser(u);
-      if (pc?.clientId) setPaypalConfig(pc);
-    }).catch(() => {});
+    fetch(`${API}/auth/org`, { headers: h })
+      .then(r => r.ok ? r.json() : null).then(o => { if (o?.id) setOrg(o); }).catch(() => {});
+    fetch(`${API}/auth/me`, { headers: h })
+      .then(r => r.ok ? r.json() : null).then(u => { if (u?.id) setUser(u); }).catch(() => {});
+    fetch(`${API}/paypal/config`)
+      .then(r => r.ok ? r.json() : null).then(pc => { if (pc?.clientId) setPaypalConfig(pc); }).catch(() => {});
   }, []);
 
   const subscribe = async (planType) => {
