@@ -30,22 +30,39 @@ const app    = express();
 const server = http.createServer(app);
 
 // ─── CORS ───────────────────────────────────────────────────────────────────
+// Middleware manual: refleja el Origin del request siempre.
+// ALLOWED_ORIGINS (opcional) sirve solo para Socket.IO ya que la autenticación
+// JWT protege los endpoints — el filtro por origin en HTTP aporta poco.
 const allowedOriginsList = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : null;
 
-// Función que refleja el Origin del request (o permite todo si no hay lista)
-function originHandler(origin, callback) {
-  if (!allowedOriginsList) return callback(null, origin || '*');
-  if (!origin || allowedOriginsList.includes(origin)) return callback(null, origin || true);
-  callback(new Error('Not allowed by CORS'));
-}
-
-app.use(cors({ origin: originHandler, credentials: true }));
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    if (!allowedOriginsList || allowedOriginsList.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.setHeader('Vary', 'Origin');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 // ─── SOCKET.IO ──────────────────────────────────────────────────────────────
+function socketOriginHandler(origin, callback) {
+  if (!allowedOriginsList || !origin || allowedOriginsList.includes(origin)) {
+    callback(null, origin || true);
+  } else {
+    callback(null, false);
+  }
+}
+
 const io = new Server(server, {
-  cors: { origin: originHandler, methods: ['GET', 'POST'] },
+  cors: { origin: socketOriginHandler, methods: ['GET', 'POST'] },
 });
 
 // Exponer io globalmente para controladores (publish event → notificaciones)
