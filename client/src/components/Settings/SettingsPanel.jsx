@@ -36,7 +36,7 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
       .then(r => r.ok ? r.json() : null).then(o => { if (o?.id) setOrg(o); }).catch(() => {});
     fetch(`${API}/auth/me`, { headers: h })
       .then(r => r.ok ? r.json() : null).then(u => { if (u?.id) setUser(u); }).catch(() => {});
-    fetch(`\${API}/paypal/config`)
+    fetch(`${API}/paypal/config`)
       .then(r => r.ok ? r.json() : null).then(pc => { if (pc?.clientId) setPaypalConfig(pc); }).catch(() => {});
   }, []);
 
