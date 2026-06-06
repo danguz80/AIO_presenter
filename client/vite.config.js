@@ -99,6 +99,10 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
       },
+      '/paypal': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+      },
       // Socket.io se conecta directamente al backend via window.location.hostname:3001
     },
   },
