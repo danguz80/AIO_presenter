@@ -92,7 +92,7 @@ const HOW_IT_WORKS = [
   {
     step: '01',
     title: 'Crea tu cuenta',
-    desc: 'Regístrate con Google en segundos. Los primeros 7 días son completamente gratis, sin tarjeta de crédito.',
+    desc: 'Regístrate con Google en segundos. Los primeros 30 días son completamente gratis, sin tarjeta de crédito.',
   },
   {
     step: '02',
@@ -335,7 +335,7 @@ export default function LandingPage() {
               onClick={() => scrollTo('precios')}
               className="w-full py-2.5 rounded-lg bg-[#C9A420] text-white font-bold text-sm"
             >
-              Prueba gratis 7 días
+              Prueba gratis 30 días
             </button>
           </div>
         )}
@@ -381,7 +381,7 @@ export default function LandingPage() {
               onClick={() => scrollTo('precios')}
               className="group flex items-center gap-2 px-8 py-3.5 bg-[#C9A420] hover:bg-[#b8931c] text-white font-bold rounded-xl text-base shadow-lg shadow-yellow-900/30 transition-all active:scale-95"
             >
-              Probar gratis 7 días
+              Probar gratis 30 días
               <ChevronRight size={18} className="group-hover:translate-x-0.5 transition-transform" />
             </button>
             <button
@@ -395,7 +395,7 @@ export default function LandingPage() {
           {/* Badge de prueba gratis */}
           <div className="flex items-center gap-2 text-white/50 text-sm">
             <Check size={14} className="text-green-400" />
-            7 días gratis · Sin tarjeta de crédito · Cancela cuando quieras
+            30 días gratis · Sin tarjeta de crédito · Cancela cuando quieras
           </div>
 
           {/* App mockup */}
@@ -561,7 +561,7 @@ export default function LandingPage() {
             <span className="inline-block text-xs font-bold text-[#C9A420] uppercase tracking-widest mb-3">Planes y precios</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#1B3166]">Simple y transparente</h2>
             <p className="mt-3 text-gray-500 max-w-lg mx-auto">
-              Comienza con 7 días gratis, sin tarjeta de crédito. Cancela en cualquier momento.
+              Comienza con 30 días gratis, sin tarjeta de crédito. Cancela en cualquier momento.
             </p>
           </div>
 
@@ -612,7 +612,7 @@ export default function LandingPage() {
                   {plan.cta}
                 </button>
                 <p className={`text-center text-xs ${plan.variant === 'solid' ? 'text-white/40' : 'text-gray-400'}`}>
-                  7 días gratis · Sin tarjeta de crédito
+                  30 días gratis · Sin tarjeta de crédito
                 </p>
               </div>
             ))}
@@ -653,7 +653,7 @@ export default function LandingPage() {
             <ChevronRight size={20} className="group-hover:translate-x-0.5 transition-transform" />
           </button>
           <div className="flex flex-wrap justify-center gap-4 text-sm text-white/40">
-            <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> 7 días de prueba</span>
+            <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> 30 días de prueba</span>
             <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> Sin tarjeta de crédito</span>
             <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> Cancela cuando quieras</span>
           </div>
