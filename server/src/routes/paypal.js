@@ -76,7 +76,7 @@ router.post('/create-subscription', requireAuth, async (req, res) => {
   }
 
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-  const returnUrl = `${clientUrl}/app?subscription_id={subscription_id}&plan_type=${planType || 'monthly'}`;
+  const returnUrl = `${clientUrl}/app?plan_type=${planType || 'monthly'}`;
   const cancelUrl = `${clientUrl}/app?paypal_cancel=true`;
 
   try {
