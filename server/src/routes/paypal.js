@@ -82,14 +82,12 @@ router.post('/create-subscription', requireAuth, async (req, res) => {
   try {
     const token = await getPayPalAccessToken();
     const body = {
-      plan_id     : planId,
-      subscriber  : {},
+      plan_id: planId,
       application_context: {
         brand_name         : 'AIO Presenter',
         locale             : 'es-ES',
         shipping_preference: 'NO_SHIPPING',
         user_action        : 'SUBSCRIBE_NOW',
-        payment_method     : { payer_selected: 'PAYPAL', payee_preferred: 'IMMEDIATE_PAYMENT_REQUIRED' },
         return_url         : returnUrl,
         cancel_url         : cancelUrl,
       },
