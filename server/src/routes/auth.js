@@ -412,7 +412,7 @@ router.get('/org/members', requireAuth, async (req, res) => {
 router.get('/org', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, band_name, spotify_client_id, plan, trial_ends, created_at FROM organizations WHERE id = $1',
+      'SELECT id, name, band_name, spotify_client_id, plan, trial_ends, created_at, paypal_plan_type, updated_at FROM organizations WHERE id = $1',
       [req.user.orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Organización no encontrada' });

@@ -204,12 +204,21 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
                   : 'border-red-500/25 bg-red-500/10 text-red-300'
                 }`}>
                   <CreditCard size={13} />
-                  <span>
-                    {plan === 'pro' ? 'Plan Pro activo'
-                      : plan === 'trial' && daysLeft > 0 ? `Prueba gratuita — ${daysLeft} día${daysLeft !== 1 ? 's' : ''} restante${daysLeft !== 1 ? 's' : ''}`
-                      : plan === 'trial' ? 'Prueba expirada — suscríbete para continuar'
-                      : 'Suscripción inactiva'}
-                  </span>
+                  <div>
+                    <div>
+                      {plan === 'pro' ? '\u2713 Plan Pro Activado'
+                        : plan === 'trial' && daysLeft > 0 ? `Prueba gratuita \u2014 ${daysLeft} d\u00eda${daysLeft !== 1 ? 's' : ''} restante${daysLeft !== 1 ? 's' : ''}`
+                        : plan === 'trial' ? 'Prueba expirada \u2014 suscr\u00edbete para continuar'
+                        : 'Suscripci\u00f3n inactiva'}
+                    </div>
+                    {plan === 'pro' && org?.updated_at && (() => {
+                      const base = new Date(org.updated_at);
+                      const renewal = new Date(base);
+                      if (org.paypal_plan_type === 'annual') renewal.setFullYear(renewal.getFullYear() + 1);
+                      else renewal.setMonth(renewal.getMonth() + 1);
+                      return <div className="text-[10px] opacity-60 mt-0.5">Renueva el {renewal.toLocaleDateString('es-CL')}</div>;
+                    })()}
+                  </div>
                 </div>
 
                 {/* Botones suscribirse */}

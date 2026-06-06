@@ -287,7 +287,7 @@ function PlanSection({ org, isAdmin }) {
 
   const PLAN_LABELS = {
     trial     : { label: 'Prueba gratuita', color: 'text-yellow-300', bg: 'bg-yellow-500/15 border-yellow-400/25' },
-    pro       : { label: 'Pro activo',       color: 'text-green-300',  bg: 'bg-green-500/15 border-green-400/25'  },
+    pro       : { label: '\u2713 Plan Pro Activado', color: 'text-green-300',  bg: 'bg-green-500/15 border-green-400/25'  },
     cancelled : { label: 'Cancelado',        color: 'text-red-300',    bg: 'bg-red-500/15 border-red-400/25'      },
     suspended : { label: 'Suspendido',       color: 'text-orange-300', bg: 'bg-orange-500/15 border-orange-400/25'},
     expired   : { label: 'Expirado',         color: 'text-red-300',    bg: 'bg-red-500/15 border-red-400/25'      },
@@ -310,6 +310,13 @@ function PlanSection({ org, isAdmin }) {
           {plan === 'pro' && (
             <p className="text-xs text-white/40">Hasta 5 miembros · 3 dispositivos por usuario</p>
           )}
+          {plan === 'pro' && org?.updated_at && (() => {
+            const base = new Date(org.updated_at);
+            const renewal = new Date(base);
+            if (org.paypal_plan_type === 'annual') renewal.setFullYear(renewal.getFullYear() + 1);
+            else renewal.setMonth(renewal.getMonth() + 1);
+            return <p className="text-xs text-green-300/60">Renueva el {renewal.toLocaleDateString('es-CL')}</p>;
+          })()}
         </div>
       </div>
 
