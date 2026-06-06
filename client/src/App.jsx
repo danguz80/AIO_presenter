@@ -29,19 +29,10 @@ function OAuthCallbackHandler() {
     const token  = params.get('sync_token');
     const err    = params.get('sync_error');
     const hasErr = params.has('sync_error');
-    if (!token && !hasErr) return;
-
-    if (token) {
-      localStorage.setItem('aio_sync_token', token);
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.orgId) localStorage.setItem('aio_org_id', String(payload.orgId));
-      } catch { /* token mal formado — ignorar */ }
-    }
+    const subId  = params.get('subscription_id');
+    const planType = params.get('plan_type');
 
     // Activar suscripción PayPal si viene de redirect de aprobación
-    const subId    = params.get('subscription_id');
-    const planType = params.get('plan_type');
     if (subId) {
       const savedToken = token || localStorage.getItem('aio_sync_token');
       if (savedToken) {
@@ -50,8 +41,23 @@ function OAuthCallbackHandler() {
           method : 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
           body   : JSON.stringify({ subscriptionId: subId, planType: planType || 'monthly' }),
+        }).then(r => r.json()).then(d => {
+          if (d.ok) window.location.replace('/app');
         }).catch(() => {});
+      } else {
+        navigate('/app', { replace: true });
       }
+      return;
+    }
+
+    if (!token && !hasErr) return;
+
+    if (token) {
+      localStorage.setItem('aio_sync_token', token);
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.orgId) localStorage.setItem('aio_org_id', String(payload.orgId));
+      } catch { /* token mal formado — ignorar */ }
     }
 
     // Redirigir a /app preservando solo el error si lo hay
