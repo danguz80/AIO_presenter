@@ -239,10 +239,12 @@ function PlanSection({ org, isAdmin }) {
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   useEffect(() => {
-    fetch(`${API}/paypal/config`)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.clientId) setConfig(d); })
-      .catch(() => {});
+    const url = `${API}/paypal/config`;
+    console.log('[PayPal] fetching:', url);
+    fetch(url)
+      .then(r => { console.log('[PayPal] status:', r.status, r.ok); return r.ok ? r.json() : r.text().then(t => { console.log('[PayPal] body:', t); return null; }); })
+      .then(d => { console.log('[PayPal] data:', d); if (d?.clientId) setConfig(d); })
+      .catch(e => { console.error('[PayPal] fetch error:', e); });
   }, []);
 
   const subscribe = async (planType) => {

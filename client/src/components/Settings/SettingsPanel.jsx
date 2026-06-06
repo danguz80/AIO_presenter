@@ -37,7 +37,9 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
     fetch(`${API}/auth/me`, { headers: h })
       .then(r => r.ok ? r.json() : null).then(u => { if (u?.id) setUser(u); }).catch(() => {});
     fetch(`${API}/paypal/config`)
-      .then(r => r.ok ? r.json() : null).then(pc => { if (pc?.clientId) setPaypalConfig(pc); }).catch(() => {});
+      .then(r => { console.log('[PayPal SP] status:', r.status); return r.ok ? r.json() : r.text().then(t => { console.log('[PayPal SP] body:', t); return null; }); })
+      .then(pc => { console.log('[PayPal SP] data:', pc); if (pc?.clientId) setPaypalConfig(pc); })
+      .catch(e => { console.error('[PayPal SP] error:', e); });
   }, []);
 
   const subscribe = async (planType) => {
