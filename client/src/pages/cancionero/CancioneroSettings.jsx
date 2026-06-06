@@ -308,7 +308,7 @@ function PlanSection({ org, isAdmin }) {
             <p className="text-xs text-red-300/70">Tu prueba ha terminado — suscríbete para continuar</p>
           )}
           {plan === 'pro' && (
-            <p className="text-xs text-white/40">Hasta 5 miembros · 3 dispositivos por usuario</p>
+            <p className="text-xs text-white/40">Hasta 5 miembros</p>
           )}
           {plan === 'pro' && org?.updated_at && (() => {
             const base = new Date(org.updated_at);
