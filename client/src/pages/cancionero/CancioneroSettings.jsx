@@ -329,7 +329,7 @@ function PlanSection({ org, isAdmin }) {
                 ? <Loader2 size={14} className="animate-spin text-yellow-400 mb-1" />
                 : <CreditCard size={14} className="text-yellow-400 mb-1" />
               }
-              <span className="text-xs font-bold text-white">$5 / mes</span>
+              <span className="text-xs font-bold text-white">$6 / mes</span>
               <span className="text-[10px] text-white/40">mensual</span>
             </button>
             <button
@@ -342,8 +342,8 @@ function PlanSection({ org, isAdmin }) {
                 ? <Loader2 size={14} className="animate-spin text-yellow-400 mb-1" />
                 : <CreditCard size={14} className="text-yellow-400 mb-1" />
               }
-              <span className="text-xs font-bold text-white">$50 / año</span>
-              <span className="text-[10px] text-white/40">$4.17/mes</span>
+              <span className="text-xs font-bold text-white">$60 / año</span>
+              <span className="text-[10px] text-white/40">$5/mes</span>
             </button>
           </div>
           <p className="text-[10px] text-white/30 text-center">
