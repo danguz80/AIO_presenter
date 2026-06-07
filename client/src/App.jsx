@@ -71,12 +71,12 @@ function OAuthCallbackHandler() {
       } catch { /* token mal formado — ignorar */ }
     }
 
-    // Redirigir según modo: invitados van a /cancionero, admins a /app
+    // Redirigir según modo: invitados van a /cancionero, admins a /mode-select
     const mode = params.get('mode');
     let dest;
-    if (hasErr)              dest = `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}`;
+    if (hasErr)                   dest = `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}`;
     else if (mode === 'cancionero') dest = '/cancionero';
-    else                     dest = '/app';
+    else                           dest = '/mode-select';
     navigate(dest, { replace: true });
   }, [navigate]);
   return null;
@@ -167,7 +167,7 @@ export default function App() {
         {/* Páginas públicas (sin PresenterProvider) */}
         <Route path="/"            element={<LandingPage />} />
         <Route path="/login"        element={<LoginPage />} />
-        <Route path="/mode-select" element={<ModeSelectPage />} />
+        <Route path="/mode-select" element={<RequireAuth><ModeSelectPage /></RequireAuth>} />
         {/* App principal — requiere autenticación */}
         <Route path="/app"      element={<RequireAuth><ControllerPage /></RequireAuth>} />
         <Route path="/mobile"   element={<RequireAuth><MobileControllerPage /></RequireAuth>} />
