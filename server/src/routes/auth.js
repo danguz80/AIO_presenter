@@ -25,7 +25,7 @@ function getClientIp(req) {
  *  2. que las sesiones concurrentes (activas en los últimos 30 min) vengan de la misma red
  * Devuelve { iat } si todo OK, o { error: string } si debe bloquearse.
  */
-async function checkAndCreateSession(userId, ip) {
+async function checkAndCreateSession(userId, ip, isOwner = false) {
   // Limpiar sesiones cuyo JWT ya expiró (30 días)
   await pool.query(
     "DELETE FROM user_sessions WHERE user_id = $1 AND created_at < NOW() - INTERVAL '30 days'",
@@ -35,9 +35,10 @@ async function checkAndCreateSession(userId, ip) {
     'SELECT id, last_ip, last_seen FROM user_sessions WHERE user_id = $1 ORDER BY last_seen DESC',
     [userId]
   );
-  // Límite de dispositivos
-  if (sessions.length >= MAX_SESSIONS) {
-    return { error: `Límite de ${MAX_SESSIONS} dispositivos alcanzado. Cierra sesión en otro dispositivo para continuar.` };
+  // Límite de dispositivos (owner tiene límite mayor)
+  const limit = isOwner ? 10 : MAX_SESSIONS;
+  if (sessions.length >= limit) {
+    return { error: `Límite de ${limit} dispositivos alcanzado. Cierra sesión en otro dispositivo para continuar.` };
   }
   // Misma red para sesiones concurrentes
   if (ip) {
@@ -223,7 +224,7 @@ router.get('/google/callback', async (req, res) => {
 
       const user = rows[0];
       const ip = getClientIp(req);
-      const sessionResult = await checkAndCreateSession(user.id, ip);
+      const sessionResult = await checkAndCreateSession(user.id, ip, false);
       if (sessionResult.error) {
         return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
       }
@@ -256,7 +257,8 @@ router.get('/google/callback', async (req, res) => {
       );
       const user = existingRows[0];
       const ip = getClientIp(req);
-      const sessionResult = await checkAndCreateSession(user.id, ip);
+      const isOwnerUser = ADMIN_EMAIL && user.email === ADMIN_EMAIL;
+      const sessionResult = await checkAndCreateSession(user.id, ip, isOwnerUser);
       if (sessionResult.error) {
         return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
       }
@@ -315,7 +317,8 @@ router.get('/google/callback', async (req, res) => {
       [user.id, orgId]
     );
     const ip = getClientIp(req);
-    const sessionResult = await checkAndCreateSession(user.id, ip);
+    const isOwnerUser = ADMIN_EMAIL && user.email === ADMIN_EMAIL;
+    const sessionResult = await checkAndCreateSession(user.id, ip, isOwnerUser);
     if (sessionResult.error) {
       return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
     }
