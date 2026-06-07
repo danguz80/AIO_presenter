@@ -104,18 +104,21 @@ router.get('/google/url', (req, res) => {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     return res.status(503).json({ error: 'Google OAuth no configurado. Agrega GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET al .env' });
   }
-  const { invite } = req.query; // código de invitación opcional
+  const { invite, mode, plan } = req.query; // invite = código de invitación; mode='trial' para landing trial
   const oauth2Client = getOAuth2Client();
+  let stateStr;
+  if (invite)          stateStr = `invite:${invite}`;
+  else if (mode === 'trial') stateStr = `trial:${plan || 'monthly'}`;
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: [
       'https://www.googleapis.com/auth/userinfo.email',
       'https://www.googleapis.com/auth/userinfo.profile',
-      // Solo el primer usuario (admin) necesita acceso a Drive
-      ...(invite ? [] : ['https://www.googleapis.com/auth/drive.file']),
+      // Solo el primer usuario (admin) y trial necesitan acceso a Drive
+      ...(invite || mode === 'trial' ? [] : ['https://www.googleapis.com/auth/drive.file']),
     ],
     prompt: 'consent',
-    state: invite ? `invite:${invite}` : undefined,
+    state: stateStr,
   });
   res.json({ url });
 });
@@ -127,8 +130,9 @@ router.get('/google/callback', async (req, res) => {
   if (error) return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(error)}`);
   if (!code)  return res.redirect(`${CLIENT_URL}/?sync_error=no_code`);
 
-  // Extraer código de invitación del state
+  // Extraer código de invitación o modo trial del state
   const inviteCode = state?.startsWith('invite:') ? state.slice(7) : null;
+  const trialPlan  = state?.startsWith('trial:')  ? state.slice(6) : null; // 'monthly' | 'annual'
 
   try {
     const oauth2Client = getOAuth2Client();
@@ -227,7 +231,7 @@ router.get('/google/callback', async (req, res) => {
         { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
         JWT_SECRET, { expiresIn: '30d' }
       );
-      return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
+      return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}&mode=cancionero`);
     }
 
     // Sin invitación: admin que crea o entra a su org
@@ -260,10 +264,12 @@ router.get('/google/callback', async (req, res) => {
         { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
         JWT_SECRET, { expiresIn: '30d' }
       );
-      return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
+      // Usuario existente via trial → ir a /cancionero directamente
+      const dest = trialPlan ? `${CLIENT_URL}/?sync_token=${jwtToken}&mode=cancionero` : `${CLIENT_URL}/?sync_token=${jwtToken}`;
+      return res.redirect(dest);
     }
 
-    if (!isFirstGlobal && !isAdmin && existingRows.length === 0) {
+    if (!isFirstGlobal && !isAdmin && !trialPlan && existingRows.length === 0) {
       return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent('Necesitas un código de invitación para unirte')}`);
     }
 
@@ -317,6 +323,55 @@ router.get('/google/callback', async (req, res) => {
         { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true, canPull: true, iat: sessionResult.iat },
       JWT_SECRET, { expiresIn: '30d' }
     );
+    // Si viene de trial: crear suscripción PayPal y redirigir a approval
+    if (trialPlan && process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) {
+      try {
+        const planId = trialPlan === 'annual'
+          ? process.env.PAYPAL_PLAN_ID_ANNUAL
+          : process.env.PAYPAL_PLAN_ID_MONTHLY;
+        if (planId) {
+          const paypalBase = process.env.PAYPAL_ENV === 'production'
+            ? 'https://api-m.paypal.com'
+            : 'https://api-m.sandbox.paypal.com';
+          const creds = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+          const ppTokenRes = await fetch(`${paypalBase}/v1/oauth2/token`, {
+            method : 'POST',
+            headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+            body   : 'grant_type=client_credentials',
+          });
+          const ppTokenData = await ppTokenRes.json();
+          if (ppTokenData.access_token) {
+            const returnUrl = `${CLIENT_URL}/?sync_token=${jwtToken}&plan_type=${trialPlan}&mode=cancionero`;
+            const cancelUrl = `${CLIENT_URL}/?sync_token=${jwtToken}&paypal_cancel=true&mode=cancionero`;
+            const subRes = await fetch(`${paypalBase}/v1/billing/subscriptions`, {
+              method : 'POST',
+              headers: { 'Authorization': `Bearer ${ppTokenData.access_token}`, 'Content-Type': 'application/json' },
+              body   : JSON.stringify({
+                plan_id: planId,
+                application_context: {
+                  brand_name         : 'AIO Presenter',
+                  locale             : 'es-ES',
+                  shipping_preference: 'NO_SHIPPING',
+                  user_action        : 'SUBSCRIBE_NOW',
+                  return_url         : returnUrl,
+                  cancel_url         : cancelUrl,
+                },
+              }),
+            });
+            const sub = await subRes.json();
+            const approveLink = sub.links?.find(l => l.rel === 'approve');
+            if (approveLink) {
+              console.log('[Auth] Trial PayPal subscription creada, redirigiendo a PayPal');
+              return res.redirect(approveLink.href);
+            }
+            console.error('[Auth] PayPal trial: no se obtuvo approve link:', sub);
+          }
+        }
+      } catch (ppErr) {
+        console.error('[Auth] Error creando suscripción PayPal trial:', ppErr.message);
+        // Fall through: continuar con redirect normal sin PayPal
+      }
+    }
     res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
   } catch (err) {
     console.error('[Auth] Error en callback OAuth - tipo:', typeof err);

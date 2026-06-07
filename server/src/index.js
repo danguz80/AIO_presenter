@@ -336,6 +336,19 @@ async function saveOrgSetting(orgId, key, value) {
         created_at      TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // ─── Licencias / tokens por organización (owner panel) ─────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS org_licenses (
+        id         SERIAL PRIMARY KEY,
+        org_id     INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        type       VARCHAR(20) NOT NULL DEFAULT 'permanent', -- 'permanent' | 'timed'
+        expires_at TIMESTAMPTZ,                              -- NULL = permanente
+        note       TEXT,
+        created_by TEXT,                                     -- email del owner que la creó
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        revoked_at TIMESTAMPTZ                               -- NULL = activa
+      )
+    `);
     const { rows } = await pool.query("SELECT key, value FROM app_settings");
     for (const row of rows) {
       const colonIdx = row.key.indexOf(':');
@@ -710,6 +723,9 @@ app.use('/api/blocked-dates', blockedDatesRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/songs',         annotationsRouter);  // anotaciones personales por canción
 app.use('/paypal',            paypalRouter);
+
+const adminRouter = require('./routes/admin');
+app.use('/admin',             adminRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

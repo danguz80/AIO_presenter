@@ -20,6 +20,7 @@ import CancioneroEvents        from './pages/cancionero/CancioneroEvents';
 import CancioneroEventDetail   from './pages/cancionero/CancioneroEventDetail';
 import CancioneroSettings      from './pages/cancionero/CancioneroSettings';
 import SpotifyCallbackPage     from './pages/cancionero/SpotifyCallbackPage';
+import AdminPage               from './pages/AdminPage';
 
 // Intercepta sync_token / sync_error de la URL (redirect post-OAuth) y redirige a /app
 function OAuthCallbackHandler() {
@@ -36,14 +37,24 @@ function OAuthCallbackHandler() {
     if (subId) {
       const savedToken = token || localStorage.getItem('aio_sync_token');
       if (savedToken) {
+        // Guardar el token antes de activar (puede ser nuevo usuario del trial)
+        if (token) {
+          localStorage.setItem('aio_sync_token', token);
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.orgId) localStorage.setItem('aio_org_id', String(payload.orgId));
+          } catch { /* token mal formado — ignorar */ }
+        }
+        const mode = params.get('mode');
+        const redirectAfter = mode === 'cancionero' ? '/cancionero' : '/app';
         const apiUrl = import.meta.env.VITE_API_URL || '';
         fetch(`${apiUrl}/paypal/activate`, {
           method : 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${savedToken}` },
           body   : JSON.stringify({ subscriptionId: subId, planType: planType || 'monthly' }),
         }).then(r => r.json()).then(d => {
-          if (d.ok) window.location.replace('/app');
-        }).catch(() => {});
+          if (d.ok) window.location.replace(redirectAfter);
+        }).catch(() => { window.location.replace(redirectAfter); });
       } else {
         navigate('/app', { replace: true });
       }
@@ -60,8 +71,12 @@ function OAuthCallbackHandler() {
       } catch { /* token mal formado — ignorar */ }
     }
 
-    // Redirigir a /app preservando solo el error si lo hay
-    const dest = hasErr ? `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}` : '/app';
+    // Redirigir según modo: invitados van a /cancionero, admins a /app
+    const mode = params.get('mode');
+    let dest;
+    if (hasErr)              dest = `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}`;
+    else if (mode === 'cancionero') dest = '/cancionero';
+    else                     dest = '/app';
     navigate(dest, { replace: true });
   }, [navigate]);
   return null;
@@ -167,6 +182,8 @@ export default function App() {
         <Route path="/cancionero/configuracion"         element={<RequireAuth><CancioneroSettings /></RequireAuth>} />
         {/* Spotify OAuth callback — sin RequireAuth: llega desde redirect de Spotify (127.0.0.1) */}
         <Route path="/spotify-callback" element={<SpotifyCallbackPage />} />
+        {/* Panel de administración del owner */}
+        <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
         {/* Páginas de display — abiertas en pantallas secundarias, sin auth */}
         <Route path="/output"  element={<OutputPage />} />
         <Route path="/stage"   element={<StagePage />} />

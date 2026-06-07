@@ -42,7 +42,7 @@ function requireAuth(req, res, next) {
   }
 }
 
-/** Verifica que la org tenga plan activo (pro) o trial vigente */
+/** Verifica que la org tenga plan activo (pro), trial vigente, O licencia activa */
 async function requireActivePlan(req, res, next) {
   try {
     const { rows } = await pool.query(
@@ -54,6 +54,17 @@ async function requireActivePlan(req, res, next) {
     if (plan === 'pro') return next();
     if (plan === 'trial') {
       if (trial_ends && new Date(trial_ends) >= new Date()) return next();
+    }
+    // Verificar si tiene licencia activa (permanente o no vencida)
+    const { rows: lic } = await pool.query(
+      `SELECT id FROM org_licenses
+        WHERE org_id = $1 AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > NOW())
+        LIMIT 1`,
+      [req.user.orgId]
+    );
+    if (lic.length) return next();
+    if (plan === 'trial') {
       return res.status(402).json({
         error: 'Tu período de prueba ha terminado. Suscríbete para continuar.',
         code : 'TRIAL_EXPIRED',
@@ -63,6 +74,15 @@ async function requireActivePlan(req, res, next) {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+}
+
+/** Solo el owner (ADMIN_EMAIL en env) puede acceder */
+function requireOwner(req, res, next) {
+  const ownerEmail = process.env.ADMIN_EMAIL;
+  if (!ownerEmail) return res.status(503).json({ error: 'Owner no configurado' });
+  if (!req.user)   return res.status(401).json({ error: 'No autenticado' });
+  if (req.user.email !== ownerEmail) return res.status(403).json({ error: 'Acceso denegado' });
+  next();
 }
 
 /** Verifica JWT si está presente, pero NO bloquea si falta o es inválido */
@@ -86,4 +106,4 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, optionalAuth, requireAdmin, requireActivePlan, JWT_SECRET, getClientIp };
+module.exports = { requireAuth, optionalAuth, requireAdmin, requireActivePlan, requireOwner, JWT_SECRET, getClientIp };

@@ -224,6 +224,17 @@ export default function LandingPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [inviteRedirecting, setInviteRedirecting] = useState(false);
+  const [trialLoading, setTrialLoading] = useState(null); // plan id que está cargando
+
+  // Iniciar prueba gratis: Google OAuth con mode=trial
+  const startTrial = (plan = 'monthly') => {
+    if (trialLoading) return;
+    setTrialLoading(plan);
+    fetch(`${API}/auth/google/url?mode=trial&plan=${encodeURIComponent(plan)}`)
+      .then(r => r.json())
+      .then(({ url }) => { if (url) window.location.href = url; else setTrialLoading(null); })
+      .catch(() => setTrialLoading(null));
+  };
 
   // Si llega con ?invite=CODE, redirigir directamente a Google OAuth
   useEffect(() => {
@@ -602,14 +613,15 @@ export default function LandingPage() {
                 </ul>
 
                 <button
-                  onClick={() => navigate(`/register?plan=${plan.id}`)}
-                  className={`w-full py-3.5 rounded-xl font-bold text-base transition-all active:scale-95 ${
+                  onClick={() => startTrial(plan.id)}
+                  disabled={!!trialLoading}
+                  className={`w-full py-3.5 rounded-xl font-bold text-base transition-all active:scale-95 disabled:opacity-70 disabled:cursor-wait ${
                     plan.variant === 'solid'
                       ? 'bg-[#C9A420] hover:bg-[#b8931c] text-white shadow-lg'
                       : 'bg-[#1B3166] hover:bg-[#243E82] text-white'
                   }`}
                 >
-                  {plan.cta}
+                  {trialLoading === plan.id ? 'Redirigiendo a Google…' : plan.cta}
                 </button>
                 <p className={`text-center text-xs ${plan.variant === 'solid' ? 'text-white/40' : 'text-gray-400'}`}>
                   30 días gratis · Sin tarjeta de crédito
@@ -623,7 +635,7 @@ export default function LandingPage() {
             {[
               ['¿Necesito descargar algo?', 'No. AIO Presenter es 100% web. Funciona desde cualquier navegador en tu computador o teléfono.'],
               ['¿Puedo usar ambos modos con un solo plan?', 'Sí. Un plan incluye tanto el Modo Presenter como el Modo Cancionero para todos tus músicos.'],
-              ['¿Qué pasa cuando termina la prueba?', 'Te notificamos antes de que termine. Si no elijes un plan, tu cuenta queda pausada y puedes reactivarla en cualquier momento.'],
+              ['\u00bfQué pasa cuando termina la prueba?', 'Al finalizar los 30 días de prueba gratuita, comienza tu primer ciclo de pago. El primer cobro real ocurre al día 60 (es decir, 30 días después de que termine el trial). Puedes cancelar antes de ese momento sin ningún cargo.'],
             ].map(([q, a]) => (
               <details key={q} className="group bg-gray-50 rounded-xl border border-gray-200 px-5 py-4">
                 <summary className="flex items-center justify-between cursor-pointer font-semibold text-[#1B3166] text-sm list-none">
@@ -646,11 +658,12 @@ export default function LandingPage() {
             Empieza hoy, gratis. Sin compromisos ni tarjeta de crédito.
           </p>
           <button
-            onClick={() => scrollTo('precios')}
-            className="group flex items-center gap-2 px-10 py-4 bg-[#C9A420] hover:bg-[#b8931c] text-white font-bold rounded-xl text-lg shadow-xl shadow-yellow-900/30 transition-all active:scale-95"
+            onClick={() => startTrial('monthly')}
+            disabled={!!trialLoading}
+            className="group flex items-center gap-2 px-10 py-4 bg-[#C9A420] hover:bg-[#b8931c] text-white font-bold rounded-xl text-lg shadow-xl shadow-yellow-900/30 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-wait"
           >
-            Crear cuenta gratis
-            <ChevronRight size={20} className="group-hover:translate-x-0.5 transition-transform" />
+            {trialLoading ? 'Redirigiendo a Google…' : 'Crear cuenta gratis'}
+            {!trialLoading && <ChevronRight size={20} className="group-hover:translate-x-0.5 transition-transform" />}
           </button>
           <div className="flex flex-wrap justify-center gap-4 text-sm text-white/40">
             <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> 30 días de prueba</span>
