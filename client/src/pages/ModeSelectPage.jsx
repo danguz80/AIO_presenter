@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MonitorPlay, Music2, ChevronRight, LogOut, Loader2 } from 'lucide-react';
+import { MonitorPlay, Music2, ChevronRight, LogOut, Loader2, ShieldCheck } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -26,6 +26,16 @@ const MODES = [
 export default function ModeSelectPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(null); // id del modo que está cargando
+
+  // Detectar si el usuario es owner leyendo el JWT del localStorage
+  const isOwner = useMemo(() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.isAdmin === true;
+    } catch { return false; }
+  }, []);
 
   const handleSelect = async (mode) => {
     if (!mode.available || loading) return;
@@ -147,6 +157,17 @@ export default function ModeSelectPage() {
         <LogOut size={14} />
         Volver al inicio
       </button>
+
+      {/* Enlace admin — solo visible para el owner */}
+      {isOwner && (
+        <button
+          onClick={() => navigate('/admin')}
+          className="mt-3 flex items-center gap-1.5 text-[#C9A420]/50 hover:text-[#C9A420] text-xs transition-colors"
+        >
+          <ShieldCheck size={13} />
+          Panel de administración
+        </button>
+      )}
     </div>
   );
 }
