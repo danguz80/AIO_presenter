@@ -92,7 +92,7 @@ const HOW_IT_WORKS = [
   {
     step: '01',
     title: 'Crea tu cuenta',
-    desc: 'Regístrate con Google en segundos. Los primeros 30 días son completamente gratis, sin tarjeta de crédito.',
+    desc: 'Regístrate con Google en segundos. Los primeros 30 días son completamente gratis. Solo pagas a partir del día 30.',
   },
   {
     step: '02',
@@ -406,7 +406,7 @@ export default function LandingPage() {
           {/* Badge de prueba gratis */}
           <div className="flex items-center gap-2 text-white/50 text-sm">
             <Check size={14} className="text-green-400" />
-            30 días gratis · Sin tarjeta de crédito · Cancela cuando quieras
+            30 días gratis · Primer cobro al día 30 · Cancela cuando quieras
           </div>
 
           {/* App mockup */}
@@ -572,7 +572,7 @@ export default function LandingPage() {
             <span className="inline-block text-xs font-bold text-[#C9A420] uppercase tracking-widest mb-3">Planes y precios</span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-[#1B3166]">Simple y transparente</h2>
             <p className="mt-3 text-gray-500 max-w-lg mx-auto">
-              Comienza con 30 días gratis, sin tarjeta de crédito. Cancela en cualquier momento.
+              Comienza con 30 días gratis. Tu primer cobro es al día 30. Cancela antes y no pagas nada.
             </p>
           </div>
 
@@ -624,7 +624,7 @@ export default function LandingPage() {
                   {trialLoading === plan.id ? 'Redirigiendo a Google…' : plan.cta}
                 </button>
                 <p className={`text-center text-xs ${plan.variant === 'solid' ? 'text-white/40' : 'text-gray-400'}`}>
-                  30 días gratis · Sin tarjeta de crédito
+                  30 días gratis · Primer cobro al día 30
                 </p>
               </div>
             ))}
@@ -635,7 +635,7 @@ export default function LandingPage() {
             {[
               ['¿Necesito descargar algo?', 'No. AIO Presenter es 100% web. Funciona desde cualquier navegador en tu computador o teléfono.'],
               ['¿Puedo usar ambos modos con un solo plan?', 'Sí. Un plan incluye tanto el Modo Presenter como el Modo Cancionero para todos tus músicos.'],
-              ['¿Qué pasa cuando termina la prueba?', 'Al finalizar los 30 días de prueba gratuita, comienza tu primer ciclo de pago. El primer cobro real ocurre al día 60 (es decir, 30 días después de que termine el trial). Puedes cancelar antes de ese momento sin ningún cargo.'],
+              ['¿Qué pasa cuando termina la prueba?', 'Al finalizar los 30 días gratuitos, PayPal realiza el primer cobro automáticamente ($6/mes o $60/año). Si cancelas tu suscripción antes del día 30, no se te cobra nada.'],
               ['¿Necesito una cuenta Gmail para registrarme?', 'El acceso se hace con Google, pero no necesitas Gmail. Si usas otro correo (Outlook, Hotmail, Yahoo, etc.), puedes crear una cuenta Google gratuita con ese mismo email en accounts.google.com/signup — sin cambiar de dirección. Una vez creada, usa ese acceso para entrar a AIO Presenter normalmente.'],
               ['¿Necesito una cuenta PayPal para suscribirme?', 'No. En la pantalla de pago de PayPal aparece la opción "Pagar con tarjeta" que permite pagar con tarjeta de crédito o débito sin crear ninguna cuenta PayPal.'],
             ].map(([q, a]) => (
@@ -657,7 +657,7 @@ export default function LandingPage() {
           <img src="/logo-circle.png" alt="AIO" className="h-16 w-16 object-contain" onError={e => { e.target.style.display='none'; }} />
           <h2 className="text-3xl sm:text-4xl font-extrabold">Lleva tu alabanza al siguiente nivel</h2>
           <p className="text-white/60 text-lg">
-            Empieza hoy, gratis. Sin compromisos ni tarjeta de crédito.
+            Empieza hoy con 30 días gratis. Sin compromisos — cancela antes del día 30 y no pagas nada.
           </p>
           <button
             onClick={() => startTrial('monthly')}
@@ -669,7 +669,7 @@ export default function LandingPage() {
           </button>
           <div className="flex flex-wrap justify-center gap-4 text-sm text-white/40">
             <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> 30 días de prueba</span>
-            <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> Sin tarjeta de crédito</span>
+            <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> Primer cobro al día 30</span>
             <span className="flex items-center gap-1"><Check size={13} className="text-green-400" /> Cancela cuando quieras</span>
           </div>
         </div>
