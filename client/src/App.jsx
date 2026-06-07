@@ -71,12 +71,13 @@ function OAuthCallbackHandler() {
       } catch { /* token mal formado — ignorar */ }
     }
 
-    // Redirigir según modo: invitados van a /cancionero, admins a /mode-select
+    // Redirigir según modo
     const mode = params.get('mode');
     let dest;
-    if (hasErr)                     dest = `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}`;
+    if (hasErr)                     dest = `/login?sync_error=${encodeURIComponent(err || 'Error desconocido')}`;
     else if (mode === 'cancionero') dest = '/cancionero';
     else                            dest = '/mode-select';
+    console.log('[OAuthCallback] token presente:', !!token, '| hasErr:', hasErr, '| dest:', dest);
     window.location.replace(dest);
   }, [navigate]);
   return null;

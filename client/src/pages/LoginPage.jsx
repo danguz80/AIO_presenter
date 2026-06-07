@@ -20,6 +20,9 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
+  // Mostrar error si viene de un redirect OAuth fallido
+  const syncError = new URLSearchParams(window.location.search).get('sync_error');
+
   const handleGoogleLogin = () => {
     setLoading(true);
     fetch(`${API}/auth/google/url`)
@@ -67,6 +70,13 @@ export default function LoginPage() {
 
         {/* Separador */}
         <hr className="w-full border-white/10" />
+
+        {/* Error de OAuth */}
+        {syncError && (
+          <div className="w-full bg-red-500/20 border border-red-500/40 rounded-xl px-4 py-3 text-red-300 text-sm text-center">
+            {decodeURIComponent(syncError)}
+          </div>
+        )}
 
         {/* Heading */}
         <div className="text-center">
