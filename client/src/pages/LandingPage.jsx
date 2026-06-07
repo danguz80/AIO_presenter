@@ -635,7 +635,9 @@ export default function LandingPage() {
             {[
               ['¿Necesito descargar algo?', 'No. AIO Presenter es 100% web. Funciona desde cualquier navegador en tu computador o teléfono.'],
               ['¿Puedo usar ambos modos con un solo plan?', 'Sí. Un plan incluye tanto el Modo Presenter como el Modo Cancionero para todos tus músicos.'],
-              ['\u00bfQué pasa cuando termina la prueba?', 'Al finalizar los 30 días de prueba gratuita, comienza tu primer ciclo de pago. El primer cobro real ocurre al día 60 (es decir, 30 días después de que termine el trial). Puedes cancelar antes de ese momento sin ningún cargo.'],
+              ['¿Qué pasa cuando termina la prueba?', 'Al finalizar los 30 días de prueba gratuita, comienza tu primer ciclo de pago. El primer cobro real ocurre al día 60 (es decir, 30 días después de que termine el trial). Puedes cancelar antes de ese momento sin ningún cargo.'],
+              ['¿Necesito una cuenta Gmail para registrarme?', 'El acceso se hace con Google, pero no necesitas Gmail. Si usas otro correo (Outlook, Hotmail, Yahoo, etc.), puedes crear una cuenta Google gratuita con ese mismo email en accounts.google.com/signup — sin cambiar de dirección. Una vez creada, usa ese acceso para entrar a AIO Presenter normalmente.'],
+              ['¿Necesito una cuenta PayPal para suscribirme?', 'No. En la pantalla de pago de PayPal aparece la opción "Pagar con tarjeta" que permite pagar con tarjeta de crédito o débito sin crear ninguna cuenta PayPal.'],
             ].map(([q, a]) => (
               <details key={q} className="group bg-gray-50 rounded-xl border border-gray-200 px-5 py-4">
                 <summary className="flex items-center justify-between cursor-pointer font-semibold text-[#1B3166] text-sm list-none">
