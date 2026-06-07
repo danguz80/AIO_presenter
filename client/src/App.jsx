@@ -167,7 +167,7 @@ export default function App() {
         {/* Páginas públicas (sin PresenterProvider) */}
         <Route path="/"            element={<LandingPage />} />
         <Route path="/login"        element={<LoginPage />} />
-        <Route path="/mode-select" element={<RequireAuth><ModeSelectPage /></RequireAuth>} />
+        <Route path="/mode-select" element={<ModeSelectPage />} />
         {/* App principal — requiere autenticación */}
         <Route path="/app"      element={<RequireAuth><ControllerPage /></RequireAuth>} />
         <Route path="/mobile"   element={<RequireAuth><MobileControllerPage /></RequireAuth>} />
