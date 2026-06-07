@@ -74,10 +74,10 @@ function OAuthCallbackHandler() {
     // Redirigir según modo: invitados van a /cancionero, admins a /mode-select
     const mode = params.get('mode');
     let dest;
-    if (hasErr)                   dest = `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}`;
+    if (hasErr)                     dest = `/app?sync_error=${encodeURIComponent(err || 'Error desconocido')}`;
     else if (mode === 'cancionero') dest = '/cancionero';
-    else                           dest = '/mode-select';
-    navigate(dest, { replace: true });
+    else                            dest = '/mode-select';
+    window.location.replace(dest);
   }, [navigate]);
   return null;
 }
