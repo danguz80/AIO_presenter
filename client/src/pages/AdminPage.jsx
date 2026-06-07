@@ -6,7 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, CreditCard, Shield, Plus, Trash2,
-  ChevronDown, ChevronUp, RefreshCw, AlertCircle, Check, X
+  ChevronDown, ChevronUp, RefreshCw, AlertCircle, Check, X, Mail, Send
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -285,8 +285,20 @@ export default function AdminPage() {
   const [orgs, setOrgs]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
-  const [filter, setFilter]   = useState('all'); // 'all' | 'pro' | 'trial' | 'licensed'
+  const [filter, setFilter]   = useState('all');
   const [search, setSearch]   = useState('');
+
+  // Estado del formulario de licencia pendiente
+  const [pendingEmail, setPendingEmail]     = useState('');
+  const [pendingType, setPendingType]       = useState('permanent');
+  const [pendingExpires, setPendingExpires] = useState('');
+  const [pendingMembers, setPendingMembers] = useState(5);
+  const [pendingNote, setPendingNote]       = useState('');
+  const [pendingList, setPendingList]       = useState([]);
+  const [savingPending, setSavingPending]   = useState(false);
+  const [pendingError, setPendingError]     = useState('');
+  const [pendingOk, setPendingOk]           = useState('');
+  const [showPendingForm, setShowPendingForm] = useState(false);
 
   const loadOrgs = useCallback(async () => {
     setLoading(true); setError('');
@@ -300,7 +312,45 @@ export default function AdminPage() {
     setLoading(false);
   }, [navigate]);
 
-  useEffect(() => { loadOrgs(); }, [loadOrgs]);
+  const loadPending = useCallback(async () => {
+    try {
+      const r = await fetch(`${API}/admin/pending-licenses`, { headers: authHeaders() });
+      const d = await r.json();
+      if (r.ok) setPendingList(Array.isArray(d) ? d : []);
+    } catch {}
+  }, []);
+
+  useEffect(() => { loadOrgs(); loadPending(); }, [loadOrgs, loadPending]);
+
+  const createPendingLicense = async () => {
+    if (!pendingEmail) return;
+    setSavingPending(true); setPendingError(''); setPendingOk('');
+    try {
+      const r = await fetch(`${API}/admin/pending-licenses`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          email: pendingEmail,
+          license_type: pendingType,
+          expires_at: pendingExpires || null,
+          max_members: pendingMembers,
+          note: pendingNote,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setPendingError(d.error || 'Error'); setSavingPending(false); return; }
+      setPendingOk(`Licencia creada para ${pendingEmail}. Dile que se registre en aiopresenter.com`);
+      setPendingEmail(''); setPendingNote(''); setPendingExpires(''); setPendingMembers(5);
+      setPendingType('permanent');
+      loadPending();
+    } catch { setPendingError('Error de conexión'); }
+    setSavingPending(false);
+  };
+
+  const deletePending = async (id) => {
+    await fetch(`${API}/admin/pending-licenses/${id}`, { method: 'DELETE', headers: authHeaders() });
+    loadPending();
+  };
 
   const filtered = orgs.filter(o => {
     const matchFilter =
@@ -355,6 +405,102 @@ export default function AdminPage() {
               <div className="text-[10px] text-white/40">{s.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* ── Otorgar licencia a nueva org ── */}
+        <div className="bg-white/4 border border-white/8 rounded-2xl overflow-hidden">
+          <button
+            onClick={() => setShowPendingForm(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/4 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm font-semibold text-white">
+              <Mail size={15} className="text-yellow-400" />
+              Otorgar licencia a nueva organización
+            </div>
+            {showPendingForm ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
+          </button>
+
+          {showPendingForm && (
+            <div className="px-4 pb-4 border-t border-white/8 pt-3 space-y-3">
+              <p className="text-xs text-white/40">El usuario se registra en aiopresenter.com con este email y se le crea la org automáticamente con la licencia aplicada.</p>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Email del futuro admin *</label>
+                  <input
+                    type="email" value={pendingEmail} onChange={e => setPendingEmail(e.target.value)}
+                    placeholder="pastor@iglesia.cl"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Tipo de licencia</label>
+                  <select
+                    value={pendingType} onChange={e => setPendingType(e.target.value)}
+                    className="w-full bg-[#0d1929] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                  >
+                    <option value="permanent">Permanente</option>
+                    <option value="timed">Con fecha de expiración</option>
+                  </select>
+                </div>
+                {pendingType === 'timed' && (
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Expira el</label>
+                    <input
+                      type="date" value={pendingExpires} onChange={e => setPendingExpires(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Máx. miembros</label>
+                  <input
+                    type="number" min={1} max={50} value={pendingMembers} onChange={e => setPendingMembers(Number(e.target.value))}
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Nota (opcional)</label>
+                  <input
+                    type="text" value={pendingNote} onChange={e => setPendingNote(e.target.value)}
+                    placeholder="Ej: Iglesia amiga, acceso regalo"
+                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25"
+                  />
+                </div>
+              </div>
+
+              {pendingError && <p className="text-xs text-red-400">{pendingError}</p>}
+              {pendingOk    && <p className="text-xs text-green-400">{pendingOk}</p>}
+
+              <button
+                onClick={createPendingLicense}
+                disabled={savingPending || !pendingEmail}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 border border-yellow-400/30 text-yellow-300 rounded-lg text-sm font-semibold disabled:opacity-40 hover:bg-yellow-500/30 transition-colors"
+              >
+                <Send size={13} />
+                {savingPending ? 'Guardando...' : 'Crear licencia pendiente'}
+              </button>
+
+              {/* Lista de licencias pendientes */}
+              {pendingList.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-[10px] text-white/30 uppercase tracking-wider">Pendientes ({pendingList.filter(p => !p.redeemed_at).length}) · Canjeadas ({pendingList.filter(p => p.redeemed_at).length})</p>
+                  {pendingList.map(p => (
+                    <div key={p.id} className={`flex items-center gap-2 text-xs py-1.5 ${p.redeemed_at ? 'opacity-40' : ''}`}>
+                      <Mail size={11} className={p.redeemed_at ? 'text-green-400' : 'text-yellow-400'} />
+                      <span className="text-white/80 flex-1">{p.email}</span>
+                      <span className="text-white/30">{p.license_type === 'permanent' ? 'permanente' : `hasta ${new Date(p.expires_at).toLocaleDateString('es-CL')}`}</span>
+                      <span className="text-white/25">·{p.max_members} miembros</span>
+                      {p.redeemed_at
+                        ? <span className="text-[9px] text-green-400">Canjeada · {p.redeemed_org_name}</span>
+                        : <button onClick={() => deletePending(p.id)} className="text-red-400/50 hover:text-red-400"><Trash2 size={11} /></button>
+                      }
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Filtros */}

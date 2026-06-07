@@ -157,4 +157,60 @@ router.patch('/orgs/:id/plan', async (req, res) => {
   }
 });
 
+// ─── GET /admin/pending-licenses — listar licencias pendientes ────────────────
+router.get('/pending-licenses', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT p.*, o.name AS redeemed_org_name
+         FROM pending_org_licenses p
+         LEFT JOIN organizations o ON o.id = p.redeemed_org_id
+         ORDER BY p.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── POST /admin/pending-licenses — crear licencia pendiente para un email ────
+router.post('/pending-licenses', async (req, res) => {
+  const { email, license_type = 'permanent', expires_at = null, max_members = 5, note = '' } = req.body;
+  if (!email || !email.includes('@')) return res.status(400).json({ error: 'Email inválido' });
+  if (!['permanent', 'timed'].includes(license_type)) {
+    return res.status(400).json({ error: 'license_type debe ser permanent o timed' });
+  }
+  try {
+    // Verificar si ya existe una pendiente para ese email (no canjeada)
+    const existing = await pool.query(
+      `SELECT id FROM pending_org_licenses WHERE email = $1 AND redeemed_at IS NULL`,
+      [email.toLowerCase()]
+    );
+    if (existing.rows.length) {
+      return res.status(409).json({ error: `Ya existe una licencia pendiente para ${email}` });
+    }
+    const { rows } = await pool.query(
+      `INSERT INTO pending_org_licenses (email, license_type, expires_at, max_members, note, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [email.toLowerCase(), license_type, expires_at || null, max_members, note, req.user.email]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── DELETE /admin/pending-licenses/:id — cancelar licencia pendiente ─────────
+router.delete('/pending-licenses/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `DELETE FROM pending_org_licenses WHERE id = $1 AND redeemed_at IS NULL`,
+      [parseInt(req.params.id)]
+    );
+    if (!rowCount) return res.status(404).json({ error: 'Licencia pendiente no encontrada o ya canjeada' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

@@ -318,6 +318,7 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paypal_subscription_id TEXT`);
     await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paypal_plan_type VARCHAR(20)`);
     await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'trial'`);
+    await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS max_members INTEGER DEFAULT 5`);
     // Cambiar trial de 7 a 30 días para nuevas orgs
     await pool.query(`ALTER TABLE organizations ALTER COLUMN trial_ends SET DEFAULT (CURRENT_DATE + 30)`);
     // Extender orgs en trial que aún no han vencido (o que vencieron muy reciente)
@@ -347,6 +348,20 @@ async function saveOrgSetting(orgId, key, value) {
         created_by TEXT,                                     -- email del owner que la creó
         created_at TIMESTAMPTZ DEFAULT NOW(),
         revoked_at TIMESTAMPTZ                               -- NULL = activa
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_org_licenses (
+        id           SERIAL PRIMARY KEY,
+        email        TEXT NOT NULL,                          -- email del futuro admin
+        license_type VARCHAR(20) NOT NULL DEFAULT 'permanent',
+        expires_at   TIMESTAMPTZ,
+        max_members  INTEGER NOT NULL DEFAULT 5,
+        note         TEXT,
+        created_by   TEXT,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        redeemed_at  TIMESTAMPTZ,
+        redeemed_org_id INTEGER REFERENCES organizations(id) ON DELETE SET NULL
       )
     `);
     const { rows } = await pool.query("SELECT key, value FROM app_settings");

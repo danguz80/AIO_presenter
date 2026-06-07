@@ -272,7 +272,71 @@ router.get('/google/callback', async (req, res) => {
     }
 
     if (!isFirstGlobal && !isAdmin && !trialPlan && existingRows.length === 0) {
-      return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent('Necesitas un código de invitación para unirte')}`);
+      // Verificar si tiene licencia pendiente otorgada por el owner
+      const { rows: pendingLic } = await pool.query(
+        `SELECT * FROM pending_org_licenses
+          WHERE email = $1 AND redeemed_at IS NULL
+          AND (expires_at IS NULL OR expires_at > NOW())
+          LIMIT 1`,
+        [userInfo.email.toLowerCase()]
+      );
+      if (!pendingLic.length) {
+        return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent('Necesitas un código de invitación para unirte')}`);
+      }
+      // Tiene licencia pendiente → crear org con plan 'pro' directamente
+      const orgName = userInfo.name ? `Org de ${userInfo.name}` : `Org ${userInfo.email}`;
+      const { rows: orgRows } = await pool.query(
+        `INSERT INTO organizations (name, plan) VALUES ($1, 'pro') RETURNING id`,
+        [orgName]
+      );
+      orgId = orgRows[0].id;
+
+      const { rows: newUserRows } = await pool.query(`
+        INSERT INTO sync_users (google_id, email, display_name, avatar_url, is_admin, can_push, can_push_all, can_pull, organization_id, access_token, refresh_token, token_expiry)
+        VALUES ($1, $2, $3, $4, true, true, true, true, $5, $6, $7, $8)
+        ON CONFLICT (google_id) DO UPDATE SET
+          email = EXCLUDED.email, display_name = EXCLUDED.display_name,
+          avatar_url = EXCLUDED.avatar_url, is_admin = TRUE,
+          can_push = TRUE, can_push_all = TRUE, can_pull = TRUE,
+          organization_id = EXCLUDED.organization_id,
+          access_token = EXCLUDED.access_token,
+          refresh_token = COALESCE(EXCLUDED.refresh_token, sync_users.refresh_token),
+          token_expiry = EXCLUDED.token_expiry, updated_at = NOW()
+        RETURNING *
+      `, [userInfo.id, userInfo.email, userInfo.name, userInfo.picture,
+          orgId, tokens.access_token, tokens.refresh_token || null, tokens.expiry_date || null]);
+
+      await pool.query(
+        `INSERT INTO user_organizations (user_id, organization_id, role) VALUES ($1, $2, 'admin') ON CONFLICT DO NOTHING`,
+        [newUserRows[0].id, orgId]
+      );
+      // Crear licencia en org_licenses
+      await pool.query(
+        `INSERT INTO org_licenses (org_id, type, expires_at, note, created_by)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [orgId, pendingLic[0].license_type, pendingLic[0].expires_at, pendingLic[0].note, pendingLic[0].created_by]
+      );
+      // Guardar max_members en la org
+      await pool.query(
+        `UPDATE organizations SET max_members = $1 WHERE id = $2`,
+        [pendingLic[0].max_members, orgId]
+      );
+      // Marcar licencia pendiente como canjeada
+      await pool.query(
+        `UPDATE pending_org_licenses SET redeemed_at = NOW(), redeemed_org_id = $1 WHERE id = $2`,
+        [orgId, pendingLic[0].id]
+      );
+
+      const ip = getClientIp(req);
+      const sessionResult = await checkAndCreateSession(newUserRows[0].id, ip, false);
+      if (sessionResult.error) {
+        return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
+      }
+      const jwtToken = jwt.sign(
+        { userId: newUserRows[0].id, orgId, email: newUserRows[0].email, isAdmin: true, canPush: true, canPull: true, iat: sessionResult.iat },
+        JWT_SECRET, { expiresIn: '30d' }
+      );
+      return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
     }
 
     // Primer usuario o admin: crear nueva organización
