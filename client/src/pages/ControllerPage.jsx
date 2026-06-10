@@ -11,7 +11,7 @@ import SongFormModal   from '../components/Library/SongFormModal';
 import { ScheduleAddProvider } from '../context/ScheduleAddContext';
 import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2 } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -164,6 +164,26 @@ export default function ControllerPage() {
             <Music2 size={15} />
             <span className="hidden sm:inline">Cancionero</span>
           </button>
+
+          {/* Botón Admin (solo owner) */}
+          {(() => {
+            try {
+              const t = localStorage.getItem('aio_sync_token');
+              if (!t) return null;
+              const p = JSON.parse(atob(t.split('.')[1]));
+              if (!p?.isAdmin) return null;
+              return (
+                <button
+                  onClick={() => navigate('/admin')}
+                  title="Panel de Administración"
+                  className="flex items-center gap-1.5 text-xs text-yellow-500/70 hover:text-yellow-400 transition-colors px-2 py-1 rounded hover:bg-surface-700"
+                >
+                  <ShieldCheck size={15} />
+                  <span className="hidden sm:inline">Admin</span>
+                </button>
+              );
+            } catch { return null; }
+          })()}
 
           {/* Botón calendario */}
           <Link

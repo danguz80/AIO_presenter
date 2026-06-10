@@ -6,7 +6,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, CreditCard, Shield, Plus, Trash2,
-  ChevronDown, ChevronUp, RefreshCw, AlertCircle, Check, X, Mail, Send
+  ChevronDown, ChevronUp, RefreshCw, AlertCircle, Check, X, Mail, Send,
+  Monitor, Music2
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -150,6 +151,14 @@ function OrgCard({ org, onRefresh }) {
   };
 
   const hasActiveLicense = !!org.active_license;
+  const [deleting, setDeleting] = useState(false);
+
+  const deleteOrg = async () => {
+    if (!window.confirm(`¿Eliminar la organización "${org.name}" y todos sus datos? Esta acción es irreversible.`)) return;
+    setDeleting(true);
+    await fetch(`${API}/admin/orgs/${org.id}`, { method: 'DELETE', headers: authHeaders() });
+    onRefresh();
+  };
 
   return (
     <div className="bg-white/4 border border-white/8 rounded-2xl overflow-hidden">
@@ -180,9 +189,17 @@ function OrgCard({ org, onRefresh }) {
             </span>
           </div>
         </div>
-        <div className="shrink-0 text-white/30">
-          {loadingDetail ? <RefreshCw size={14} className="animate-spin" />
-            : expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <div className="shrink-0 flex items-center gap-2">
+          <button
+            onClick={e => { e.stopPropagation(); deleteOrg(); }}
+            disabled={deleting}
+            className="text-red-400/40 hover:text-red-400 transition-colors p-1"
+            title="Eliminar organización"
+          ><Trash2 size={13} /></button>
+          <span className="text-white/30">
+            {loadingDetail ? <RefreshCw size={14} className="animate-spin" />
+              : expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </span>
         </div>
       </div>
 
@@ -382,13 +399,25 @@ export default function AdminPage() {
             <p className="text-xs text-white/40">AIO Presenter — Owner</p>
           </div>
         </div>
-        <button
-          onClick={loadOrgs}
-          className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors"
-        >
-          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
-          Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/app')}
+            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/8"
+            title="Modo Presenter"
+          ><Monitor size={13} /><span className="hidden sm:inline">Presenter</span></button>
+          <button
+            onClick={() => navigate('/cancionero')}
+            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-yellow-400 transition-colors px-2 py-1 rounded hover:bg-white/8"
+            title="Modo Cancionero"
+          ><Music2 size={13} /><span className="hidden sm:inline">Cancionero</span></button>
+          <button
+            onClick={loadOrgs}
+            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white transition-colors px-2 py-1 rounded hover:bg-white/8"
+          >
+            <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">Actualizar</span>
+          </button>
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">

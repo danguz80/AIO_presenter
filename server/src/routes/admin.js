@@ -199,6 +199,35 @@ router.post('/pending-licenses', async (req, res) => {
   }
 });
 
+});
+
+// ─── DELETE /admin/orgs/:id — eliminar organización completamente ─────────────
+router.delete('/orgs/:id', async (req, res) => {
+  try {
+    const orgId = parseInt(req.params.id);
+    // Eliminar en cascada: miembros, invitaciones, licencias, sesiones, datos de la org
+    await pool.query(`DELETE FROM org_licenses            WHERE org_id = $1`, [orgId]);
+    await pool.query(`DELETE FROM pending_org_licenses    WHERE redeemed_org_id = $1`, [orgId]);
+    await pool.query(`DELETE FROM sync_invitations        WHERE organization_id = $1`, [orgId]);
+    // Eliminar sesiones de todos los usuarios de la org
+    await pool.query(`
+      DELETE FROM user_sessions WHERE user_id IN (
+        SELECT user_id FROM user_organizations WHERE organization_id = $1
+      )`, [orgId]);
+    // Desvincular usuarios (no eliminar el usuario por si pertenece a otra org)
+    await pool.query(`DELETE FROM user_organizations WHERE organization_id = $1`, [orgId]);
+    await pool.query(`UPDATE sync_users SET organization_id = NULL WHERE organization_id = $1`, [orgId]);
+    // Eliminar datos de la org
+    await pool.query(`DELETE FROM songs  WHERE organization_id = $1`, [orgId]);
+    await pool.query(`DELETE FROM events WHERE organization_id = $1`, [orgId]);
+    const { rowCount } = await pool.query(`DELETE FROM organizations WHERE id = $1`, [orgId]);
+    if (!rowCount) return res.status(404).json({ error: 'Organización no encontrada' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── DELETE /admin/pending-licenses/:id — cancelar licencia pendiente ─────────
 router.delete('/pending-licenses/:id', async (req, res) => {
   try {

@@ -1,5 +1,13 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Music2, ListChecks, CalendarDays, Monitor, Settings2 } from 'lucide-react';
+import { Home, Music2, ListChecks, CalendarDays, Monitor, Settings2, ShieldCheck } from 'lucide-react';
+
+function getIsOwner() {
+  try {
+    const t = localStorage.getItem('aio_sync_token');
+    if (!t) return false;
+    return JSON.parse(atob(t.split('.')[1]))?.isAdmin === true;
+  } catch { return false; }
+}
 
 const NAV = [
   { label: 'Inicio',     icon: Home,         route: '/cancionero'                 },
@@ -13,13 +21,17 @@ const NAV = [
 export default function CancioneroNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const isOwner  = getIsOwner();
+
+  const allItems = isOwner
+    ? [...NAV, { label: 'Admin', icon: ShieldCheck, route: '/admin', gold: true }]
+    : NAV;
 
   return (
     <nav className="flex-shrink-0 bg-[#0a1220]/95 backdrop-blur-sm border-t border-white/10 px-2 py-1 pb-safe">
       <div className="flex items-center justify-around max-w-lg mx-auto">
-        {NAV.map(item => {
+        {allItems.map(item => {
           const Icon = item.icon;
-          // Marcar activo: ruta exacta para /cancionero, startsWith para el resto
           const isActive =
             item.route === '/cancionero'
               ? location.pathname === '/cancionero'
@@ -31,8 +43,8 @@ export default function CancioneroNavbar() {
               onClick={() => navigate(item.route)}
               className={`relative flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-colors ${
                 isActive
-                  ? 'text-yellow-400'
-                  : 'text-white/35 hover:text-white/70'
+                  ? item.gold ? 'text-yellow-400' : 'text-yellow-400'
+                  : item.gold ? 'text-yellow-600/60 hover:text-yellow-400/80' : 'text-white/35 hover:text-white/70'
               }`}
             >
               {isActive && (
