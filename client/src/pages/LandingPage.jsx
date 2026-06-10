@@ -225,6 +225,16 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [inviteRedirecting, setInviteRedirecting] = useState(false);
   const [trialLoading, setTrialLoading] = useState(null); // plan id que está cargando
+  const [paypalCancelled, setPaypalCancelled] = useState(false);
+
+  // Detectar si viene de cancelar PayPal
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('paypal_cancelled') === 'true') {
+      setPaypalCancelled(true);
+      window.history.replaceState({}, '', '/');
+    }
+  }, []);
 
   // Iniciar prueba gratis: Google OAuth con mode=trial
   const startTrial = (plan = 'monthly') => {
@@ -270,6 +280,14 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-gray-900 font-sans antialiased">
+
+      {/* Banner cancelación PayPal */}
+      {paypalCancelled && (
+        <div className="fixed top-0 inset-x-0 z-[60] bg-yellow-400 text-yellow-900 text-center text-sm font-semibold py-2 px-4 flex items-center justify-center gap-2">
+          <span>Cancelaste el pago. Puedes volver a intentarlo cuando quieras.</span>
+          <button onClick={() => setPaypalCancelled(false)} className="ml-2 text-yellow-800 hover:text-yellow-900">✕</button>
+        </div>
+      )}
 
       {/* ── NAVBAR ── */}
       <header className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'bg-white/95 backdrop-blur shadow-sm border-b border-gray-200' : 'bg-transparent'}`}>

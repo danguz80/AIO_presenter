@@ -420,6 +420,10 @@ router.get('/google/callback', async (req, res) => {
                   locale             : 'es-ES',
                   shipping_preference: 'NO_SHIPPING',
                   user_action        : 'SUBSCRIBE_NOW',
+                  payment_method     : {
+                    payer_selected  : 'PAYPAL',
+                    payee_preferred : 'UNRESTRICTED',
+                  },
                   return_url         : returnUrl,
                   cancel_url         : cancelUrl,
                 },

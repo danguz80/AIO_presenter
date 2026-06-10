@@ -32,6 +32,13 @@ function OAuthCallbackHandler() {
     const hasErr = params.has('sync_error');
     const subId  = params.get('subscription_id');
     const planType = params.get('plan_type');
+    const paypalCancel = params.get('paypal_cancel');
+
+    // Si el usuario canceló el pago en PayPal → no loguear, volver a landing
+    if (paypalCancel === 'true') {
+      window.location.replace('/?paypal_cancelled=true');
+      return;
+    }
 
     // Activar suscripción PayPal si viene de redirect de aprobación
     if (subId) {
