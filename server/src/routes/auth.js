@@ -727,7 +727,8 @@ router.post('/invite', requireAuth, async (req, res) => {
     );
     if (existing.length) return res.status(409).json({ error: 'Ese email ya es miembro de la banda' });
 
-  // Verificar límite de miembros según plan
+  // Verificar límite de miembros según plan (el owner no tiene límite)
+  if (req.user.email !== process.env.ADMIN_EMAIL) {
     const { rows: orgPlan } = await pool.query(
       'SELECT plan FROM organizations WHERE id = $1', [req.user.orgId]
     );
@@ -742,6 +743,7 @@ router.post('/invite', requireAuth, async (req, res) => {
         code : 'MAX_MEMBERS_REACHED',
       });
     }
+  }
 
     // Generar código único
     const crypto = require('crypto');
