@@ -199,8 +199,6 @@ router.post('/pending-licenses', async (req, res) => {
   }
 });
 
-});
-
 // ─── DELETE /admin/orgs/:id — eliminar organización completamente ─────────────
 router.delete('/orgs/:id', async (req, res) => {
   try {
