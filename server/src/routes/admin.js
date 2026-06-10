@@ -40,7 +40,8 @@ router.get('/orgs', async (req, res) => {
           ORDER BY l.created_at DESC LIMIT 1
         ) AS active_license
       FROM organizations o
-      LEFT JOIN sync_users u ON u.organization_id = o.id
+      LEFT JOIN user_organizations uo ON uo.organization_id = o.id
+      LEFT JOIN sync_users u ON u.id = uo.user_id
       GROUP BY o.id
       ORDER BY o.created_at DESC
     `);
@@ -57,8 +58,10 @@ router.get('/orgs/:id', async (req, res) => {
     const [orgRes, membersRes, licensesRes] = await Promise.all([
       pool.query('SELECT * FROM organizations WHERE id = $1', [orgId]),
       pool.query(
-        `SELECT id, email, display_name, avatar_url, is_admin, created_at
-           FROM sync_users WHERE organization_id = $1 ORDER BY created_at`,
+        `SELECT u.id, u.email, u.display_name, u.avatar_url, u.is_admin, u.created_at
+           FROM sync_users u
+           JOIN user_organizations uo ON uo.user_id = u.id AND uo.organization_id = $1
+           ORDER BY u.created_at`,
         [orgId]
       ),
       pool.query(

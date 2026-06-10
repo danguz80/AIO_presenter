@@ -820,6 +820,11 @@ router.delete('/members/:id', requireAuth, async (req, res) => {
       'DELETE FROM user_organizations WHERE user_id=$1 AND organization_id=$2',
       [req.params.id, req.user.orgId]
     );
+    // Limpiar organization_id en sync_users si apuntaba a esta org
+    await pool.query(
+      `UPDATE sync_users SET organization_id = NULL WHERE id = $1 AND organization_id = $2`,
+      [req.params.id, req.user.orgId]
+    );
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
