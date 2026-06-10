@@ -40,8 +40,8 @@ async function checkAndCreateSession(userId, ip, isOwner = false) {
   if (sessions.length >= limit) {
     return { error: `Límite de ${limit} dispositivos alcanzado. Cierra sesión en otro dispositivo para continuar.` };
   }
-  // Misma red para sesiones concurrentes
-  if (ip) {
+  // Misma red para sesiones concurrentes (owner está exento)
+  if (ip && !isOwner) {
     const now = Date.now();
     const concurrent = sessions.filter(
       s => s.last_seen && (now - new Date(s.last_seen).getTime()) < ACTIVE_WINDOW
