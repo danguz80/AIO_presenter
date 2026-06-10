@@ -5,7 +5,7 @@ function getIsOwner() {
   try {
     const t = localStorage.getItem('aio_sync_token');
     if (!t) return false;
-    return JSON.parse(atob(t.split('.')[1]))?.isAdmin === true;
+    return JSON.parse(atob(t.split('.')[1]))?.isOwner === true;
   } catch { return false; }
 }
 

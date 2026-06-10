@@ -229,7 +229,7 @@ router.get('/google/callback', async (req, res) => {
         return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
       }
       const jwtToken = jwt.sign(
-        { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
+        { userId: user.id, orgId: user.organization_id, email: user.email, isAdmin: false, isOwner: false, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
         JWT_SECRET, { expiresIn: '30d' }
       );
       return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}&mode=cancionero`);
@@ -262,11 +262,46 @@ router.get('/google/callback', async (req, res) => {
       if (sessionResult.error) {
         return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
       }
+      const isOwnerExisting = ADMIN_EMAIL && user.email === ADMIN_EMAIL;
       const jwtToken = jwt.sign(
-        { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
+        { userId: user.id, orgId, email: user.email, isAdmin: user.is_admin, isOwner: !!isOwnerExisting, canPush: user.can_push, canPull: user.can_pull ?? true, iat: sessionResult.iat },
         JWT_SECRET, { expiresIn: '30d' }
       );
-      // Usuario existente via trial → ir a /cancionero directamente
+      // Usuario existente via trial → redirigir a PayPal igual
+      if (trialPlan && process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET) {
+        try {
+          const planId = trialPlan === 'annual' ? process.env.PAYPAL_PLAN_ID_ANNUAL : process.env.PAYPAL_PLAN_ID_MONTHLY;
+          if (planId) {
+            const paypalBase = process.env.PAYPAL_ENV === 'production' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+            const creds = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
+            const ppTokenRes = await fetch(`${paypalBase}/v1/oauth2/token`, {
+              method: 'POST', headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'grant_type=client_credentials',
+            });
+            const ppTokenData = await ppTokenRes.json();
+            if (ppTokenData.access_token) {
+              const returnUrl = `${CLIENT_URL}/?sync_token=${jwtToken}&plan_type=${trialPlan}&mode=cancionero`;
+              const cancelUrl = `${CLIENT_URL}/?sync_token=${jwtToken}&paypal_cancel=true&mode=cancionero`;
+              const subRes = await fetch(`${paypalBase}/v1/billing/subscriptions`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${ppTokenData.access_token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  plan_id: planId,
+                  application_context: {
+                    brand_name: 'AIO Presenter', locale: 'es-ES', shipping_preference: 'NO_SHIPPING',
+                    user_action: 'SUBSCRIBE_NOW',
+                    payment_method: { payer_selected: 'PAYPAL', payee_preferred: 'UNRESTRICTED' },
+                    return_url: returnUrl, cancel_url: cancelUrl,
+                  },
+                }),
+              });
+              const sub = await subRes.json();
+              const approveLink = sub.links?.find(l => l.rel === 'approve');
+              if (approveLink) return res.redirect(approveLink.href);
+            }
+          }
+        } catch (ppErr) { console.error('[Auth] PayPal trial (existing user):', ppErr.message); }
+      }
       const dest = trialPlan ? `${CLIENT_URL}/?sync_token=${jwtToken}&mode=cancionero` : `${CLIENT_URL}/?sync_token=${jwtToken}`;
       return res.redirect(dest);
     }
@@ -333,7 +368,7 @@ router.get('/google/callback', async (req, res) => {
         return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
       }
       const jwtToken = jwt.sign(
-        { userId: newUserRows[0].id, orgId, email: newUserRows[0].email, isAdmin: true, canPush: true, canPull: true, iat: sessionResult.iat },
+        { userId: newUserRows[0].id, orgId, email: newUserRows[0].email, isAdmin: true, isOwner: false, canPush: true, canPull: true, iat: sessionResult.iat },
         JWT_SECRET, { expiresIn: '30d' }
       );
       return res.redirect(`${CLIENT_URL}/?sync_token=${jwtToken}`);
@@ -386,8 +421,9 @@ router.get('/google/callback', async (req, res) => {
     if (sessionResult.error) {
       return res.redirect(`${CLIENT_URL}/?sync_error=${encodeURIComponent(sessionResult.error)}`);
     }
+    const isOwnerNewUser = ADMIN_EMAIL && user.email === ADMIN_EMAIL;
     const jwtToken = jwt.sign(
-        { userId: user.id, orgId, email: user.email, isAdmin: true, canPush: true, canPull: true, iat: sessionResult.iat },
+        { userId: user.id, orgId, email: user.email, isAdmin: true, isOwner: !!isOwnerNewUser, canPush: true, canPull: true, iat: sessionResult.iat },
       JWT_SECRET, { expiresIn: '30d' }
     );
     // Si viene de trial: crear suscripción PayPal y redirigir a approval
@@ -657,7 +693,7 @@ router.post('/orgs', requireAuth, async (req, res) => {
       [org.id, req.user.userId]
     );
     const newToken = jwt.sign(
-      { userId: req.user.userId, orgId: org.id, email: req.user.email, isAdmin: true, canPush: true, canPull: true },
+      { userId: req.user.userId, orgId: org.id, email: req.user.email, isAdmin: true, isOwner: !!(ADMIN_EMAIL && req.user.email === ADMIN_EMAIL), canPush: true, canPull: true },
       JWT_SECRET, { expiresIn: '30d' }
     );
     res.json({ org, token: newToken });
@@ -684,7 +720,7 @@ router.post('/switch-org/:orgId', requireAuth, async (req, res) => {
       [orgId, role === 'admin', req.user.userId]
     );
     const newToken = jwt.sign(
-      { userId: req.user.userId, orgId, email: req.user.email, isAdmin: role === 'admin', canPush: true, canPull: true },
+      { userId: req.user.userId, orgId, email: req.user.email, isAdmin: role === 'admin', isOwner: !!(ADMIN_EMAIL && req.user.email === ADMIN_EMAIL), canPush: true, canPull: true },
       JWT_SECRET, { expiresIn: '30d' }
     );
     res.json({ token: newToken });

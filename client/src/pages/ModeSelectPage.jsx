@@ -33,7 +33,7 @@ export default function ModeSelectPage() {
       const token = localStorage.getItem('aio_sync_token');
       if (!token) return false;
       const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.isAdmin === true;
+      return payload.isOwner === true;
     } catch { return false; }
   }, []);
 

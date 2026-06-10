@@ -171,7 +171,7 @@ export default function ControllerPage() {
               const t = localStorage.getItem('aio_sync_token');
               if (!t) return null;
               const p = JSON.parse(atob(t.split('.')[1]));
-              if (!p?.isAdmin) return null;
+              if (!p?.isOwner) return null;
               return (
                 <button
                   onClick={() => navigate('/admin')}
