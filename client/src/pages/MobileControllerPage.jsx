@@ -15,7 +15,7 @@ import {
   Wifi, WifiOff, Music, Music2, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
   CalendarDays, BookOpen, Clock,
   Pencil, Trash2, Plus, Check, ChevronUp, ChevronDown, LayoutTemplate, SkipForward, Minus,
-  CheckCircle2, Circle, MonitorPlay,
+  CheckCircle2, Circle, MonitorPlay, MessageSquare,
 } from 'lucide-react';
 
 // ─── Utilidad: leer/guardar conexión ─────────────────────────────────────────
@@ -115,6 +115,21 @@ const BOOK_CATEGORIES = [
 // ─────────────────────────────────────────────────────────────────────────────
 export default function MobileControllerPage() {
   const { state, actions } = usePresenter();
+  const { internalMessages } = state;
+
+  // ── Toast de mensajes internos ───────────────────────────────────────────────
+  const [msgToast, setMsgToast] = useState(null);
+  const lastMsgId = useRef(null);
+  useEffect(() => {
+    if (!internalMessages?.length) return;
+    const last = internalMessages[internalMessages.length - 1];
+    if (last && last.id !== lastMsgId.current && !last.own) {
+      lastMsgId.current = last.id;
+      setMsgToast(last);
+      const t = setTimeout(() => setMsgToast(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [internalMessages]);
   const { liveState, connected, songs, schedule, reservasMode, stageConfig, eventPlays, eventPlaysContext } = state;
   const { slideData, nextSlideData, isBlank } = liveState;
   const navigate = useNavigate();
@@ -574,6 +589,17 @@ export default function MobileControllerPage() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
+      {/* ── Toast: mensaje interno ── */}
+      {msgToast && (
+        <div className="fixed top-3 left-3 right-3 z-[9999] flex items-start gap-2 bg-zinc-800 border border-accent/40 rounded-xl px-3 py-2.5 shadow-xl pointer-events-none">
+          <MessageSquare size={16} className="text-accent shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold text-accent truncate">{msgToast.from}</p>
+            <p className="text-xs text-white/90 leading-snug">{msgToast.text}</p>
+          </div>
+          <button className="pointer-events-auto text-zinc-500 hover:text-white shrink-0" onClick={() => setMsgToast(null)}><X size={14} /></button>
+        </div>
+      )}
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-3 xs:px-4 py-2 xs:py-3 bg-surface-800 border-b border-surface-700 shrink-0">
         {songDetail ? (
