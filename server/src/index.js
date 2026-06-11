@@ -25,6 +25,7 @@ const notificationsRouter = require('./routes/notifications');
 const annotationsRouter = require('./routes/annotations');
 const paypalRouter = require('./routes/paypal');
 const ndi          = require('./ndi/ndiSender');
+const { requireAuth, requireActivePlan } = require('./middleware/auth');
 
 const app    = express();
 const server = http.createServer(app);
@@ -724,19 +725,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── RUTAS ───────────────────────────────────────────────────────────────────
-app.use('/api/songs',  songsRouter);
-app.use('/api/bible',  bibleRouter);
-app.use('/api/import', importRouter);
-app.use('/api/media',  mediaRouter);
-app.use('/api/events',          eventsRouter);
-app.use('/api/event-templates', eventTemplatesRouter);
-app.use('/api/events',          playsRouter); // plays nested under /api/events/:id/plays
+app.use('/api/songs',           requireAuth, requireActivePlan, songsRouter);
+app.use('/api/songs',           requireAuth, requireActivePlan, annotationsRouter);
+app.use('/api/bible',           bibleRouter);
+app.use('/api/import',          requireAuth, requireActivePlan, importRouter);
+app.use('/api/media',           mediaRouter);  // media tiene su propio requireAuth interno
+app.use('/api/events',          requireAuth, requireActivePlan, eventsRouter);
+app.use('/api/event-templates', requireAuth, requireActivePlan, eventTemplatesRouter);
+app.use('/api/events',          requireAuth, requireActivePlan, playsRouter); // plays nested
 app.use('/auth',      authRouter);
 app.use('/api/sync',  syncRouter);
-app.use('/api/band-configs',  bandConfigsRouter);
-app.use('/api/blocked-dates', blockedDatesRouter);
+app.use('/api/band-configs',  requireAuth, requireActivePlan, bandConfigsRouter);
+app.use('/api/blocked-dates', requireAuth, requireActivePlan, blockedDatesRouter);
 app.use('/api/notifications', notificationsRouter);
-app.use('/api/songs',         annotationsRouter);  // anotaciones personales por canción
 app.use('/paypal',            paypalRouter);
 
 const adminRouter = require('./routes/admin');

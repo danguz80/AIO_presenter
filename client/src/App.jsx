@@ -21,6 +21,7 @@ import CancioneroEventDetail   from './pages/cancionero/CancioneroEventDetail';
 import CancioneroSettings      from './pages/cancionero/CancioneroSettings';
 import SpotifyCallbackPage     from './pages/cancionero/SpotifyCallbackPage';
 import AdminPage               from './pages/AdminPage';
+import TrialExpiredBanner      from './components/shared/TrialExpiredBanner';
 
 // Intercepta sync_token / sync_error de la URL (redirect post-OAuth) y redirige a /app
 function OAuthCallbackHandler() {
@@ -171,6 +172,7 @@ export default function App() {
       <UpdateBanner />
       <OAuthCallbackHandler />
       <ThemeApplier />
+      <TrialExpiredBanner />
       <Routes>
         {/* Páginas públicas (sin PresenterProvider) */}
         <Route path="/"            element={<LandingPage />} />

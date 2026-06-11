@@ -20,4 +20,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Interceptor de respuesta: emitir evento global cuando trial expira
+api.interceptors.response.use(
+  res => res,
+  err => {
+    if (err.response?.status === 402) {
+      const code = err.response.data?.code;
+      window.dispatchEvent(new CustomEvent('aio:plan-required', { detail: { code } }));
+    }
+    return Promise.reject(err);
+  }
+);
+
 export default api;
