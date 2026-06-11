@@ -219,7 +219,7 @@ export default function ControllerPage() {
             <span className="hidden sm:inline">Mensajes</span>
           </button>
 
-          {/* Botón configuración */}}
+          {/* Botón configuración */}
           <button
             onClick={() => setShowSettings(true)}
             title="Configuración"
