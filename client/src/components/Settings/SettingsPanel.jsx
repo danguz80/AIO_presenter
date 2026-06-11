@@ -62,7 +62,7 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
     } finally { setCancelling(false); }
   };
 
-  const plan      = org?.plan || 'trial';
+  const plan      = org?.effective_plan || org?.plan || 'trial';
   const trialEnds = org?.trial_ends ? new Date(org.trial_ends) : null;
   const daysLeft  = trialEnds ? Math.max(0, Math.ceil((trialEnds - Date.now()) / 86400000)) : 0;
 

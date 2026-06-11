@@ -578,7 +578,19 @@ router.get('/org', requireAuth, async (req, res) => {
       [req.user.orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Organización no encontrada' });
-    res.json(rows[0]);
+    const org = rows[0];
+    // Verificar licencia activa (afecta cómo se muestra el plan en el cliente)
+    const { rows: lic } = await pool.query(
+      `SELECT id, type, expires_at FROM org_licenses
+        WHERE org_id = $1 AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > NOW())
+        LIMIT 1`,
+      [req.user.orgId]
+    );
+    org.has_active_license = lic.length > 0;
+    // Si tiene licencia activa y plan no es pro, forzar effective_plan = 'pro'
+    org.effective_plan = (org.plan === 'pro' || org.has_active_license) ? 'pro' : org.plan;
+    res.json(org);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

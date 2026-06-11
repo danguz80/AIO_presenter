@@ -24,6 +24,16 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+// Prefijo por org para que cada organización tenga su propio namespace en IndexedDB
+function getOrgPrefix() {
+  try {
+    const t = localStorage.getItem('aio_sync_token');
+    if (!t) return '';
+    const { orgId } = JSON.parse(atob(t.split('.')[1]));
+    return orgId ? `org${orgId}:` : '';
+  } catch { return ''; }
+}
+
 const SERVER_BASE = (() => {
   const savedIp   = localStorage.getItem('aio_server_ip');
   const savedPort = localStorage.getItem('aio_server_port') || '3001';
@@ -490,9 +500,10 @@ export default function MediaLibrary() {
         const dbFolders = await fetchFoldersFromDb(API_BASE, token);
         // Si la BD devuelve carpetas, usarlas como fuente de verdad
         if (dbFolders.length > 0) {
+          const prefix = getOrgPrefix();
           const merged = await Promise.all(
             dbFolders.map(async ({ id, name }) => {
-              const idbKey  = `db-folder:${id}`;
+              const idbKey  = `${prefix}db-folder:${id}`;
               const byKey   = handles.find(h => h.key === idbKey);
               const byName  = handles.find(h => h.name === name);
               const entry   = byKey ?? byName;
@@ -656,7 +667,7 @@ export default function MediaLibrary() {
           console.warn('No se pudo guardar carpeta en BD:', e);
         }
       }
-      const idbKey = dbId ? `db-folder:${dbId}` : undefined;
+      const idbKey = dbId ? `${getOrgPrefix()}db-folder:${dbId}` : undefined;
       const key    = await saveFolder(handle, idbKey);
       const perm   = await handle.queryPermission({ mode: 'read' });
       const newFolder = { key, dbId, name: handle.name, handle, permissionState: perm };
