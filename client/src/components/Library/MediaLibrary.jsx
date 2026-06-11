@@ -525,16 +525,7 @@ export default function MediaLibrary() {
           });
           return;
         }
-        // BD vacía o no disponible — usar IndexedDB como fallback para no perder acceso local
-        if (handles.length > 0) {
-          const withPerms = await buildFromHandles(handles);
-          setFolders(withPerms);
-          setSelectedFolder(prev => {
-            if (!prev) return withPerms[0] ?? null;
-            return withPerms.find(f => f.key === prev.key) ?? withPerms[0] ?? null;
-          });
-          return;
-        }
+        // BD vacía → la org no ha configurado carpetas, mostrar vacío
         setFolders([]);
         setSelectedFolder(null);
       } else {
