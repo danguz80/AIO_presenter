@@ -328,6 +328,14 @@ export default function LandingPage() {
                 {label}
               </button>
             ))}
+            <a
+              href="https://tundra-mapusaurus-d5c.notion.site/AIO-Presenter-Documentaci-n-37cd4a9b92ba8041a6e2fa378faa522a"
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`text-sm font-medium transition-colors hover:text-[#C9A420] ${scrolled ? 'text-gray-600' : 'text-white/80'}`}
+            >
+              Tutoriales
+            </a>
           </nav>
 
           {/* CTAs */}
@@ -358,6 +366,14 @@ export default function LandingPage() {
             {[['Características', 'features'], ['Cómo funciona', 'how'], ['Precios', 'precios']].map(([label, id]) => (
               <button key={id} onClick={() => scrollTo(id)} className="text-left text-gray-700 font-medium py-1">{label}</button>
             ))}
+            <a
+              href="https://tundra-mapusaurus-d5c.notion.site/AIO-Presenter-Documentaci-n-37cd4a9b92ba8041a6e2fa378faa522a"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-left text-gray-700 font-medium py-1"
+            >
+              Tutoriales
+            </a>
             <hr className="border-gray-200 my-1" />
             <button onClick={() => navigate('/login')} className="text-left text-[#1B3166] font-semibold py-1">Iniciar sesión</button>
             <button
