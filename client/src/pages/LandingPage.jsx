@@ -655,7 +655,7 @@ export default function LandingPage() {
               ['¿Puedo usar ambos modos con un solo plan?', 'Sí. Un plan incluye tanto el Modo Presenter como el Modo Cancionero para todos tus músicos.'],
               ['¿Qué pasa cuando termina la prueba?', 'Al finalizar los 30 días gratuitos, PayPal realiza el primer cobro automáticamente ($6/mes o $60/año). Si cancelas tu suscripción antes del día 30, no se te cobra nada.'],
               ['¿Necesito una cuenta Gmail para registrarme?', 'El acceso se hace con Google, pero no necesitas Gmail. Si usas otro correo (Outlook, Hotmail, Yahoo, etc.), puedes crear una cuenta Google gratuita con ese mismo email en accounts.google.com/signup — sin cambiar de dirección. Una vez creada, usa ese acceso para entrar a AIO Presenter normalmente.'],
-              ['¿Necesito una cuenta PayPal para suscribirme?', 'No. En la pantalla de pago de PayPal aparece la opción "Pagar con tarjeta" que permite pagar con tarjeta de crédito o débito sin crear ninguna cuenta PayPal.'],
+              ['¿Necesito una cuenta PayPal para suscribirme?', 'Las suscripciones recurrentes de PayPal requieren una cuenta PayPal para que el cobro mensual sea automático. Si no tienes cuenta, en la pantalla de pago haz clic en "Abrir una cuenta" — solo necesitas un email y una tarjeta de crédito o débito, y el proceso toma menos de 2 minutos. Una vez creada, la suscripción queda activa automáticamente.'],
             ].map(([q, a]) => (
               <details key={q} className="group bg-gray-50 rounded-xl border border-gray-200 px-5 py-4">
                 <summary className="flex items-center justify-between cursor-pointer font-semibold text-[#1B3166] text-sm list-none">
