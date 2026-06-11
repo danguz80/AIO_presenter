@@ -7,6 +7,7 @@ import MediaLibrary    from '../components/Library/MediaLibrary';
 import LiveControls    from '../components/Controls/LiveControls';
 import LivePreview     from '../components/Controls/LivePreview';
 import SettingsPanel   from '../components/Settings/SettingsPanel';
+import MessagesPanel   from '../components/Controls/MessagesPanel';
 import SongFormModal   from '../components/Library/SongFormModal';
 import { ScheduleAddProvider } from '../context/ScheduleAddContext';
 import { useScheduleAdd }      from '../context/ScheduleAddContext';
