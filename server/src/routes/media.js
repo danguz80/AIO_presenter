@@ -300,9 +300,9 @@ async function resolveOrgId(user) {
   return rows[0]?.id ?? null;
 }
 
-router.get('/db-folders', optionalAuth, async (req, res) => {
+router.get('/db-folders', requireAuth, async (req, res) => {
   try {
-    const orgId = await resolveOrgId(req.user);
+    const orgId = req.user?.orgId;
     if (!orgId) return res.json([]);
     const { rows } = await pool.query(
       'SELECT id, name, created_at FROM media_folders WHERE organization_id = $1 ORDER BY created_at',
