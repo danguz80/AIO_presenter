@@ -1,5 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Music2, ListChecks, CalendarDays, Monitor, Settings2, ShieldCheck } from 'lucide-react';
+import OrgSwitcher from '../../components/shared/OrgSwitcher';
 
 function getIsOwner() {
   try {
@@ -29,6 +30,10 @@ export default function CancioneroNavbar() {
 
   return (
     <nav className="flex-shrink-0 bg-[#0a1220]/95 backdrop-blur-sm border-t border-white/10 px-2 py-1 pb-safe">
+      {/* Org switcher — visible solo si hay varias orgs */}
+      <div className="flex justify-center pt-1 pb-0.5">
+        <OrgSwitcher variant="cancionero" />
+      </div>
       <div className="flex items-center justify-around max-w-lg mx-auto">
         {allItems.map(item => {
           const Icon = item.icon;

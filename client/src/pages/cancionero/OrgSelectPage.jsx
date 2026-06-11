@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, ChevronRight, Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Building2, ChevronRight, Loader2, ArrowLeft, CheckCircle2, Plus, X } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
 
 export default function OrgSelectPage() {
   const navigate = useNavigate();
-  const [orgs, setOrgs]       = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [orgs, setOrgs]           = useState([]);
+  const [loading, setLoading]     = useState(true);
   const [switching, setSwitching] = useState(null);
-  const [error, setError]     = useState(null);
+  const [error, setError]         = useState(null);
+
+  // Crear nueva org
+  const [showCreate, setShowCreate] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [creating, setCreating]     = useState(false);
+  const [createError, setCreateError] = useState(null);
 
   const currentOrgId = Number(localStorage.getItem('aio_org_id'));
 
@@ -38,6 +44,29 @@ export default function OrgSelectPage() {
     } catch {
       setError('Error al cambiar de organización. Intenta de nuevo.');
       setSwitching(null);
+    }
+  };
+
+  const createOrg = async (e) => {
+    e.preventDefault();
+    if (!newOrgName.trim() || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      const res = await fetch(`${API}/auth/orgs`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newOrgName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al crear organización');
+      localStorage.setItem('aio_sync_token', data.token);
+      localStorage.setItem('aio_org_id', String(data.org.id));
+      navigate('/cancionero', { replace: true });
+    } catch (err) {
+      setCreateError(err.message);
+      setCreating(false);
     }
   };
 
@@ -110,6 +139,46 @@ export default function OrgSelectPage() {
             );
           })}
         </div>
+
+        {/* Crear nueva organización */}
+        {!showCreate ? (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="mt-4 w-full flex items-center justify-center gap-2 border-2 border-dashed border-white/15 hover:border-yellow-400/40 rounded-2xl p-4 text-white/40 hover:text-yellow-400/80 transition-all text-sm"
+          >
+            <Plus size={16} />
+            Crear nueva organización
+          </button>
+        ) : (
+          <form onSubmit={createOrg} className="mt-4 bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <p className="text-white font-semibold text-sm">Nueva organización</p>
+              <button type="button" onClick={() => { setShowCreate(false); setNewOrgName(''); setCreateError(null); }} className="text-white/30 hover:text-white/60">
+                <X size={16} />
+              </button>
+            </div>
+            <input
+              autoFocus
+              type="text"
+              value={newOrgName}
+              onChange={e => setNewOrgName(e.target.value)}
+              placeholder="Nombre de la iglesia o grupo..."
+              maxLength={80}
+              className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-2.5 text-white placeholder-white/30 text-sm focus:outline-none focus:border-yellow-400/50"
+            />
+            {createError && (
+              <p className="text-red-400 text-xs">{createError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={!newOrgName.trim() || creating}
+              className="flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-40 text-black font-bold rounded-xl py-2.5 text-sm transition-colors"
+            >
+              {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+              {creating ? 'Creando...' : 'Crear organización'}
+            </button>
+          </form>
+        )}
 
         <button
           onClick={() => navigate('/mode-select')}

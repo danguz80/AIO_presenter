@@ -13,6 +13,7 @@ import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import OrgSwitcher from '../components/shared/OrgSwitcher';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -164,6 +165,9 @@ export default function ControllerPage() {
             <Music2 size={15} />
             <span className="hidden sm:inline">Cancionero</span>
           </button>
+
+          {/* Org switcher */}
+          <OrgSwitcher variant="presenter" />
 
           {/* Botón Admin (solo owner) */}
           {(() => {

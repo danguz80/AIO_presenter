@@ -685,7 +685,6 @@ router.patch('/org', requireAuth, async (req, res) => {
 
 /** POST /auth/orgs — crear una nueva organización (solo admin) */
 router.post('/orgs', requireAuth, async (req, res) => {
-  if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede crear organizaciones' });
   const { name } = req.body;
   if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
   try {
