@@ -72,55 +72,6 @@ function Tab({ active, onClick, icon: Icon, label }) {
   );
 }
 
-// ─── Presets de color ──────────────────────────────────────────────────────────────────────────────
-const TEXT_PRESETS = [\'#ffffff\',\'#fde047\',\'#22d3ee\',\'#4ade80\',\'#f87171\',\'#fb923c\'];
-const BG_PRESETS   = [
-  { l: \'Negro\',  v: \'rgba(0,0,0,0.88)\'    },
-  { l: \'Azul\',   v: \'rgba(10,20,50,0.92)\' },
-  { l: \'Humo\',   v: \'rgba(30,30,30,0.85)\' },
-  { l: \'Sin\',    v: \'transparent\'         },
-];
-
-// ─── Selector de colores + estrobo ──────────────────────────────────────────────────────────────────
-function StyleOptions({ textColor, setTextColor, bgColor, setBgColor, strobe, setStrobe }) {
-  return (
-    <div className="flex flex-col gap-2 p-2.5 bg-surface-900/50 rounded-xl border border-surface-700">
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-zinc-500 uppercase tracking-widest shrink-0 w-10">Letra</span>
-        <div className="flex gap-1.5 flex-wrap items-center">
-          {TEXT_PRESETS.map(c => (
-            <button key={c} onClick={() => setTextColor(c)}
-              style={{ background: c, width: 18, height: 18, borderRadius: \'50%\',
-                border: textColor === c ? \'2px solid #7c3aed\' : \'2px solid rgba(255,255,255,0.15)\' }}
-            />
-          ))}
-          <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
-            className="w-5 h-5 cursor-pointer rounded border-0 bg-transparent p-0" title="Personalizado" />
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-zinc-500 uppercase tracking-widest shrink-0 w-10">Fondo</span>
-        <div className="flex gap-1.5 flex-wrap">
-          {BG_PRESETS.map(({ l, v }) => (
-            <button key={v} onClick={() => setBgColor(v)}
-              className={`text-[10px] px-2 py-0.5 rounded-lg border transition-colors ${
-                bgColor === v ? \'border-accent text-accent\' : \'border-surface-600 text-zinc-400 hover:text-zinc-200\'
-              }`}
-            >{l}</button>
-          ))}
-        </div>
-      </div>
-      <button onClick={() => setStrobe(v => !v)}
-        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors ${
-          strobe ? \'border-yellow-400 bg-yellow-400/15 text-yellow-300\' : \'border-surface-600 text-zinc-400 hover:text-zinc-200\'
-        }`}
-      >
-        \u26a1 Modo estrobo {strobe ? \'ON\' : \'OFF\'}
-      </button>
-    </div>
-  );
-}
-
 // ─── 1. Mensajes Internos ─────────────────────────────────────────────────────
 function InternalMessages() {
   const { state, actions } = usePresenter();
@@ -220,14 +171,14 @@ function InternalMessages() {
   );
 }
 
-// ─── 2. Mensajes a Pantallas ──────────────────────────────────────────────────────────────────────────────
+// ─── 2. Mensajes a Pantallas ──────────────────────────────────────────────────────────────────────────
 function ScreenMessages() {
   const { state, actions } = usePresenter();
-  const msg = state.screenMessage || { text: \'\', target: \'both\', visible: false };
-  const [text,      setText]      = useState(msg.text      || \'\');
-  const [target,    setTarget]    = useState(msg.target    || \'both\');
-  const [textColor, setTextColor] = useState(msg.textColor || \'#ffffff\');
-  const [bgColor,   setBgColor]   = useState(msg.bgColor   || \'rgba(0,0,0,0.88)\');
+  const msg = state.screenMessage || { text: '', target: 'both', visible: false };
+  const [text,      setText]      = useState(msg.text      || '');
+  const [target,    setTarget]    = useState(msg.target    || 'both');
+  const [textColor, setTextColor] = useState(msg.textColor || '#ffffff');
+  const [bgColor,   setBgColor]   = useState(msg.bgColor   || 'rgba(0,0,0,0.88)');
   const [strobe,    setStrobe]    = useState(msg.strobe    || false);
 
   const build = (patch) => ({ ...msg, text, target, textColor, bgColor, strobe, ...patch });
@@ -242,10 +193,10 @@ function ScreenMessages() {
         className="bg-surface-700 border border-surface-600 text-zinc-200 text-sm rounded-xl px-3 py-2.5 placeholder-zinc-500 focus:outline-none focus:border-accent resize-none"
       />
       <div className="grid grid-cols-3 gap-2">
-        {[[\'output\', \'Principal\', Monitor], [\'stage\', \'Escenario\', Tv2], [\'both\', \'Ambas\', Eye]].map(([val, label, Icon]) => (
+        {[['output', 'Principal', Monitor], ['stage', 'Escenario', Tv2], ['both', 'Ambas', Eye]].map(([val, label, Icon]) => (
           <button key={val} onClick={() => setTarget(val)}
             className={`flex flex-col items-center gap-1 py-2 rounded-xl border text-xs transition-colors ${
-              target === val ? \'border-accent bg-accent/15 text-accent\' : \'border-surface-600 bg-surface-700 text-zinc-400 hover:text-zinc-200\'
+              target === val ? 'border-accent bg-accent/15 text-accent' : 'border-surface-600 bg-surface-700 text-zinc-400 hover:text-zinc-200'
             }`}
           ><Icon size={14} />{label}</button>
         ))}
@@ -253,7 +204,7 @@ function ScreenMessages() {
       <StyleOptions textColor={textColor} setTextColor={setTextColor} bgColor={bgColor} setBgColor={setBgColor} strobe={strobe} setStrobe={setStrobe} />
       {msg.visible && (
         <div className="flex items-center gap-2 px-3 py-2 bg-green-500/15 border border-green-500/30 rounded-xl text-green-400 text-xs">
-          <Eye size={12} /> Mostrando en pantalla{msg.target === \'both\' ? \'s\' : msg.target === \'output\' ? \' principal\' : \' de escenario\'}
+          <Eye size={12} /> Mostrando en pantalla{msg.target === 'both' ? 's' : msg.target === 'output' ? ' principal' : ' de escenario'}
         </div>
       )}
       <div className="grid grid-cols-2 gap-2">
@@ -268,20 +219,20 @@ function ScreenMessages() {
   );
 }
 
-// ─── 3. Mensajes Personalizados (Timer / Countdown) ───────────────────────────────────────────────────────
+// ─── 3. Mensajes Personalizados (Timer / Countdown) ──────────────────────────────────────────────────
 function CustomMessages() {
   const { state, actions } = usePresenter();
-  const timer = state.timerState || { type: \'countdown\', seconds: 0, running: false, label: \'\'  };
+  const timer = state.timerState || { type: 'countdown', seconds: 0, running: false, label: '' };
 
-  const timerDisplay = useTimerDisplay(timer);
-  const initialSecs  = timer.initialSeconds ?? timer.seconds ?? 0;
+  const timerDisplay  = useTimerDisplay(timer);
+  const initialSecs   = timer.initialSeconds ?? timer.seconds ?? 0;
   const [inputMin,    setInputMin]    = useState(Math.floor(initialSecs / 60));
   const [inputSec,    setInputSec]    = useState(initialSecs % 60);
-  const [label,       setLabel]       = useState(timer.label       || \'\');
-  const [timerType,   setTimerType]   = useState(timer.type        || \'countdown\');
-  const [timerTarget, setTimerTarget] = useState(timer.target      || \'both\');
-  const [textColor,   setTextColor]   = useState(timer.textColor   || \'#ffffff\');
-  const [bgColor,     setBgColor]     = useState(timer.bgColor     || \'rgba(0,0,0,0.88)\');
+  const [label,       setLabel]       = useState(timer.label       || '');
+  const [timerType,   setTimerType]   = useState(timer.type        || 'countdown');
+  const [timerTarget, setTimerTarget] = useState(timer.target      || 'both');
+  const [textColor,   setTextColor]   = useState(timer.textColor   || '#ffffff');
+  const [bgColor,     setBgColor]     = useState(timer.bgColor     || 'rgba(0,0,0,0.88)');
   const [strobe,      setStrobe]      = useState(timer.strobe      || false);
 
   useEffect(() => {
@@ -289,11 +240,11 @@ function CustomMessages() {
       const secs = timer.initialSeconds ?? timer.seconds ?? 0;
       setInputMin(Math.floor(secs / 60));
       setInputSec(secs % 60);
-      setTimerType(timer.type       || \'countdown\');
-      setLabel(timer.label          || \'\');
-      setTimerTarget(timer.target   || \'both\');
-      setTextColor(timer.textColor  || \'#ffffff\');
-      setBgColor(timer.bgColor      || \'rgba(0,0,0,0.88)\');
+      setTimerType(timer.type       || 'countdown');
+      setLabel(timer.label          || '');
+      setTimerTarget(timer.target   || 'both');
+      setTextColor(timer.textColor  || '#ffffff');
+      setBgColor(timer.bgColor      || 'rgba(0,0,0,0.88)');
       setStrobe(timer.strobe        || false);
     }
   }, [timer.running, timer.initialSeconds, timer.seconds, timer.type, timer.label, timer.target, timer.textColor, timer.bgColor, timer.strobe]);
@@ -302,21 +253,21 @@ function CustomMessages() {
   const dispatch = (patch) => actions.setTimerState({ ...timer, ...patch });
 
   const start = () => {
-    const secs = timerType === \'timer\' ? 0 : totalSeconds;
+    const secs = timerType === 'timer' ? 0 : totalSeconds;
     dispatch({ type: timerType, seconds: secs, running: true, label, startedAt: Date.now(), initialSeconds: secs, target: timerTarget, textColor, bgColor, strobe });
   };
   const pause  = () => dispatch({ running: false, seconds: timerDisplay });
   const resume = () => dispatch({ running: true, startedAt: Date.now(), initialSeconds: timerDisplay });
   const reset  = () => {
-    const secs = timerType === \'timer\' ? 0 : totalSeconds;
+    const secs = timerType === 'timer' ? 0 : totalSeconds;
     dispatch({ type: timerType, seconds: secs, running: false, label, startedAt: null, initialSeconds: secs, target: timerTarget, textColor, bgColor, strobe });
   };
   const clear  = () => {
-    dispatch({ type: timerType, seconds: 0, running: false, label: \'\', startedAt: null, initialSeconds: 0, target: \'both\', textColor: \'#ffffff\', bgColor: \'rgba(0,0,0,0.88)\', strobe: false });
-    setInputMin(0); setInputSec(0); setLabel(\'\');
+    dispatch({ type: timerType, seconds: 0, running: false, label: '', startedAt: null, initialSeconds: 0, target: 'both', textColor: '#ffffff', bgColor: 'rgba(0,0,0,0.88)', strobe: false });
+    setInputMin(0); setInputSec(0); setLabel('');
   };
   const useVideoTime = () => {
-    const video = document.querySelector(\'video\');
+    const video = document.querySelector('video');
     if (video && isFinite(video.duration) && video.duration > 0) {
       const remaining = Math.max(0, Math.floor(video.duration - video.currentTime));
       setInputMin(Math.floor(remaining / 60));
@@ -331,10 +282,10 @@ function CustomMessages() {
     <div className="flex flex-col gap-3">
       {/* Tipo */}
       <div className="grid grid-cols-2 gap-2">
-        {[[\'countdown\', \'Cuenta regresiva\', AlarmClock], [\'timer\', \'Cron\u00f3metro\', Clock]].map(([val, lbl, Icon]) => (
+        {[['countdown', 'Cuenta regresiva', AlarmClock], ['timer', 'Cronómetro', Clock]].map(([val, lbl, Icon]) => (
           <button key={val} onClick={() => { setTimerType(val); dispatch({ type: val, running: false }); }}
             className={`flex items-center justify-center gap-2 py-2 rounded-xl border text-xs font-semibold transition-colors ${
-              timerType === val ? \'border-accent bg-accent/15 text-accent\' : \'border-surface-600 bg-surface-700 text-zinc-400 hover:text-zinc-200\'
+              timerType === val ? 'border-accent bg-accent/15 text-accent' : 'border-surface-600 bg-surface-700 text-zinc-400 hover:text-zinc-200'
             }`}
           ><Icon size={13} /> {lbl}</button>
         ))}
@@ -342,10 +293,10 @@ function CustomMessages() {
 
       {/* Destino */}
       <div className="grid grid-cols-3 gap-2">
-        {[[\'output\', \'Principal\', Monitor], [\'stage\', \'Escenario\', Tv2], [\'both\', \'Ambas\', Eye]].map(([val, lbl, Icon]) => (
+        {[['output', 'Principal', Monitor], ['stage', 'Escenario', Tv2], ['both', 'Ambas', Eye]].map(([val, lbl, Icon]) => (
           <button key={val} onClick={() => setTimerTarget(val)}
             className={`flex flex-col items-center gap-1 py-2 rounded-xl border text-xs transition-colors ${
-              timerTarget === val ? \'border-accent bg-accent/15 text-accent\' : \'border-surface-600 bg-surface-700 text-zinc-400 hover:text-zinc-200\'
+              timerTarget === val ? 'border-accent bg-accent/15 text-accent' : 'border-surface-600 bg-surface-700 text-zinc-400 hover:text-zinc-200'
             }`}
           ><Icon size={14} />{lbl}</button>
         ))}
@@ -358,7 +309,7 @@ function CustomMessages() {
       />
 
       {/* Tiempo inicial (solo cuenta regresiva) */}
-      {timerType === \'countdown\' && (
+      {timerType === 'countdown' && (
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 flex-1">
             <input type="number" min={0} max={99} value={inputMin} onChange={e => setInputMin(Number(e.target.value))}
@@ -372,7 +323,7 @@ function CustomMessages() {
           </div>
           <button onClick={useVideoTime} title="Usar tiempo restante del video actual"
             className="text-[10px] text-zinc-500 hover:text-accent border border-surface-600 rounded-lg px-2 py-1.5 transition-colors"
-          >\u{1F3AC} Video</button>
+          >🎬 Video</button>
         </div>
       )}
 
@@ -381,7 +332,7 @@ function CustomMessages() {
 
       {/* Display grande */}
       <div className={`text-center py-4 rounded-2xl border font-mono text-4xl font-bold tracking-widest ${
-        timer.running ? \'bg-accent/10 border-accent/30\' : \'bg-surface-700 border-surface-600 text-zinc-300\'
+        timer.running ? 'bg-accent/10 border-accent/30' : 'bg-surface-700 border-surface-600 text-zinc-300'
       }`} style={{ color: timer.running ? textColor : undefined }}>
         {fmtTimer(timerDisplay)}
         {label && <p className="text-xs font-sans font-normal text-zinc-500 mt-1">{label}</p>}
@@ -401,12 +352,12 @@ function CustomMessages() {
         <button onClick={reset} title="Reiniciar" className="flex items-center justify-center gap-1 py-2.5 bg-surface-700 hover:bg-surface-600 text-zinc-300 rounded-xl text-sm border border-surface-600 transition-colors">
           <RotateCcw size={14} />
         </button>
-        <button onClick={clear} title="Borrar timer de pantallas" className="flex items-center justify-center gap-1 py-2.5 bg-red-900/40 hover:bg-red-800/60 text-red-400 hover:text-red-300 rounded-xl text-sm border border-red-800/40 transition-colors">
+        <button onClick={clear} title="Borrar timer" className="flex items-center justify-center gap-1 py-2.5 bg-red-900/40 hover:bg-red-800/60 text-red-400 hover:text-red-300 rounded-xl text-sm border border-red-800/40 transition-colors">
           <Trash2 size={14} />
         </button>
       </div>
       {timer.running && (
-        <p className="text-[10px] text-zinc-500 text-center">Timer corriendo. <button onClick={pause} className="underline hover:text-zinc-300">Pausar</button> \u00b7 <button onClick={clear} className="underline text-red-400 hover:text-red-300">Borrar</button></p>
+        <p className="text-[10px] text-zinc-500 text-center">Timer corriendo. <button onClick={pause} className="underline hover:text-zinc-300">Pausar</button> · <button onClick={clear} className="underline text-red-400 hover:text-red-300">Borrar</button></p>
       )}
     </div>
   );
@@ -418,14 +369,11 @@ export default function MessagesPanel() {
 
   return (
     <div className="flex flex-col gap-3 h-full">
-      {/* Tabs */}
       <div className="flex gap-1 bg-surface-800 p-1 rounded-xl">
         <Tab active={tab === 'internal'} onClick={() => setTab('internal')} icon={MessageSquare} label="Internos" />
         <Tab active={tab === 'screen'}   onClick={() => setTab('screen')}   icon={Monitor}       label="Pantallas" />
-        <Tab active={tab === 'custom'}   onClick={() => setTab('custom')}   icon={Timer}         label="Timers" />
+        <Tab active={tab === 'custom'}    onClick={() => setTab('custom')}   icon={Timer}         label="Timers" />
       </div>
-
-      {/* Contenido */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {tab === 'internal' && <InternalMessages />}
         {tab === 'screen'   && <ScreenMessages />}
