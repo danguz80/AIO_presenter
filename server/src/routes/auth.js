@@ -26,29 +26,38 @@ function getClientIp(req) {
  * Devuelve { iat } si todo OK, o { error: string } si debe bloquearse.
  */
 async function checkAndCreateSession(userId, ip, isOwner = false) {
-  // Limpiar sesiones cuyo JWT ya expiró (30 días desde creación)
+  // Limpiar sesiones expiradas: más de 30 días desde creación
   await pool.query(
     "DELETE FROM user_sessions WHERE user_id = $1 AND created_at < NOW() - INTERVAL '30 days'",
     [userId]
   );
-  // También limpiar sesiones sin actividad en los últimos 30 días (dispositivos abandonados)
+  // Limpiar sesiones sin actividad: last_seen nulo o más de 7 días sin uso
   await pool.query(
-    "DELETE FROM user_sessions WHERE user_id = $1 AND last_seen < NOW() - INTERVAL '30 days'",
+    `DELETE FROM user_sessions WHERE user_id = $1
+     AND (last_seen IS NULL OR last_seen < NOW() - INTERVAL '7 days')`,
     [userId]
   );
+
   const { rows: sessions } = await pool.query(
-    'SELECT id, last_ip, last_seen FROM user_sessions WHERE user_id = $1 ORDER BY last_seen DESC',
+    'SELECT id, last_ip, last_seen FROM user_sessions WHERE user_id = $1 ORDER BY last_seen ASC NULLS FIRST',
     [userId]
   );
-  // Límite de dispositivos (owner tiene límite mayor)
+
+  // Límite de dispositivos: si se alcanza, evictar la sesión más antigua
   const limit = isOwner ? 10 : MAX_SESSIONS;
   if (sessions.length >= limit) {
-    return { error: `Límite de ${limit} dispositivos alcanzado. Cierra sesión en otro dispositivo para continuar.` };
+    // Eliminar la sesión más antigua (primera en el ORDER BY ASC) para hacer hueco
+    await pool.query('DELETE FROM user_sessions WHERE id = $1', [sessions[0].id]);
   }
+
   // Misma red para sesiones concurrentes (owner está exento)
   if (ip && !isOwner) {
+    const { rows: fresh } = await pool.query(
+      'SELECT id, last_ip FROM user_sessions WHERE user_id = $1 ORDER BY last_seen DESC',
+      [userId]
+    );
     const now = Date.now();
-    const concurrent = sessions.filter(
+    const concurrent = fresh.filter(
       s => s.last_seen && (now - new Date(s.last_seen).getTime()) < ACTIVE_WINDOW
     );
     if (concurrent.length > 0 && concurrent.some(s => s.last_ip !== ip)) {
@@ -921,7 +930,10 @@ router.patch('/members/:memberId/instruments', requireAuth, async (req, res) => 
 router.get('/sessions', requireAuth, async (req, res) => {
   try {
     await pool.query(
-      "DELETE FROM user_sessions WHERE user_id = $1 AND created_at < NOW() - INTERVAL '30 days'",
+      `DELETE FROM user_sessions WHERE user_id = $1
+       AND (created_at < NOW() - INTERVAL '30 days'
+         OR last_seen IS NULL
+         OR last_seen < NOW() - INTERVAL '7 days')`,
       [req.user.userId]
     );
     const { rows } = await pool.query(
