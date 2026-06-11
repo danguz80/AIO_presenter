@@ -1376,6 +1376,20 @@ function OrgSection({ orgs, onSwitch }) {
   const [switching, setSwitching] = useState(null);
   const navigate = useNavigate();
 
+  // Renombrar org activa
+  const isAdmin = (() => { try { return JSON.parse(atob(localStorage.getItem('aio_sync_token').split('.')[1]))?.isAdmin === true; } catch { return false; } })();
+  const activeOrg = orgs.find(o => o.id === currentOrgId);
+  const [renaming, setRenaming]   = useState(false);
+  const [newName, setNewName]     = useState('');
+  const [saving, setSaving]       = useState(false);
+  const [renameError, setRenameError] = useState(null);
+
+  // Crear nueva org
+  const [showCreate, setShowCreate] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [creating, setCreating]     = useState(false);
+  const [createError, setCreateError] = useState(null);
+
   const selectOrg = async (org) => {
     if (switching || org.id === currentOrgId) return;
     setSwitching(org.id);
@@ -1395,42 +1409,152 @@ function OrgSection({ orgs, onSwitch }) {
     }
   };
 
+  const saveRename = async (e) => {
+    e.preventDefault();
+    if (!newName.trim() || saving) return;
+    setSaving(true); setRenameError(null);
+    try {
+      const res = await fetch(`${API}/auth/org`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify({ name: newName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error');
+      // Actualizar nombre en la lista local y cerrar
+      setRenaming(false);
+      window.location.reload();
+    } catch (err) {
+      setRenameError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createOrg = async (e) => {
+    e.preventDefault();
+    if (!createName.trim() || creating) return;
+    setCreating(true); setCreateError(null);
+    try {
+      const res = await fetch(`${API}/auth/orgs`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ name: createName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al crear');
+      localStorage.setItem('aio_sync_token', data.token);
+      localStorage.setItem('aio_org_id', String(data.org.id));
+      navigate('/cancionero', { replace: true });
+    } catch (err) {
+      setCreateError(err.message);
+      setCreating(false);
+    }
+  };
+
   return (
-    <div className="space-y-2">
-      {orgs.map(org => {
-        const isActive  = org.id === currentOrgId;
+    <div className="space-y-3">
+      {/* Org activa con opción de renombrar (solo admin) */}
+      {activeOrg && isAdmin && (
+        <div className="bg-yellow-500/10 border border-yellow-400/30 rounded-xl px-4 py-3">
+          {!renaming ? (
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-xs text-yellow-400/60 font-semibold uppercase tracking-wider mb-0.5">Org activa</p>
+                <p className="text-sm font-bold text-yellow-200">{activeOrg.name}</p>
+              </div>
+              <button
+                onClick={() => { setNewName(activeOrg.name); setRenaming(true); }}
+                className="text-xs text-yellow-400/60 hover:text-yellow-300 px-2 py-1 rounded-lg hover:bg-yellow-500/10 transition-colors"
+              >
+                Renombrar
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={saveRename} className="space-y-2">
+              <p className="text-xs text-yellow-400/60 font-semibold uppercase tracking-wider">Nuevo nombre</p>
+              <input
+                autoFocus
+                value={newName}
+                onChange={e => setNewName(e.target.value)}
+                maxLength={80}
+                className="w-full bg-white/10 border border-yellow-400/30 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-yellow-400/60"
+              />
+              {renameError && <p className="text-red-400 text-xs">{renameError}</p>}
+              <div className="flex gap-2">
+                <button type="submit" disabled={!newName.trim() || saving}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-40 text-black font-bold rounded-lg py-2 text-xs transition-colors">
+                  {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Guardar
+                </button>
+                <button type="button" onClick={() => setRenaming(false)}
+                  className="px-3 py-2 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+
+      {/* Lista de otras orgs para cambiar */}
+      {orgs.filter(o => o.id !== currentOrgId).map(org => {
         const isLoading = switching === org.id;
         return (
           <button
             key={org.id}
             onClick={() => selectOrg(org)}
-            disabled={isActive || !!switching}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
-              isActive
-                ? 'bg-yellow-500/15 border-yellow-400/40 cursor-default'
-                : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-            }`}
+            disabled={!!switching}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 transition-colors text-left"
           >
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              isActive ? 'bg-yellow-500/20' : 'bg-white/10'
-            }`}>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-white/10">
               {isLoading
                 ? <Loader2 size={16} className="animate-spin text-yellow-300" />
-                : <Building2 size={16} className={isActive ? 'text-yellow-300' : 'text-white/40'} />
+                : <Building2 size={16} className="text-white/40" />
               }
             </div>
             <div className="flex-1 min-w-0">
-              <p className={`text-sm font-semibold truncate ${isActive ? 'text-yellow-200' : 'text-white/80'}`}>
-                {org.name}
-              </p>
-              {isActive && (
-                <p className="text-[10px] text-yellow-400/60 font-medium">Organización actual</p>
-              )}
+              <p className="text-sm font-semibold truncate text-white/80">{org.name}</p>
+              <p className="text-[10px] text-white/30 capitalize">{org.role}</p>
             </div>
-            {isActive && <CheckCircle2 size={16} className="text-yellow-400 flex-shrink-0" />}
+            <ChevronRight size={14} className="text-white/25 flex-shrink-0" />
           </button>
         );
       })}
+
+      {/* Crear nueva org */}
+      {!showCreate ? (
+        <button
+          onClick={() => setShowCreate(true)}
+          className="w-full flex items-center justify-center gap-2 border border-dashed border-white/15 hover:border-yellow-400/35 rounded-xl px-4 py-3 text-white/35 hover:text-yellow-400/70 transition-all text-sm"
+        >
+          <Plus size={14} />
+          Crear nueva organización
+        </button>
+      ) : (
+        <form onSubmit={createOrg} className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">Nueva organización</p>
+            <button type="button" onClick={() => { setShowCreate(false); setCreateName(''); setCreateError(null); }} className="text-white/30 hover:text-white/60">
+              <X size={15} />
+            </button>
+          </div>
+          <input
+            autoFocus
+            value={createName}
+            onChange={e => setCreateName(e.target.value)}
+            placeholder="Nombre de la iglesia o grupo..."
+            maxLength={80}
+            className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-yellow-400/50"
+          />
+          {createError && <p className="text-red-400 text-xs">{createError}</p>}
+          <button type="submit" disabled={!createName.trim() || creating}
+            className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-400 disabled:opacity-40 text-black font-bold rounded-lg py-2.5 text-sm transition-colors">
+            {creating ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            {creating ? 'Creando...' : 'Crear organización'}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
@@ -1573,15 +1697,13 @@ export default function CancioneroSettings() {
           <CalendarSection myUserId={user?.id} />
         </SectionCard>
 
-        {orgs.length > 1 && (
-          <SectionCard
-            icon={Building2}
-            title="Organización"
-            subtitle={orgs.find(o => o.id === Number(localStorage.getItem('aio_org_id')))?.name || 'Cambiar organización'}
-          >
-            <OrgSection orgs={orgs} />
-          </SectionCard>
-        )}
+        <SectionCard
+          icon={Building2}
+          title="Organización"
+          subtitle={orgs.find(o => o.id === Number(localStorage.getItem('aio_org_id')))?.name || 'Gestionar organización'}
+        >
+          <OrgSection orgs={orgs} />
+        </SectionCard>
       </div>
 
       <CancioneroNavbar />
