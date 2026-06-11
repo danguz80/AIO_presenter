@@ -7,9 +7,10 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { usePresenter } from '../../context/usePresenter';
+import { useTimerDisplay, fmtTimer } from '../../hooks/useTimerDisplay';
 import {
   MessageSquare, Monitor, Timer, Send, Users, Eye, EyeOff,
-  Play, Pause, RotateCcw, Clock, AlarmClock, Tv2,
+  Play, Pause, RotateCcw, Clock, AlarmClock, Tv2, Trash2,
 } from 'lucide-react';
 
 // ─── Tab wrapper ──────────────────────────────────────────────────────────────
@@ -203,35 +204,26 @@ function CustomMessages() {
   const { state, actions } = usePresenter();
   const timer = state.timerState || { type: 'countdown', seconds: 0, running: false, label: '' };
 
-  const [inputMin, setInputMin]   = useState(Math.floor((timer.seconds || 0) / 60));
-  const [inputSec, setInputSec]   = useState((timer.seconds || 0) % 60);
+  // Fix 4: usar hook para display — correcto al remontar aunque esté corriendo
+  const timerDisplay = useTimerDisplay(timer);
+
+  // Inputs de configuración — solo se usan para nuevo timer (no sincronizan con running)
+  const initialSecs = timer.initialSeconds ?? timer.seconds ?? 0;
+  const [inputMin, setInputMin]   = useState(Math.floor(initialSecs / 60));
+  const [inputSec, setInputSec]   = useState(initialSecs % 60);
   const [label, setLabel]         = useState(timer.label || '');
   const [timerType, setTimerType] = useState(timer.type || 'countdown');
-  const [display, setDisplay]     = useState(timer.seconds || 0); // segundos actuales en pantalla
-  const intervalRef               = useRef(null);
 
-  // Sincronizar display con estado global
+  // Cuando el timer se resetea (running=false y seconds cambia desde afuera), sync inputs
   useEffect(() => {
-    setDisplay(timer.seconds || 0);
-    setTimerType(timer.type || 'countdown');
-  }, [timer.seconds, timer.type]);
-
-  // Tick local para no depender solo del servidor
-  useEffect(() => {
-    clearInterval(intervalRef.current);
-    if (timer.running) {
-      intervalRef.current = setInterval(() => {
-        setDisplay(prev => {
-          if (timerType === 'countdown') {
-            if (prev <= 0) { clearInterval(intervalRef.current); return 0; }
-            return prev - 1;
-          }
-          return prev + 1;
-        });
-      }, 1000);
+    if (!timer.running) {
+      const secs = timer.initialSeconds ?? timer.seconds ?? 0;
+      setInputMin(Math.floor(secs / 60));
+      setInputSec(secs % 60);
+      setTimerType(timer.type || 'countdown');
+      setLabel(timer.label || '');
     }
-    return () => clearInterval(intervalRef.current);
-  }, [timer.running, timerType]);
+  }, [timer.running, timer.initialSeconds, timer.seconds, timer.type, timer.label]);
 
   const totalSeconds = inputMin * 60 + Number(inputSec);
 
@@ -242,33 +234,55 @@ function CustomMessages() {
 
   const start = () => {
     const secs = timerType === 'timer' ? 0 : totalSeconds;
-    setDisplay(secs);
     dispatch({ type: timerType, seconds: secs, running: true, label, startedAt: Date.now(), initialSeconds: secs });
   };
 
-  const pause  = () => dispatch({ running: false, seconds: display });
-  const resume = () => dispatch({ running: true, startedAt: Date.now(), initialSeconds: display });
+  const pause  = () => dispatch({ running: false, seconds: timerDisplay });
+  const resume = () => dispatch({ running: true, startedAt: Date.now(), initialSeconds: timerDisplay });
   const reset  = () => {
-    clearInterval(intervalRef.current);
     const secs = timerType === 'timer' ? 0 : totalSeconds;
-    setDisplay(secs);
     dispatch({ type: timerType, seconds: secs, running: false, label, startedAt: null, initialSeconds: secs });
   };
-
-  const useVideoTime = () => {
-    // Usa el tiempo del video en vivo si hay uno
-    const liveState = state.liveState;
-    const dur = liveState?.slideData?.duration || 0;
-    if (dur > 0) {
-      setInputMin(Math.floor(dur / 60));
-      setInputSec(dur % 60);
-    }
+  // Fix 2: borrar timer de pantallas
+  const clear  = () => {
+    dispatch({ type: timerType, seconds: 0, running: false, label: '', startedAt: null, initialSeconds: 0 });
+    setInputMin(0); setInputSec(0); setLabel('');
   };
 
-  const fmt = (s) => {
-    const m = Math.floor(Math.abs(s) / 60);
-    const sc = Math.abs(s) % 60;
-    return `${String(m).padStart(2, '0')}:${String(sc).padStart(2, '0')}`;
+  // Fix 3: leer tiempo del video activo en el DOM
+  const useVideoTime = () => {
+    const video = document.querySelector('video');
+    if (video && isFinite(video.duration) && video.duration > 0) {
+      const remaining = Math.max(0, Math.floor(video.duration - video.currentTime));
+      setInputMin(Math.floor(remaining / 60));
+      setInputSec(remaining % 60);
+    } else {
+      // Fallback: duración configurada en el slide
+      const dur = state.liveState?.slideData?.duration || 0;
+      if (dur > 0) { setInputMin(Math.floor(dur / 60)); setInputSec(dur % 60); }
+    }
+  };
+  const reset  = () => {
+    const secs = timerType === 'timer' ? 0 : totalSeconds;
+    dispatch({ type: timerType, seconds: secs, running: false, label, startedAt: null, initialSeconds: secs });
+  };
+  // Fix 2: borrar timer de pantallas
+  const clear  = () => {
+    dispatch({ type: timerType, seconds: 0, running: false, label: '', startedAt: null, initialSeconds: 0 });
+    setInputMin(0); setInputSec(0); setLabel('');
+  };
+
+  // Fix 3: leer tiempo del video activo en el DOM
+  const useVideoTime = () => {
+    const video = document.querySelector('video');
+    if (video && isFinite(video.duration) && video.duration > 0) {
+      const remaining = Math.max(0, Math.floor(video.duration - video.currentTime));
+      setInputMin(Math.floor(remaining / 60));
+      setInputSec(remaining % 60);
+    } else {
+      const dur = state.liveState?.slideData?.duration || 0;
+      if (dur > 0) { setInputMin(Math.floor(dur / 60)); setInputSec(dur % 60); }
+    }
   };
 
   return (
@@ -319,7 +333,7 @@ function CustomMessages() {
           </div>
           <button
             onClick={useVideoTime}
-            title="Usar tiempo del video actual"
+            title="Usar tiempo restante del video actual"
             className="text-[10px] text-zinc-500 hover:text-accent border border-surface-600 rounded-lg px-2 py-1.5 transition-colors"
           >
             🎬 Video
@@ -331,25 +345,36 @@ function CustomMessages() {
       <div className={`text-center py-4 rounded-2xl border font-mono text-4xl font-bold tracking-widest ${
         timer.running ? 'bg-accent/10 border-accent/30 text-accent' : 'bg-surface-700 border-surface-600 text-zinc-300'
       }`}>
-        {fmt(display)}
+        {fmtTimer(timerDisplay)}
         {label && <p className="text-xs font-sans font-normal text-zinc-500 mt-1">{label}</p>}
       </div>
 
-      {/* Controles */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Controles: Play/Pausa | Reiniciar | Borrar */}
+      <div className="grid grid-cols-4 gap-2">
         {!timer.running ? (
           <button onClick={start} className="col-span-2 flex items-center justify-center gap-2 py-2.5 bg-accent hover:bg-accent/80 text-white rounded-xl text-sm font-semibold transition-colors">
             <Play size={14} /> Iniciar
           </button>
         ) : (
-          <button onClick={pause} className="col-span-2 flex items-center justify-center gap-2 py-2.5 bg-yellow-500/80 hover:bg-yellow-500 text-black rounded-xl text-sm font-semibold transition-colors">
-            <Pause size={14} /> Pausar
-          </button>
+          <>
+            <button onClick={pause} className="flex items-center justify-center gap-1 py-2.5 bg-yellow-500/80 hover:bg-yellow-500 text-black rounded-xl text-sm font-semibold transition-colors">
+              <Pause size={14} />
+            </button>
+            <button onClick={resume} className="flex items-center justify-center gap-1 py-2.5 bg-accent hover:bg-accent/80 text-white rounded-xl text-sm font-semibold transition-colors" style={{ display: timer.running ? 'none' : 'flex' }}>
+              <Play size={14} />
+            </button>
+          </>
         )}
-        <button onClick={reset} className="flex items-center justify-center gap-1 py-2.5 bg-surface-700 hover:bg-surface-600 text-zinc-300 rounded-xl text-sm border border-surface-600 transition-colors">
+        <button onClick={reset} title="Reiniciar" className="flex items-center justify-center gap-1 py-2.5 bg-surface-700 hover:bg-surface-600 text-zinc-300 rounded-xl text-sm border border-surface-600 transition-colors">
           <RotateCcw size={14} />
         </button>
+        <button onClick={clear} title="Borrar timer de pantallas" className="col-span-1 flex items-center justify-center gap-1 py-2.5 bg-red-900/40 hover:bg-red-800/60 text-red-400 hover:text-red-300 rounded-xl text-sm border border-red-800/40 transition-colors">
+          <Trash2 size={14} />
+        </button>
       </div>
+      {timer.running && (
+        <p className="text-[10px] text-zinc-500 text-center">Timer corriendo en pantallas. <button onClick={pause} className="underline hover:text-zinc-300">Pausar</button> · <button onClick={clear} className="underline text-red-400 hover:text-red-300">Borrar</button></p>
+      )}
     </div>
   );
 }

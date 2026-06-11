@@ -691,6 +691,49 @@ export default function MobileControllerPage() {
       {/* ── Paneles colapsables ── */}
       <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-surface-700/60">
 
+        {/* ──── PANEL: NAVBAR ──── */}
+        <div>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 bg-surface-800/40 active:bg-surface-700/60 transition-colors"
+            onClick={() => togglePanel('navbar')}
+          >
+            <div className="flex items-center gap-2.5">
+              <Music2 size={15} className={openPanels.has('navbar') ? 'text-accent' : 'text-zinc-500'} />
+              <span className={`text-sm font-semibold ${openPanels.has('navbar') ? 'text-zinc-100' : 'text-zinc-400'}`}>Navegación</span>
+            </div>
+            <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('navbar') ? 'rotate-180' : ''}`} />
+          </button>
+          {openPanels.has('navbar') && (
+            <div className="px-4 py-3 flex flex-col gap-2 bg-surface-900/40">
+              <Link to="/output" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95">
+                <MonitorPlay size={16} className="text-zinc-400" /> Ver pantalla de salida
+              </Link>
+              <button onClick={() => navigate('/cancionero')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
+                <Music2 size={16} className="text-yellow-400" /> Modo Cancionero
+              </button>
+              <button onClick={() => navigate('/calendar')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
+                <CalendarDays size={16} className="text-zinc-400" /> Calendario
+              </button>
+              {(() => {
+                try {
+                  const t = localStorage.getItem('aio_sync_token');
+                  if (!t) return null;
+                  const p = JSON.parse(atob(t.split('.')[1]));
+                  if (!p?.isOwner && !p?.isAdmin) return null;
+                  return (
+                    <button onClick={() => navigate('/admin')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
+                      <Settings size={16} className="text-yellow-500" /> Panel Admin
+                    </button>
+                  );
+                } catch { return null; }
+              })()}
+              <button onClick={() => window.location.reload()} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
+                <RefreshCw size={16} className="text-zinc-400" /> Recargar
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* ──── PANEL: SALIDAS ──── */}
         <div>
           <button
