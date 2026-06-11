@@ -243,36 +243,10 @@ function CustomMessages() {
     const secs = timerType === 'timer' ? 0 : totalSeconds;
     dispatch({ type: timerType, seconds: secs, running: false, label, startedAt: null, initialSeconds: secs });
   };
-  // Fix 2: borrar timer de pantallas
   const clear  = () => {
     dispatch({ type: timerType, seconds: 0, running: false, label: '', startedAt: null, initialSeconds: 0 });
     setInputMin(0); setInputSec(0); setLabel('');
   };
-
-  // Fix 3: leer tiempo del video activo en el DOM
-  const useVideoTime = () => {
-    const video = document.querySelector('video');
-    if (video && isFinite(video.duration) && video.duration > 0) {
-      const remaining = Math.max(0, Math.floor(video.duration - video.currentTime));
-      setInputMin(Math.floor(remaining / 60));
-      setInputSec(remaining % 60);
-    } else {
-      // Fallback: duración configurada en el slide
-      const dur = state.liveState?.slideData?.duration || 0;
-      if (dur > 0) { setInputMin(Math.floor(dur / 60)); setInputSec(dur % 60); }
-    }
-  };
-  const reset  = () => {
-    const secs = timerType === 'timer' ? 0 : totalSeconds;
-    dispatch({ type: timerType, seconds: secs, running: false, label, startedAt: null, initialSeconds: secs });
-  };
-  // Fix 2: borrar timer de pantallas
-  const clear  = () => {
-    dispatch({ type: timerType, seconds: 0, running: false, label: '', startedAt: null, initialSeconds: 0 });
-    setInputMin(0); setInputSec(0); setLabel('');
-  };
-
-  // Fix 3: leer tiempo del video activo en el DOM
   const useVideoTime = () => {
     const video = document.querySelector('video');
     if (video && isFinite(video.duration) && video.duration > 0) {
