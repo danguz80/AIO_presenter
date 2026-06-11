@@ -243,16 +243,16 @@ function CustomMessages() {
   const start = () => {
     const secs = timerType === 'timer' ? 0 : totalSeconds;
     setDisplay(secs);
-    dispatch({ type: timerType, seconds: secs, running: true, label });
+    dispatch({ type: timerType, seconds: secs, running: true, label, startedAt: Date.now(), initialSeconds: secs });
   };
 
-  const pause  = () => dispatch({ running: false });
-  const resume = () => dispatch({ running: true  });
+  const pause  = () => dispatch({ running: false, seconds: display });
+  const resume = () => dispatch({ running: true, startedAt: Date.now(), initialSeconds: display });
   const reset  = () => {
     clearInterval(intervalRef.current);
     const secs = timerType === 'timer' ? 0 : totalSeconds;
     setDisplay(secs);
-    dispatch({ type: timerType, seconds: secs, running: false, label });
+    dispatch({ type: timerType, seconds: secs, running: false, label, startedAt: null, initialSeconds: secs });
   };
 
   const useVideoTime = () => {

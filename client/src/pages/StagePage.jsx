@@ -3,6 +3,7 @@ import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
+import { useTimerDisplay, fmtTimer } from '../hooks/useTimerDisplay';
 import { Maximize2 } from 'lucide-react';
 
 const FONT_PRESETS = {
@@ -38,6 +39,7 @@ export default function StagePage() {
   const outputCfg = state.outputConfig ?? {};
   const [time, setTime] = useState(new Date());
   const [lastLabel, setLastLabel] = useState(null);
+  const timerSeconds = useTimerDisplay(state.timerState);
 
   // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
   // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
@@ -384,12 +386,9 @@ export default function StagePage() {
               return <span className="font-bold text-white text-center" style={{ fontSize: sz(fontSizeNextSong + 4) }}>{sm.text}</span>;
             }
             if (tm?.running) {
-              const mm = Math.floor(Math.abs(tm.seconds) / 60);
-              const ss = Math.abs(tm.seconds) % 60;
-              const fmt = `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
               return (
                 <span className="font-mono font-bold text-yellow-300 text-center" style={{ fontSize: sz(fontSizeNextSong + 6) }}>
-                  {fmt}{tm.label ? ` · ${tm.label}` : ''}
+                  {fmtTimer(timerSeconds)}{tm.label ? ` · ${tm.label}` : ''}
                 </span>
               );
             }

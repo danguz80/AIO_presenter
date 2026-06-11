@@ -4,6 +4,7 @@ import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { injectGoogleFont } from '../utils/fontUtils';
 import OutputRenderer from '../components/shared/OutputRenderer';
+import { useTimerDisplay, fmtTimer } from '../hooks/useTimerDisplay';
 import { Smartphone, Maximize2 } from 'lucide-react';
 
 /**
@@ -56,6 +57,7 @@ export default function OutputPage() {
   }, [cfg.fontFamily, cfg.commentFontFamily, cfg.titleFontFamily, cfg.artistFontFamily, cfg.bibleFontFamily, cfg.bibleRefFontFamily]);
 
   const { slideData, isBlank, background, slideIndex, totalSlides, backgroundMedia } = liveState;
+  const timerSeconds = useTimerDisplay(state.timerState);
 
   // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
   // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
@@ -97,15 +99,12 @@ export default function OutputPage() {
             </div>
           );
         }
-        // Timer visible (si hay timer running y label o simplemente running)
+        // Timer visible (si hay timer running)
         if (tm?.running && (sm?.target === 'output' || sm?.target === 'both' || !sm?.visible)) {
-          const m  = Math.floor(Math.abs(tm.seconds) / 60);
-          const s  = Math.abs(tm.seconds) % 60;
-          const fmt = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
           return (
             <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
               <div className="bg-black/80 text-white font-mono text-7xl font-bold px-10 py-6 rounded-2xl text-center shadow-2xl border border-white/10">
-                {fmt}
+                {fmtTimer(timerSeconds)}
                 {tm.label && <p className="text-xl font-sans font-normal mt-2 text-white/70">{tm.label}</p>}
               </div>
             </div>

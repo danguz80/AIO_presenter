@@ -126,8 +126,7 @@ export default function MobileControllerPage() {
     if (last && last.id !== lastMsgId.current && !last.own) {
       lastMsgId.current = last.id;
       setMsgToast(last);
-      const t = setTimeout(() => setMsgToast(null), 5000);
-      return () => clearTimeout(t);
+      // Sin auto-dismiss — el usuario lo cierra manualmente
     }
   }, [internalMessages]);
   const { liveState, connected, songs, schedule, reservasMode, stageConfig, eventPlays, eventPlaysContext } = state;
@@ -591,13 +590,13 @@ export default function MobileControllerPage() {
     >
       {/* ── Toast: mensaje interno ── */}
       {msgToast && (
-        <div className="fixed top-3 left-3 right-3 z-[9999] flex items-start gap-2 bg-zinc-800 border border-accent/40 rounded-xl px-3 py-2.5 shadow-xl pointer-events-none">
-          <MessageSquare size={16} className="text-accent shrink-0 mt-0.5" />
+        <div className="fixed top-3 left-3 right-3 z-[9999] flex items-start gap-3 bg-zinc-800 border border-accent/40 rounded-2xl px-4 py-3 shadow-xl">
+          <MessageSquare size={20} className="text-accent shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold text-accent truncate">{msgToast.from}</p>
-            <p className="text-xs text-white/90 leading-snug">{msgToast.text}</p>
+            <p className="text-sm font-semibold text-accent truncate">{msgToast.from}</p>
+            <p className="text-base text-white/90 leading-snug mt-0.5">{msgToast.text}</p>
           </div>
-          <button className="pointer-events-auto text-zinc-500 hover:text-white shrink-0" onClick={() => setMsgToast(null)}><X size={14} /></button>
+          <button className="text-zinc-400 hover:text-white shrink-0 p-1" onClick={() => setMsgToast(null)}><X size={18} /></button>
         </div>
       )}
       {/* ── Header ── */}

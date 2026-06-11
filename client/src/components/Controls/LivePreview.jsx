@@ -4,6 +4,7 @@ import { stripChords, parseChordLines, isCommentLine, stripComments, extractInli
 import { injectGoogleFont } from '../../utils/fontUtils';
 import VirtualRenderer from '../shared/VirtualRenderer';
 import OutputRenderer from '../shared/OutputRenderer';
+import { useTimerDisplay, fmtTimer } from '../../hooks/useTimerDisplay';
 import { Monitor, MonitorOff } from 'lucide-react';
 
 import { getLabelColor } from '../../utils/labelColors';
@@ -13,6 +14,7 @@ export default function LivePreview() {
   const { liveState, stageConfig, virtualConfig, schedule, eventPlays, reservasMode } = state;
   const outputCfg    = state.outputConfig  ?? {};
   const displayCfg   = state.displayConfig ?? {};
+  const timerSeconds = useTimerDisplay(state.timerState);
 
   // Medir el contenedor del preview Principal para canvas escalado (ancho + alto)
   const principalRef = useRef(null);
@@ -260,6 +262,26 @@ export default function LivePreview() {
                   totalSlides={liveState.totalSlides}
                   backgroundMedia={liveState.backgroundMedia}
                 />
+                {/* Overlay timer/mensaje en preview output */}
+                {(() => {
+                  const sm = state.screenMessage;
+                  const tm = state.timerState;
+                  if (sm?.visible && (sm.target === 'output' || sm.target === 'both') && sm.text) {
+                    return (
+                      <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.6)', zIndex:50 }}>
+                        <span style={{ color:'#fff', fontWeight:'bold', fontSize: res.width * 0.04, textAlign:'center', padding:'0 5%' }}>{sm.text}</span>
+                      </div>
+                    );
+                  }
+                  if (tm?.running && (!sm?.visible || sm?.target === 'output' || sm?.target === 'both')) {
+                    return (
+                      <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.6)', zIndex:50 }}>
+                        <span style={{ color:'#fff', fontWeight:'bold', fontFamily:'monospace', fontSize: res.width * 0.1, textAlign:'center' }}>{fmtTimer(timerSeconds)}</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             );
           })()}
@@ -274,17 +296,39 @@ export default function LivePreview() {
         live={live}
         onClick={() => openWindow('/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution)}
       >
-        <StagePreview
-          stageBgStyle={stageBgStyle}
-          slideData={slideData}
-          nextSlideData={nextSlideData}
-          isBlank={isBlank}
-          live={live}
-          stageConfig={stageConfig}
-          schedule={schedule}
-          eventPlays={eventPlays}
-          reservasMode={reservasMode}
-        />
+        <div className="relative w-full h-full">
+          <StagePreview
+            stageBgStyle={stageBgStyle}
+            slideData={slideData}
+            nextSlideData={nextSlideData}
+            isBlank={isBlank}
+            live={live}
+            stageConfig={stageConfig}
+            schedule={schedule}
+            eventPlays={eventPlays}
+            reservasMode={reservasMode}
+          />
+          {/* Overlay timer/mensaje en preview escenario */}
+          {(() => {
+            const sm = state.screenMessage;
+            const tm = state.timerState;
+            if (sm?.visible && (sm.target === 'stage' || sm.target === 'both') && sm.text) {
+              return (
+                <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none bg-black/40 z-50">
+                  <span className="text-white font-bold text-xs text-center px-2">{sm.text}</span>
+                </div>
+              );
+            }
+            if (tm?.running && (!sm?.visible || sm?.target === 'stage' || sm?.target === 'both')) {
+              return (
+                <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none z-50">
+                  <span className="text-yellow-300 font-bold font-mono text-sm">{fmtTimer(timerSeconds)}</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </div>
       </PreviewBox>
 
       {/* ── Stream / NDI ─────────────────────────────────────────────── */}
