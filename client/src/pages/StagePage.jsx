@@ -3,7 +3,7 @@ import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
-import { useTimerDisplay, fmtTimer } from '../hooks/useTimerDisplay';
+import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
 import { Maximize2 } from 'lucide-react';
 
 const FONT_PRESETS = {
@@ -40,6 +40,10 @@ export default function StagePage() {
   const [time, setTime] = useState(new Date());
   const [lastLabel, setLastLabel] = useState(null);
   const timerSeconds = useTimerDisplay(state.timerState);
+  const smStrobe = useStrobe(
+    !!(state.screenMessage?.visible && state.screenMessage?.strobe &&
+      (state.screenMessage.target === 'stage' || state.screenMessage.target === 'both'))
+  );
 
   // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
   // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
@@ -369,8 +373,29 @@ export default function StagePage() {
         )}
       </div>
 
-      {/* ── BARRA INFERIOR: mensaje de pantalla o próxima canción + reloj ── */}
-      {(showClock || nextSong || state.screenMessage?.visible || state.timerState?.running) && (
+      {/* Overlay: mensaje a pantalla — cubre la mitad inferior (o 35% si no hay siguiente diapo) */}
+      {(() => {
+        const sm = state.screenMessage;
+        if (!sm?.visible || !(sm.target === 'stage' || sm.target === 'both') || !sm.text) return null;
+        const h = showNextSlide ? '50%' : '35%';
+        const bg = sm.strobe
+          ? (smStrobe ? (sm.bgColor || 'rgba(0,0,0,0.88)') : '#000000')
+          : (sm.bgColor || 'rgba(0,0,0,0.88)');
+        return (
+          <div style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: h,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: bg, zIndex: 10, padding: '0 5%',
+          }}>
+            <span style={{ color: sm.textColor || '#ffffff', fontWeight: 'bold', fontSize: '2.5rem', textAlign: 'center', lineHeight: 1.2 }}>
+              {sm.text}
+            </span>
+          </div>
+        );
+      })()}
+
+      {/* ── BARRA INFERIOR: timer o próxima canción + reloj ── */}
+      {(showClock || nextSong || state.timerState?.running) && (
         <div
           className="shrink-0 bg-black/70 border-t border-white/10 px-5 py-2 flex items-center"
           style={{ fontFamily: fontStyles.fontFamily, position: 'relative', zIndex: 1 }}
@@ -378,14 +403,10 @@ export default function StagePage() {
           {/* Columna izquierda (spacer) */}
           <div className="flex-1" />
 
-          {/* Columna central: mensaje a pantalla > timer > próxima canción */}
+          {/* Columna central: timer > próxima canción */}
           {(() => {
-            const sm = state.screenMessage;
             const tm = state.timerState;
-            if (sm?.visible && (sm.target === 'stage' || sm.target === 'both') && sm.text) {
-              return <span className="font-bold text-white text-center" style={{ fontSize: sz(fontSizeNextSong + 4) }}>{sm.text}</span>;
-            }
-            if (tm?.running) {
+            if (tm?.running && (!tm.target || tm.target === 'stage' || tm.target === 'both')) {
               return (
                 <span className="font-mono font-bold text-yellow-300 text-center" style={{ fontSize: sz(fontSizeNextSong + 6) }}>
                   {fmtTimer(timerSeconds)}{tm.label ? ` · ${tm.label}` : ''}

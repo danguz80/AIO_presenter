@@ -2,11 +2,6 @@ import { useEffect, useState } from 'react';
 
 /**
  * Calcula los segundos actuales de un timer basándose en startedAt.
- * Así cualquier pantalla que recibe el estado inicial puede mostrarlo corriendo
- * sin depender de broadcasts por segundo.
- *
- * @param {object} timerState  { type, seconds, running, startedAt, initialSeconds }
- * @returns {number}           segundos actuales a mostrar
  */
 export function useTimerDisplay(timerState) {
   const computeCurrent = () => {
@@ -18,7 +13,6 @@ export function useTimerDisplay(timerState) {
     if (timerState.type === 'timer') {
       return initial + elapsed;
     }
-    // countdown
     return Math.max(0, initial - elapsed);
   };
 
@@ -39,4 +33,18 @@ export function fmtTimer(seconds) {
   const m = Math.floor(Math.abs(seconds) / 60);
   const s = Math.abs(seconds) % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/**
+ * Efecto estrobo: alterna true/false cada intervalMs cuando active=true.
+ */
+export function useStrobe(active, intervalMs = 250) {
+  const [bright, setBright] = useState(true);
+  useEffect(() => {
+    setBright(true);
+    if (!active) return;
+    const id = setInterval(() => setBright(v => !v), intervalMs);
+    return () => clearInterval(id);
+  }, [active, intervalMs]);
+  return bright;
 }

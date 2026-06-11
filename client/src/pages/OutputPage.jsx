@@ -4,7 +4,7 @@ import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { injectGoogleFont } from '../utils/fontUtils';
 import OutputRenderer from '../components/shared/OutputRenderer';
-import { useTimerDisplay, fmtTimer } from '../hooks/useTimerDisplay';
+import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
 import { Smartphone, Maximize2 } from 'lucide-react';
 
 /**
@@ -58,6 +58,10 @@ export default function OutputPage() {
 
   const { slideData, isBlank, background, slideIndex, totalSlides, backgroundMedia } = liveState;
   const timerSeconds = useTimerDisplay(state.timerState);
+  const smStrobe = useStrobe(!!(state.screenMessage?.visible && state.screenMessage?.strobe &&
+    (state.screenMessage.target === 'output' || state.screenMessage.target === 'both')));
+  const tmStrobe = useStrobe(!!(state.timerState?.running && state.timerState?.strobe &&
+    (!state.timerState.target || state.timerState.target === 'output' || state.timerState.target === 'both')));
 
   // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
   // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
@@ -89,23 +93,29 @@ export default function OutputPage() {
       {(() => {
         const sm = state.screenMessage;
         const tm = state.timerState;
-        // Mensaje de texto visible en output o both
         if (sm?.visible && (sm.target === 'output' || sm.target === 'both') && sm.text) {
+          const bg = sm.strobe
+            ? (smStrobe ? (sm.bgColor || 'rgba(0,0,0,0.88)') : '#000000')
+            : (sm.bgColor || 'rgba(0,0,0,0.88)');
           return (
-            <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
-              <div className="bg-black/80 text-white text-4xl font-bold px-10 py-6 rounded-2xl text-center max-w-[80%] shadow-2xl border border-white/10">
+            <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none" style={{ background: bg }}>
+              <span className="text-4xl font-bold px-10 py-6 text-center max-w-[80%]" style={{ color: sm.textColor || '#ffffff' }}>
                 {sm.text}
-              </div>
+              </span>
             </div>
           );
         }
-        // Timer visible (si hay timer running)
-        if (tm?.running && (sm?.target === 'output' || sm?.target === 'both' || !sm?.visible)) {
+        if (tm?.running && (!tm.target || tm.target === 'output' || tm.target === 'both') && !sm?.visible) {
+          const bg = tm.strobe
+            ? (tmStrobe ? (tm.bgColor || 'rgba(0,0,0,0.88)') : '#000000')
+            : (tm.bgColor || 'rgba(0,0,0,0.88)');
           return (
-            <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
-              <div className="bg-black/80 text-white font-mono text-7xl font-bold px-10 py-6 rounded-2xl text-center shadow-2xl border border-white/10">
-                {fmtTimer(timerSeconds)}
-                {tm.label && <p className="text-xl font-sans font-normal mt-2 text-white/70">{tm.label}</p>}
+            <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none" style={{ background: bg }}>
+              <div className="text-center">
+                <span className="font-mono text-7xl font-bold" style={{ color: tm.textColor || '#ffffff' }}>
+                  {fmtTimer(timerSeconds)}
+                </span>
+                {tm.label && <p className="text-xl font-sans font-normal mt-2" style={{ color: (tm.textColor || '#ffffff') + 'aa' }}>{tm.label}</p>}
               </div>
             </div>
           );
