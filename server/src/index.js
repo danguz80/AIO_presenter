@@ -437,6 +437,20 @@ io.use((socket, next) => {
   return next(new Error('Sin autenticación. Proporciona un token o orgId.'));
 });
 
+// ─── Helper: usuarios conectados en una org ───────────────────────────────────
+function getConnectedUsers(orgId) {
+  const room    = io.sockets.adapter.rooms.get(`org:${orgId}`);
+  if (!room) return [];
+  const users = [];
+  for (const sid of room) {
+    const s = io.sockets.sockets.get(sid);
+    if (s?.userName) {
+      users.push({ socketId: sid, name: s.userName, avatar: s.userAvatar || null });
+    }
+  }
+  return users;
+}
+
 io.on('connection', (socket) => {
   const orgId = socket.orgId;
   socket.join(`org:${orgId}`);
@@ -702,7 +716,59 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log(`[Socket] Org ${orgId} — cliente desconectado: ${socket.id}`);
+    // Notificar a la org que este usuario se desconectó
+    if (socket.userId && socket.userName) {
+      emitToOrg('users:connected', getConnectedUsers(orgId));
+    }
   });
+
+  // ── Registro de usuario conectado ─────────────────────────────────────────
+  socket.on('user:register', ({ name, avatar }) => {
+    socket.userName   = name   || 'Usuario';
+    socket.userAvatar = avatar || null;
+    emitToOrg('users:connected', getConnectedUsers(orgId));
+  });
+
+  // ── Mensajes internos (entre operadores) ──────────────────────────────────
+  // data: { text, toSocketId? } — si toSocketId es null → broadcast a todos
+  socket.on('msg:internal:send', ({ text, toSocketId }) => {
+    const msg = {
+      id        : Date.now(),
+      text,
+      from      : socket.userName || 'Alguien',
+      fromAvatar: socket.userAvatar || null,
+      fromId    : socket.id,
+      at        : new Date().toISOString(),
+    };
+    if (toSocketId) {
+      // Mensaje privado
+      io.to(toSocketId).emit('msg:internal:receive', { ...msg, private: true });
+      socket.emit('msg:internal:receive', { ...msg, private: true, own: true });
+    } else {
+      // A todos en la org
+      emitToOrg('msg:internal:receive', msg);
+    }
+  });
+
+  // ── Mensajes a pantallas ───────────────────────────────────────────────────
+  // data: { text, target: 'output'|'stage'|'both', visible: bool }
+  socket.on('msg:screen', (data) => {
+    if (!s.screenMessage) s.screenMessage = { text: '', target: 'both', visible: false };
+    s.screenMessage = { ...s.screenMessage, ...data };
+    emitToOrg('msg:screen', s.screenMessage);
+  });
+
+  // ── Timer / Cuenta regresiva ───────────────────────────────────────────────
+  // data: { type:'timer'|'countdown', seconds, running, label }
+  socket.on('msg:timer', (data) => {
+    if (!s.timerState) s.timerState = { type: 'timer', seconds: 0, running: false, label: '' };
+    s.timerState = { ...s.timerState, ...data };
+    emitToOrg('msg:timer', s.timerState);
+  });
+
+  // Al conectar, enviar estado de mensajes de pantalla y timer si existen
+  if (s.screenMessage) socket.emit('msg:screen', s.screenMessage);
+  if (s.timerState)    socket.emit('msg:timer',   s.timerState);
 
   // ── Transposición global de canción (modo Cancionero) ──────────────────────
   // songKeyOffsets: Map<songId, number> dentro del estado de org

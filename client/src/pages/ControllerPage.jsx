@@ -11,7 +11,7 @@ import SongFormModal   from '../components/Library/SongFormModal';
 import { ScheduleAddProvider } from '../context/ScheduleAddContext';
 import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck, MessageSquare } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import OrgSwitcher from '../components/shared/OrgSwitcher';
 
@@ -115,6 +115,7 @@ export default function ControllerPage() {
   }, [mediaHeight]);
   const [mobileUrl, setMobileUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [showMessages, setShowMessages] = useState(false);
   const { width: previewWidth, onMouseDown: onPreviewResize } = useResizablePanel(384, 220, 700, true);
 
   // Obtener IP local del servidor para construir URL del móvil
@@ -208,7 +209,17 @@ export default function ControllerPage() {
             <RefreshCw size={15} />
           </button>
 
-          {/* Botón configuración */}
+          {/* Botón mensajes */}
+          <button
+            onClick={() => { setShowMessages(v => !v); setShowSettings(false); }}
+            title="Mensajes"
+            className={`flex items-center gap-1.5 text-xs transition-colors px-2 py-1 rounded hover:bg-surface-700 ${showMessages ? 'text-accent' : 'text-zinc-400 hover:text-accent'}`}
+          >
+            <MessageSquare size={15} />
+            <span className="hidden sm:inline">Mensajes</span>
+          </button>
+
+          {/* Botón configuración */}}
           <button
             onClick={() => setShowSettings(true)}
             title="Configuración"
@@ -304,6 +315,19 @@ export default function ControllerPage() {
           <LiveControls />
         </aside>
       </div>
+
+      {/* Panel de Mensajes */}
+      {showMessages && (
+        <div className="fixed inset-y-0 right-0 z-50 w-80 bg-surface-800 border-l border-surface-700 flex flex-col shadow-2xl">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
+            <span className="text-sm font-semibold text-white">Mensajes</span>
+            <button onClick={() => setShowMessages(false)} className="text-zinc-400 hover:text-white"><X size={16} /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <MessagesPanel />
+          </div>
+        </div>
+      )}
 
       {/* Panel de Configuración */}
       {showSettings && (

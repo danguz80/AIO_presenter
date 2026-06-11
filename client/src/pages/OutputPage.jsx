@@ -83,6 +83,36 @@ export default function OutputPage() {
         totalSlides={totalSlides}
         backgroundMedia={backgroundMedia}
       />
+      {/* Overlay: mensaje a pantalla */}
+      {(() => {
+        const sm = state.screenMessage;
+        const tm = state.timerState;
+        // Mensaje de texto visible en output o both
+        if (sm?.visible && (sm.target === 'output' || sm.target === 'both') && sm.text) {
+          return (
+            <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
+              <div className="bg-black/80 text-white text-4xl font-bold px-10 py-6 rounded-2xl text-center max-w-[80%] shadow-2xl border border-white/10">
+                {sm.text}
+              </div>
+            </div>
+          );
+        }
+        // Timer visible (si hay timer running y label o simplemente running)
+        if (tm?.running && (sm?.target === 'output' || sm?.target === 'both' || !sm?.visible)) {
+          const m  = Math.floor(Math.abs(tm.seconds) / 60);
+          const s  = Math.abs(tm.seconds) % 60;
+          const fmt = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+          return (
+            <div className="fixed inset-0 z-[500] flex items-center justify-center pointer-events-none">
+              <div className="bg-black/80 text-white font-mono text-7xl font-bold px-10 py-6 rounded-2xl text-center shadow-2xl border border-white/10">
+                {fmt}
+                {tm.label && <p className="text-xl font-sans font-normal mt-2 text-white/70">{tm.label}</p>}
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
       {/* Overlay pantalla completa (si auto-fullscreen falló) */}
       {showFsHint && (
         <div

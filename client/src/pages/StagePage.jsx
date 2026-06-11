@@ -367,8 +367,8 @@ export default function StagePage() {
         )}
       </div>
 
-      {/* ── BARRA INFERIOR: próxima canción (centro) + reloj (derecha) ── */}
-      {(showClock || nextSong) && (
+      {/* ── BARRA INFERIOR: mensaje de pantalla o próxima canción + reloj ── */}
+      {(showClock || nextSong || state.screenMessage?.visible || state.timerState?.running) && (
         <div
           className="shrink-0 bg-black/70 border-t border-white/10 px-5 py-2 flex items-center"
           style={{ fontFamily: fontStyles.fontFamily, position: 'relative', zIndex: 1 }}
@@ -376,15 +376,33 @@ export default function StagePage() {
           {/* Columna izquierda (spacer) */}
           <div className="flex-1" />
 
-          {/* Columna central: título de la próxima canción */}
-          {nextSong && (
-            <span
-              className="font-bold leading-tight text-center"
-              style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}
-            >
-              {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
-            </span>
-          )}
+          {/* Columna central: mensaje a pantalla > timer > próxima canción */}
+          {(() => {
+            const sm = state.screenMessage;
+            const tm = state.timerState;
+            if (sm?.visible && (sm.target === 'stage' || sm.target === 'both') && sm.text) {
+              return <span className="font-bold text-white text-center" style={{ fontSize: sz(fontSizeNextSong + 4) }}>{sm.text}</span>;
+            }
+            if (tm?.running) {
+              const mm = Math.floor(Math.abs(tm.seconds) / 60);
+              const ss = Math.abs(tm.seconds) % 60;
+              const fmt = `${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+              return (
+                <span className="font-mono font-bold text-yellow-300 text-center" style={{ fontSize: sz(fontSizeNextSong + 6) }}>
+                  {fmt}{tm.label ? ` · ${tm.label}` : ''}
+                </span>
+              );
+            }
+            if (nextSong) {
+              return (
+                <span className="font-bold leading-tight text-center"
+                  style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
+                  {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
+                </span>
+              );
+            }
+            return null;
+          })()}
 
           {/* Columna derecha: reloj */}
           <div className="flex-1 flex justify-end">

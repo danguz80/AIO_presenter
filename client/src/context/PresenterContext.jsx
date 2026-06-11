@@ -205,6 +205,11 @@ const initialState = {
 
   // Socket
   connected: false,
+  // Mensajería
+  connectedUsers: [],
+  internalMessages: [],
+  screenMessage: { text: '', target: 'both', visible: false },
+  timerState: { type: 'countdown', seconds: 0, running: false, label: '' },
 };
 
 // ─── Reducer ─────────────────────────────────────────────────────────────────
@@ -281,6 +286,14 @@ function reducer(state, action) {
       return { ...state, displayConfig: { ...state.displayConfig, ...action.payload } };
     case 'SET_APP_THEME':
       return { ...state, appTheme: action.payload };
+    case 'SET_CONNECTED_USERS':
+      return { ...state, connectedUsers: action.payload };
+    case 'ADD_INTERNAL_MSG':
+      return { ...state, internalMessages: [...state.internalMessages.slice(-49), action.payload] };
+    case 'SET_SCREEN_MSG':
+      return { ...state, screenMessage: action.payload };
+    case 'SET_TIMER_STATE':
+      return { ...state, timerState: action.payload };
     default:
       return state;
   }
@@ -319,10 +332,18 @@ export function PresenterProvider({ children }) {
 
     socket.on('connect', () => {
       dispatch({ type: 'SET_CONNECTED', payload: true });
-      // Re-emitir schedule al reconectar (el servidor lo pierde al reiniciarse)
+      // Re-emitir schedule al reconectar
       if (scheduleRef.current?.length > 0) {
         socket.emit('schedule:update', scheduleRef.current);
       }
+      // Registrar usuario para mensajería
+      try {
+        const tok = localStorage.getItem('aio_sync_token');
+        if (tok) {
+          const p = JSON.parse(atob(tok.split('.')[1]));
+          socket.emit('user:register', { name: p.displayName || p.email || 'Usuario', avatar: p.avatar || null });
+        }
+      } catch { /* ignore */ }
     });
     socket.on('disconnect',   () => dispatch({ type: 'SET_CONNECTED', payload: false }));
     socket.on('live:state', (data) => {
@@ -346,6 +367,11 @@ export function PresenterProvider({ children }) {
     socket.on('event:reservas_mode', (mode) => dispatch({ type: 'SET_RESERVAS_MODE', payload: mode }));
     socket.on('display:config',      (data) => dispatch({ type: 'SET_DISPLAY_CONFIG', payload: data }));
     socket.on('app:theme',           (theme) => dispatch({ type: 'SET_APP_THEME',     payload: theme }));
+    // Mensajería
+    socket.on('users:connected',     (data) => dispatch({ type: 'SET_CONNECTED_USERS', payload: data }));
+    socket.on('msg:internal:receive',(data) => dispatch({ type: 'ADD_INTERNAL_MSG',   payload: data }));
+    socket.on('msg:screen',          (data) => dispatch({ type: 'SET_SCREEN_MSG',     payload: data }));
+    socket.on('msg:timer',           (data) => dispatch({ type: 'SET_TIMER_STATE',    payload: data }));
     return () => socket.disconnect();
   }, []);
 
@@ -555,6 +581,25 @@ export function PresenterProvider({ children }) {
     setAppTheme: (theme) => {
       dispatch({ type: 'SET_APP_THEME', payload: theme });
       socketRef.current?.emit('settings:theme', theme);
+    },
+
+    // ── Mensajería ────────────────────────────────────────────────────────
+    sendInternalMsg: ({ text, toSocketId }) => {
+      socketRef.current?.emit('msg:internal:send', { text, toSocketId: toSocketId || null });
+    },
+
+    setScreenMessage: (data) => {
+      socketRef.current?.emit('msg:screen', data);
+      dispatch({ type: 'SET_SCREEN_MSG', payload: data });
+    },
+
+    setTimerState: (data) => {
+      socketRef.current?.emit('msg:timer', data);
+      dispatch({ type: 'SET_TIMER_STATE', payload: data });
+    },
+
+    registerUser: (name, avatar) => {
+      socketRef.current?.emit('user:register', { name, avatar });
     },
   };
 
