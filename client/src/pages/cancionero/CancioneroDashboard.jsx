@@ -215,9 +215,9 @@ export default function CancioneroDashboard() {
             <span className="hidden sm:inline">Presenter</span>
           </button>
           <button
-            onClick={() => navigate('/mode-select')}
-            title="Cambiar modo"
-            className="text-white/30 hover:text-white/60 transition-colors p-1"
+            onClick={logout}
+            title="Cerrar sesión"
+            className="text-white/30 hover:text-red-400 transition-colors p-1"
           >
             <LogOut size={16} />
           </button>
