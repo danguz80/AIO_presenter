@@ -106,7 +106,7 @@ export default function LoginPage() {
           onClick={() => navigate('/register')}
           className="w-full py-3 rounded-xl border border-white/20 text-white/70 hover:text-white hover:border-white/40 text-sm font-semibold transition-all"
         >
-          Crear cuenta gratis — 7 días
+          Crear cuenta gratis — 30 días
         </button>
 
         <p className="text-center text-xs text-white/25 leading-relaxed">
