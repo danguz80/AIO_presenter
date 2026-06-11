@@ -177,7 +177,11 @@ export default function CancioneroDashboard() {
   // Auto-cargar notificaciones al montar (auto-abre si hay no leídas)
   useEffect(() => { loadNotifs(true); }, [loadNotifs]);
 
-  const logout = () => {
+  const logout = async () => {
+    const token = localStorage.getItem('aio_sync_token');
+    if (token) {
+      try { await fetch(`${API}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch (_) {}
+    }
     localStorage.removeItem('aio_sync_token');
     localStorage.removeItem('aio_org_id');
     navigate('/', { replace: true });

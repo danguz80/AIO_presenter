@@ -138,7 +138,13 @@ function ProfileSection({ user, onSaved }) {
       </button>
 
       <button
-        onClick={() => { localStorage.removeItem('aio_sync_token'); localStorage.removeItem('aio_org_id'); navigate('/'); }}
+        onClick={async () => {
+          const token = localStorage.getItem('aio_sync_token');
+          if (token) {
+            try { await fetch(`${API}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch (_) {}
+          }
+          localStorage.removeItem('aio_sync_token'); localStorage.removeItem('aio_org_id'); navigate('/');
+        }}
         className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 border border-red-500/20 text-red-400/60 hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/30"
       >
         <LogOut size={14} /> Cerrar sesión

@@ -642,7 +642,12 @@ export default function SyncPanel() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const token = localStorage.getItem('aio_sync_token');
+    const apiBase = import.meta.env.VITE_API_URL || '';
+    if (token) {
+      try { await fetch(`${apiBase}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } }); } catch (_) {}
+    }
     localStorage.removeItem('aio_sync_token');
     localStorage.removeItem('aio_org_id');
     setUser(null); setSyncInfo(null);

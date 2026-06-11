@@ -26,9 +26,14 @@ function getClientIp(req) {
  * Devuelve { iat } si todo OK, o { error: string } si debe bloquearse.
  */
 async function checkAndCreateSession(userId, ip, isOwner = false) {
-  // Limpiar sesiones cuyo JWT ya expiró (30 días)
+  // Limpiar sesiones cuyo JWT ya expiró (30 días desde creación)
   await pool.query(
     "DELETE FROM user_sessions WHERE user_id = $1 AND created_at < NOW() - INTERVAL '30 days'",
+    [userId]
+  );
+  // También limpiar sesiones sin actividad en los últimos 30 días (dispositivos abandonados)
+  await pool.query(
+    "DELETE FROM user_sessions WHERE user_id = $1 AND last_seen < NOW() - INTERVAL '30 days'",
     [userId]
   );
   const { rows: sessions } = await pool.query(
