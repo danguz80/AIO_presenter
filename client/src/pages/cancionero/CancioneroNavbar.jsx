@@ -60,7 +60,7 @@ export default function CancioneroNavbar() {
         </div>
       )}
 
-      {/* ── Drawer de mensajes ── */}}
+      {/* ── Drawer de mensajes ── */}
       {showMessages && (
         <div className="fixed inset-0 z-[9998] flex flex-col bg-[#0a1220]">
           <div className="flex items-center justify-between px-4 py-3 bg-[#0d1929] border-b border-white/10 shrink-0">

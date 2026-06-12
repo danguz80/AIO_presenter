@@ -76,7 +76,9 @@ export default function CancioneroDashboard() {
   const [bandConfigs, setBandConfigs] = useState([]);
   const [myBlockedDates, setMyBlockedDates] = useState([]);
   const isAdmin = getIsAdmin();
-  const [showDemoBanner, setShowDemoBanner] = useState(false);
+  const [showDemoBanner, setShowDemoBanner] = useState(
+    () => localStorage.getItem('aio_demo_banner_dismissed') !== '1'
+  );
 
   // Notificaciones
   const [notifs,       setNotifs]       = useState([]);
@@ -124,14 +126,10 @@ export default function CancioneroDashboard() {
         .then(r => r.json()).catch(() => []),
       fetch(`${API}/api/blocked-dates?start=${todayStr()}&end=${futureStr(60)}`, { headers: authHeaders() })
         .then(r => r.json()).catch(() => []),
-      fetch(`${API}/api/songs`, { headers: authHeaders() })
-        .then(r => r.json()).catch(() => []),
-    ]).then(([me, orgData, evs, configs, blocked, songsData]) => {
+    ]).then(([me, orgData, evs, configs, blocked]) => {
       setUser(me);
       setOrg(orgData);
       setBandConfigs(Array.isArray(configs) ? configs : []);
-      const songList = Array.isArray(songsData) ? songsData : (songsData?.songs ?? []);
-      setShowDemoBanner(songList.length === 0);
       // Guardar solo mis propias fechas bloqueadas (filtramos después de tener me.id)
       const blockedArr = Array.isArray(blocked) ? blocked : [];
       const myId = Number(me?.id);
@@ -296,7 +294,10 @@ export default function CancioneroDashboard() {
       {showDemoBanner && (
         <DemoPackBanner
           onSongsImported={() => {}}
-          onDismiss={() => setShowDemoBanner(false)}
+          onDismiss={() => {
+            localStorage.setItem('aio_demo_banner_dismissed', '1');
+            setShowDemoBanner(false);
+          }}
         />
       )}
 
