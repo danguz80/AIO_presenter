@@ -119,6 +119,19 @@ export default function ControllerPage() {
   const [showMessages, setShowMessages] = useState(false);
   const { width: previewWidth, onMouseDown: onPreviewResize } = useResizablePanel(384, 220, 700, true);
 
+  // ── Toast: mensajes internos entrantes ────────────────────────────────────
+  const [msgToast, setMsgToast] = useState(null);
+  const lastMsgId = useRef(null);
+  useEffect(() => {
+    const msgs = state.internalMessages;
+    if (!msgs?.length) return;
+    const last = msgs[msgs.length - 1];
+    if (last && last.id !== lastMsgId.current && !last.own) {
+      lastMsgId.current = last.id;
+      setMsgToast(last);
+    }
+  }, [state.internalMessages]);
+
   // Obtener IP local del servidor para construir URL del móvil
   useEffect(() => {
     fetch('/api/network-info')
@@ -135,6 +148,19 @@ export default function ControllerPage() {
   return (
     <ScheduleAddProvider>
     <div className="flex flex-col h-screen bg-surface-900 overflow-hidden">
+      {/* ── Toast: mensaje interno ── */}
+      {msgToast && (
+        <div className="fixed top-4 right-4 z-[9999] flex items-start gap-3 bg-zinc-800 border border-accent/50 rounded-2xl px-4 py-3.5 shadow-2xl max-w-sm w-full">
+          <MessageSquare size={20} className="text-accent shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-accent truncate">{msgToast.from}</p>
+            <p className="text-base text-white/90 leading-snug mt-0.5">{msgToast.text}</p>
+          </div>
+          <button className="text-zinc-400 hover:text-white shrink-0 p-1" onClick={() => setMsgToast(null)}>
+            <X size={18} />
+          </button>
+        </div>
+      )}
       {/* ── Header ── */}
       <header className="flex items-center justify-between px-4 py-3 bg-surface-800 border-b border-surface-700 shrink-0">
         <div className="flex items-center gap-3">
