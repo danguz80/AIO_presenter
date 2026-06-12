@@ -394,6 +394,7 @@ function SlideContent({ slideData, cfg }) {
           autoPlay
           loop
           playsInline
+          data-media-video="1"
           style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', display: 'block' }}
         />
       );

@@ -616,13 +616,17 @@ export function PresenterProvider({ children }) {
     let disposed = false;
     let attached = null; // video actualmente monitorizado
 
-    // Solo videos de fondo (data-bg-video) o el más grande. Excluye logos.
+    // Solo videos de contenido (data-media-video). Ignora fondos (data-bg-video).
     const getBgVideo = () => {
       const all = Array.from(document.querySelectorAll('video'));
       if (all.length === 0) return null;
-      const marked = all.find(v => v.dataset.bgVideo === '1');
-      if (marked) return marked;
-      return all.reduce((best, v) =>
+      // Prioridad 1: slide de medios explícitamente marcado
+      const media = all.find(v => v.dataset.mediaVideo === '1');
+      if (media) return media;
+      // Prioridad 2: ninguno marcado (ej. LivePreview) → excluir fondos, tomar el más grande
+      const nonBg = all.filter(v => v.dataset.bgVideo !== '1');
+      if (nonBg.length === 0) return null;
+      return nonBg.reduce((best, v) =>
         v.getBoundingClientRect().width > best.getBoundingClientRect().width ? v : best
       );
     };
