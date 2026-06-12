@@ -308,25 +308,29 @@ export default function LivePreview() {
             eventPlays={eventPlays}
             reservasMode={reservasMode}
           />
-          {/* Overlay timer/mensaje en preview escenario */}
+          {/* Overlay timer/mensaje en preview escenario — replica StagePage: ocupa la mitad inferior */}
           {(() => {
             const sm = state.screenMessage;
             const tm = state.timerState;
-            if (sm?.visible && (sm.target === 'stage' || sm.target === 'both') && sm.text) {
-              return (
-                <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none bg-black/40 z-50">
-                  <span className="text-white font-bold text-xs text-center px-2">{sm.text}</span>
-                </div>
-              );
-            }
-            if (tm?.running && (!tm.target || tm.target === 'stage' || tm.target === 'both') && (!sm?.visible)) {
-              return (
-                <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none z-50">
-                  <span className="text-yellow-300 font-bold font-mono text-sm">{fmtTimer(timerSeconds)}</span>
-                </div>
-              );
-            }
-            return null;
+            const showSm = sm?.visible && (sm.target === 'stage' || sm.target === 'both') && sm.text;
+            const showTm = tm?.running && (!tm.target || tm.target === 'stage' || tm.target === 'both');
+            if (!showSm && !showTm) return null;
+
+            const style = { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              zIndex: 50, pointerEvents: 'none' };
+
+            if (showSm) return (
+              <div style={{ ...style, background: sm.bgColor || 'rgba(0,0,0,0.92)', padding: '0 4px' }}>
+                <span style={{ color: sm.textColor || '#ffffff', fontWeight: 'bold', fontSize: '0.9em', textAlign: 'center', lineHeight: 1.2 }}>{sm.text}</span>
+              </div>
+            );
+            return (
+              <div style={{ ...style, background: tm.bgColor || 'rgba(0,0,0,0.92)' }}>
+                <span style={{ color: tm.textColor || '#facc15', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '1.4em' }}>{fmtTimer(timerSeconds)}</span>
+                {tm.label && <span style={{ color: (tm.textColor || '#facc15') + '99', fontSize: '0.75em', marginTop: '2px' }}>{tm.label}</span>}
+              </div>
+            );
           })()}
         </div>
       </PreviewBox>
@@ -520,13 +524,13 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
         )}
       </div>
 
-      {/* Bottom bar */}
+      {/* Bottom bar — solo nextSong + reloj, igual que StagePage */}
       <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-t border-white/10"
         style={{ minHeight: '12px' }}>
         <div className="flex-1" />
         {nextSong && (
-          <span className="absolute left-1/2 -translate-x-1/2 font-semibold truncate max-w-[60%]"
-            style={{ color: '#22c55e', fontSize: '0.8em', position: 'relative', transform: 'none', left: 'auto' }}>
+          <span className="font-semibold truncate max-w-[70%] text-center"
+            style={{ color: '#22c55e', fontSize: '0.8em' }}>
             {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
           </span>
         )}
