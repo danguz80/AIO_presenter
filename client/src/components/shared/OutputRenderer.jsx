@@ -113,7 +113,7 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
       {/* Capa de fondo multimedia */}
       {hasBg && (
         effectiveBgMedia.mediaType === 'video'
-          ? <video key={effectiveBgMedia.url} src={effectiveBgMedia.url} autoPlay loop playsInline
+          ? <video key={effectiveBgMedia.url} src={effectiveBgMedia.url} autoPlay loop playsInline data-bg-video="1"
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />
           : <img key={effectiveBgMedia.url} src={effectiveBgMedia.url} alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />

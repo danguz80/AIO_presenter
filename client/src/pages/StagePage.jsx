@@ -217,7 +217,7 @@ export default function StagePage() {
       {hasBgMedia && (
         backgroundMedia.mediaType === 'video'
           ? showVideo
-            ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop muted playsInline
+            ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop muted playsInline data-bg-video="1"
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
             : null
           : <img key={backgroundMedia.url} src={backgroundMedia.url} alt=""

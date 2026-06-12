@@ -613,23 +613,27 @@ export function PresenterProvider({ children }) {
   useEffect(() => {
     if (!state.timerState?.videoSync) return;
 
-    let disposed  = false;
-    let attached  = null;
-    let armed     = true;
+    let disposed = false;
+    let attached = null; // video actualmente monitorizado
+
+    // Solo videos de fondo (data-bg-video) o el más grande. Excluye logos.
+    const getBgVideo = () => {
+      const all = Array.from(document.querySelectorAll('video'));
+      if (all.length === 0) return null;
+      const marked = all.find(v => v.dataset.bgVideo === '1');
+      if (marked) return marked;
+      return all.reduce((best, v) =>
+        v.getBoundingClientRect().width > best.getBoundingClientRect().width ? v : best
+      );
+    };
 
     const emitTimer = (data) => {
-      // Emitir directo por socket (no usar actions para evitar dependencia circular)
       socketRef.current?.emit('msg:timer', data);
       dispatch({ type: 'SET_TIMER_STATE', payload: data });
     };
 
-    const doStart = (video) => {
-      if (!armed || disposed) return;
-      if (timerStateRef.current?.running) return; // ya corriendo (otro cliente lo inició)
-      const dur = isFinite(video.duration) && video.duration > 0
-        ? Math.floor(video.duration) : 0;
-      if (dur <= 0) return;
-      armed = false;
+    const startTimer = (dur) => {
+      if (disposed) return;
       emitTimer({
         ...timerStateRef.current,
         type:           'countdown',
@@ -652,22 +656,48 @@ export function PresenterProvider({ children }) {
       detachFrom(attached);
       attached = video;
 
-      let prevTime = video.currentTime;
+      let prevTime  = video.currentTime;
+      let prevSrc   = video.src;
+      let debounceT = null;
+
+      const tryStart = () => {
+        if (disposed) return;
+        const dur = isFinite(video.duration) && video.duration > 0
+          ? Math.floor(video.duration) : 0;
+        if (dur <= 0) return;
+        startTimer(dur);
+      };
 
       video._vsPlay = () => {
-        // play puede disparar antes de loadedmetadata: en ese caso esperamos _vsMeta
-        if (isFinite(video.duration) && video.duration > 0) doStart(video);
+        if (video.src !== prevSrc) {
+          prevSrc  = video.src;
+          prevTime = 0;
+          clearTimeout(debounceT);
+          debounceT = setTimeout(tryStart, 150);
+          return;
+        }
+        if (isFinite(video.duration) && video.duration > 0) tryStart();
       };
+
       video._vsMeta = () => {
-        if (!video.paused && !video.ended) doStart(video);
+        if (!video.paused && !video.ended) {
+          if (video.src !== prevSrc) prevSrc = video.src;
+          tryStart();
+        }
       };
+
       video._vsTU = () => {
         const curr = video.currentTime;
         const dur  = video.duration;
-        // Loop detectado
+        if (video.src !== prevSrc) {
+          prevSrc  = video.src;
+          prevTime = curr;
+          if (isFinite(dur) && dur > 0) tryStart();
+          return;
+        }
+        // Loop: tiempo saltó hacia atrás cerca del final — reset directo sin guards
         if (isFinite(dur) && dur > 0 && prevTime > dur - 2 && curr < 1) {
-          armed = true;
-          doStart(video);
+          startTimer(Math.floor(dur));
         }
         prevTime = curr;
       };
@@ -676,20 +706,23 @@ export function PresenterProvider({ children }) {
       video.addEventListener('loadedmetadata', video._vsMeta);
       video.addEventListener('timeupdate',     video._vsTU);
 
-      // Si el video ya está corriendo con duración disponible, arrancar ahora
       if (!video.paused && !video.ended && isFinite(video.duration) && video.duration > 0) {
-        doStart(video);
+        tryStart();
       }
     };
 
-    // Polling: busca <video> en el DOM de esta ventana cada 300ms
+    // Polling 300ms: detecta aparición/cambio del video activo
     const poll = setInterval(() => {
       if (disposed) { clearInterval(poll); return; }
-      // Busca el primer video que esté reproduciendo (no paused) preferiblemente
-      const videos = Array.from(document.querySelectorAll('video'));
-      const playing = videos.find(v => !v.paused && !v.ended) || videos[0];
-      if (!playing) return;
-      attachTo(playing);
+      const video = getBgVideo();
+      if (!video) return;
+      if (attached && attached === video && attached._prevPollSrc !== video.src) {
+        attached._prevPollSrc = video.src;
+        detachFrom(attached);
+        attached = null;
+      }
+      attachTo(video);
+      if (attached) attached._prevPollSrc = video.src;
     }, 300);
 
     return () => {

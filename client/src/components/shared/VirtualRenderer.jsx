@@ -208,7 +208,7 @@ export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroun
       {/* Capa de fondo multimedia (primerPlano=false) */}
       {hasBgMedia && (
         backgroundMedia.mediaType === 'video'
-          ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop playsInline
+          ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop playsInline data-bg-video="1"
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
           : <img key={backgroundMedia.url} src={backgroundMedia.url} alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
