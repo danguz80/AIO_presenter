@@ -270,46 +270,22 @@ function CustomMessages() {
 
   const toggleVideoSync = () => {
     if (videoSyncing) {
-      // Desactivar: pausar timer y quitar flag
-      dispatch({ running: false, videoSync: false });
-      return;
-    }
-    // Activar: leer duración del video actual y arrancar el timer
-    const url = state.liveState?.backgroundMedia?.url;
-    const startFromDuration = (dur) => {
-      if (!dur || dur <= 0) return;
-      const secs = Math.floor(dur);
-      setInputMin(Math.floor(secs / 60));
-      setInputSec(secs % 60);
+      // Desactivar: detener timer y limpiar flag
+      actions.setTimerState({ ...timer, videoSync: false, running: false, startedAt: null });
+    } else {
+      // Activar modo espera: guardar configuración actual y esperar play de video
       actions.setTimerState({
         ...timer,
         type: 'countdown',
-        seconds: secs,
-        initialSeconds: secs,
-        running: true,
-        startedAt: Date.now(),
+        running: false,
+        startedAt: null,
+        videoSync: true,
         label,
         target: timerTarget,
         textColor,
         bgColor,
         strobe,
-        videoSync: true,
       });
-    };
-    if (url) {
-      // Cargar metadata del video para obtener duración exacta
-      const tmp = document.createElement('video');
-      tmp.preload = 'metadata';
-      tmp.onloadedmetadata = () => startFromDuration(tmp.duration);
-      tmp.onerror = () => {
-        // Fallback: usar duración del slideData si existe
-        const d = state.liveState?.slideData?.duration || 0;
-        startFromDuration(d);
-      };
-      tmp.src = url;
-    } else {
-      // Sin video activo: usar tiempo configurado en el form
-      startFromDuration(totalSeconds);
     }
   };
 
@@ -356,13 +332,14 @@ function CustomMessages() {
             />
             <span className="text-zinc-500 text-sm">s</span>
           </div>
-          <button onClick={toggleVideoSync} title={videoSyncing ? 'Desactivar sincronización con video' : 'Sincronizar con tiempo restante del video'}
-            className={`text-[10px] border rounded-lg px-2 py-1.5 transition-colors ${
-              videoSyncing
-                ? 'border-accent bg-accent/20 text-accent'
-                : 'text-zinc-500 hover:text-accent border-surface-600'
+          <button onClick={toggleVideoSync}
+            title={videoSyncing ? 'Desactivar sincronización con video' : 'Activar: el timer arranca automáticamente cuando un video haga play'}
+            className={`text-[10px] border rounded-lg px-2 py-1.5 transition-all ${
+              videoSyncing && timer.running  ? 'border-green-500 bg-green-500/20 text-green-400 animate-pulse'
+              : videoSyncing                 ? 'border-yellow-500 bg-yellow-500/15 text-yellow-400'
+              :                               'text-zinc-500 hover:text-accent border-surface-600'
             }`}
-          >🎬 {videoSyncing ? 'Video ●' : 'Video'}</button>
+          >{videoSyncing && timer.running ? '🎬 Corriendo' : videoSyncing ? '🎬 En espera...' : '🎬 Video'}</button>
         </div>
       )}
 
