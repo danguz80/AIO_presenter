@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
@@ -12,7 +12,7 @@ import { Smartphone, Maximize2 } from 'lucide-react';
  * para enviar a proyector o segunda pantalla.
  */
 export default function OutputPage() {
-  const { state, actions } = usePresenter();
+  const { state } = usePresenter();
   const { liveState } = state;
   const cfg = state.outputConfig ?? {};
   const navigate = useNavigate();
@@ -74,87 +74,6 @@ export default function OutputPage() {
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [showFsHint]);
-
-  // ── Video sync: arranca countdown cuando un video hace play + reset en loop ─
-  useEffect(() => {
-    if (!state.timerState?.videoSync) return;
-
-    let disposed   = false;
-    let attached   = null; // elemento <video> al que ya enganchamos listeners
-    let armed      = true; // evitar doble-disparo mientras el state actualiza
-
-    const doStart = (video) => {
-      if (!armed || disposed) return;
-      const dur = isFinite(video.duration) && video.duration > 0
-        ? Math.floor(video.duration) : 0;
-      if (dur <= 0) return;
-      armed = false;
-      actionsRef.current.setTimerState({
-        ...timerStateRef.current,
-        type:           'countdown',
-        seconds:        dur,
-        initialSeconds: dur,
-        running:        true,
-        startedAt:      Date.now(),
-      });
-    };
-
-    const detachFrom = (video) => {
-      if (!video) return;
-      video.removeEventListener('loadedmetadata', video._syncMeta);
-      video.removeEventListener('timeupdate',     video._syncTU);
-      video._syncMeta = video._syncTU = null;
-    };
-
-    const attachTo = (video) => {
-      if (attached === video) return; // ya enganchado
-      detachFrom(attached);
-      attached = video;
-
-      let prevTime = video.currentTime;
-
-      video._syncMeta = () => {
-        if (!video.paused && !video.ended) doStart(video);
-      };
-      video._syncTU = () => {
-        const curr = video.currentTime;
-        const dur  = video.duration;
-        if (isFinite(dur) && dur > 0 && prevTime > dur - 2 && curr < 1) {
-          armed = true;
-          doStart(video);
-        }
-        prevTime = curr;
-      };
-      video.addEventListener('loadedmetadata', video._syncMeta);
-      video.addEventListener('timeupdate',     video._syncTU);
-    };
-
-    // Polling cada 250ms: busca video, engancha listeners, e intenta arrancar
-    const poll = setInterval(() => {
-      if (disposed) { clearInterval(poll); return; }
-
-      const video = document.querySelector('video');
-      if (!video) return; // aún no hay video en DOM
-
-      attachTo(video); // enganchar si no estaba enganchado
-
-      // Si ya está reproduciéndose y tenemos duración → arrancar
-      if (!video.paused && !video.ended) {
-        if (isFinite(video.duration) && video.duration > 0) {
-          doStart(video);
-          if (!armed) clearInterval(poll); // parar polling una vez que arrancó
-        }
-        // si duration=NaN esperamos loadedmetadata (listener ya adjunto)
-      }
-    }, 250);
-
-    return () => {
-      disposed = true;
-      clearInterval(poll);
-      detachFrom(attached);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.timerState?.videoSync]);
 
   return (
     <div

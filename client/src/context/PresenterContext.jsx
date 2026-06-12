@@ -306,6 +306,11 @@ export function PresenterProvider({ children }) {
   const socketRef  = useRef(null);
   const scheduleRef = useRef(initialState.schedule);
   const preBibleTemplateRef = useRef(null); // plantilla activa antes de entrar en modo bíblico
+  // Refs estables para usar en listeners de video (evitar closures obsoletos)
+  const timerStateRef = useRef(state.timerState);
+  const socketSetTimerRef = useRef(null); // se llena cuando el socket está listo
+
+  useEffect(() => { timerStateRef.current = state.timerState; }, [state.timerState]);
 
   // Mantener scheduleRef sincronizado con el estado
   useEffect(() => { scheduleRef.current = state.schedule; }, [state.schedule]);
@@ -596,12 +601,104 @@ export function PresenterProvider({ children }) {
     setTimerState: (data) => {
       socketRef.current?.emit('msg:timer', data);
       dispatch({ type: 'SET_TIMER_STATE', payload: data });
+      socketSetTimerRef.current = data; // mantener ref actualizada
     },
 
     registerUser: (name, avatar) => {
       socketRef.current?.emit('user:register', { name, avatar });
     },
   };
+
+  // ── Video sync: cuando videoSync=true, espera q un video haga play en este DOM ─
+  useEffect(() => {
+    if (!state.timerState?.videoSync) return;
+
+    let disposed  = false;
+    let attached  = null;
+    let armed     = true;
+
+    const emitTimer = (data) => {
+      // Emitir directo por socket (no usar actions para evitar dependencia circular)
+      socketRef.current?.emit('msg:timer', data);
+      dispatch({ type: 'SET_TIMER_STATE', payload: data });
+    };
+
+    const doStart = (video) => {
+      if (!armed || disposed) return;
+      if (timerStateRef.current?.running) return; // ya corriendo (otro cliente lo inició)
+      const dur = isFinite(video.duration) && video.duration > 0
+        ? Math.floor(video.duration) : 0;
+      if (dur <= 0) return;
+      armed = false;
+      emitTimer({
+        ...timerStateRef.current,
+        type:           'countdown',
+        seconds:        dur,
+        initialSeconds: dur,
+        running:        true,
+        startedAt:      Date.now(),
+      });
+    };
+
+    const detachFrom = (v) => {
+      if (!v) return;
+      if (v._vsMeta) { v.removeEventListener('loadedmetadata', v._vsMeta); v._vsMeta = null; }
+      if (v._vsTU)   { v.removeEventListener('timeupdate',     v._vsTU);   v._vsTU   = null; }
+      if (v._vsPlay) { v.removeEventListener('play',           v._vsPlay); v._vsPlay = null; }
+    };
+
+    const attachTo = (video) => {
+      if (attached === video) return;
+      detachFrom(attached);
+      attached = video;
+
+      let prevTime = video.currentTime;
+
+      video._vsPlay = () => {
+        // play puede disparar antes de loadedmetadata: en ese caso esperamos _vsMeta
+        if (isFinite(video.duration) && video.duration > 0) doStart(video);
+      };
+      video._vsMeta = () => {
+        if (!video.paused && !video.ended) doStart(video);
+      };
+      video._vsTU = () => {
+        const curr = video.currentTime;
+        const dur  = video.duration;
+        // Loop detectado
+        if (isFinite(dur) && dur > 0 && prevTime > dur - 2 && curr < 1) {
+          armed = true;
+          doStart(video);
+        }
+        prevTime = curr;
+      };
+
+      video.addEventListener('play',           video._vsPlay);
+      video.addEventListener('loadedmetadata', video._vsMeta);
+      video.addEventListener('timeupdate',     video._vsTU);
+
+      // Si el video ya está corriendo con duración disponible, arrancar ahora
+      if (!video.paused && !video.ended && isFinite(video.duration) && video.duration > 0) {
+        doStart(video);
+      }
+    };
+
+    // Polling: busca <video> en el DOM de esta ventana cada 300ms
+    const poll = setInterval(() => {
+      if (disposed) { clearInterval(poll); return; }
+      // Busca el primer video que esté reproduciendo (no paused) preferiblemente
+      const videos = Array.from(document.querySelectorAll('video'));
+      const playing = videos.find(v => !v.paused && !v.ended) || videos[0];
+      if (!playing) return;
+      attachTo(playing);
+    }, 300);
+
+    return () => {
+      disposed = true;
+      clearInterval(poll);
+      detachFrom(attached);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.timerState?.videoSync]);
 
   return (
     <PresenterContext.Provider value={{ state, actions }}>
