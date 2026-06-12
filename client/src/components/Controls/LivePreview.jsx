@@ -273,7 +273,7 @@ export default function LivePreview() {
                       </div>
                     );
                   }
-                  if (tm?.running && (!sm?.visible || sm?.target === 'output' || sm?.target === 'both')) {
+                  if (tm?.running && (!tm.target || tm.target === 'output' || tm.target === 'both') && (!sm?.visible)) {
                     return (
                       <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', background:'rgba(0,0,0,0.6)', zIndex:50 }}>
                         <span style={{ color:'#fff', fontWeight:'bold', fontFamily:'monospace', fontSize: res.width * 0.1, textAlign:'center' }}>{fmtTimer(timerSeconds)}</span>
@@ -319,7 +319,7 @@ export default function LivePreview() {
                 </div>
               );
             }
-            if (tm?.running && (!sm?.visible || sm?.target === 'stage' || sm?.target === 'both')) {
+            if (tm?.running && (!tm.target || tm.target === 'stage' || tm.target === 'both') && (!sm?.visible)) {
               return (
                 <div className="absolute inset-0 flex items-end justify-center pb-2 pointer-events-none z-50">
                   <span className="text-yellow-300 font-bold font-mono text-sm">{fmtTimer(timerSeconds)}</span>

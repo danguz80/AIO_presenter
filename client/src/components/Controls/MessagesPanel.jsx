@@ -266,15 +266,50 @@ function CustomMessages() {
     dispatch({ type: timerType, seconds: 0, running: false, label: '', startedAt: null, initialSeconds: 0, target: 'both', textColor: '#ffffff', bgColor: 'rgba(0,0,0,0.88)', strobe: false });
     setInputMin(0); setInputSec(0); setLabel('');
   };
-  const useVideoTime = () => {
-    const video = document.querySelector('video');
-    if (video && isFinite(video.duration) && video.duration > 0) {
-      const remaining = Math.max(0, Math.floor(video.duration - video.currentTime));
-      setInputMin(Math.floor(remaining / 60));
-      setInputSec(remaining % 60);
+  const videoSyncing = timer.videoSync === true;
+
+  const toggleVideoSync = () => {
+    if (videoSyncing) {
+      // Desactivar: pausar timer y quitar flag
+      dispatch({ running: false, videoSync: false });
+      return;
+    }
+    // Activar: leer duración del video actual y arrancar el timer
+    const url = state.liveState?.backgroundMedia?.url;
+    const startFromDuration = (dur) => {
+      if (!dur || dur <= 0) return;
+      const secs = Math.floor(dur);
+      setInputMin(Math.floor(secs / 60));
+      setInputSec(secs % 60);
+      actions.setTimerState({
+        ...timer,
+        type: 'countdown',
+        seconds: secs,
+        initialSeconds: secs,
+        running: true,
+        startedAt: Date.now(),
+        label,
+        target: timerTarget,
+        textColor,
+        bgColor,
+        strobe,
+        videoSync: true,
+      });
+    };
+    if (url) {
+      // Cargar metadata del video para obtener duración exacta
+      const tmp = document.createElement('video');
+      tmp.preload = 'metadata';
+      tmp.onloadedmetadata = () => startFromDuration(tmp.duration);
+      tmp.onerror = () => {
+        // Fallback: usar duración del slideData si existe
+        const d = state.liveState?.slideData?.duration || 0;
+        startFromDuration(d);
+      };
+      tmp.src = url;
     } else {
-      const dur = state.liveState?.slideData?.duration || 0;
-      if (dur > 0) { setInputMin(Math.floor(dur / 60)); setInputSec(dur % 60); }
+      // Sin video activo: usar tiempo configurado en el form
+      startFromDuration(totalSeconds);
     }
   };
 
@@ -321,9 +356,13 @@ function CustomMessages() {
             />
             <span className="text-zinc-500 text-sm">s</span>
           </div>
-          <button onClick={useVideoTime} title="Usar tiempo restante del video actual"
-            className="text-[10px] text-zinc-500 hover:text-accent border border-surface-600 rounded-lg px-2 py-1.5 transition-colors"
-          >🎬 Video</button>
+          <button onClick={toggleVideoSync} title={videoSyncing ? 'Desactivar sincronización con video' : 'Sincronizar con tiempo restante del video'}
+            className={`text-[10px] border rounded-lg px-2 py-1.5 transition-colors ${
+              videoSyncing
+                ? 'border-accent bg-accent/20 text-accent'
+                : 'text-zinc-500 hover:text-accent border-surface-600'
+            }`}
+          >🎬 {videoSyncing ? 'Video ●' : 'Video'}</button>
         </div>
       )}
 

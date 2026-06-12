@@ -12,7 +12,7 @@ import { Smartphone, Maximize2 } from 'lucide-react';
  * para enviar a proyector o segunda pantalla.
  */
 export default function OutputPage() {
-  const { state } = usePresenter();
+  const { state, actions } = usePresenter();
   const { liveState } = state;
   const cfg = state.outputConfig ?? {};
   const navigate = useNavigate();
@@ -74,6 +74,44 @@ export default function OutputPage() {
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [showFsHint]);
+
+  // ── Detección de loop de video para sincronizar el timer ──────────────────
+  useEffect(() => {
+    const tm = state.timerState;
+    if (!tm?.videoSync || !tm?.running) return;
+
+    // Buscar el elemento <video> en la página (puede tardar un tick en montarse)
+    const attach = () => {
+      const video = document.querySelector('video');
+      if (!video) return false;
+
+      let prevTime = video.currentTime;
+      const handleTimeUpdate = () => {
+        const curr = video.currentTime;
+        // Loop detectado: el tiempo retrocedió cerca del inicio después de estar cerca del final
+        if (prevTime > video.duration - 2 && curr < 1) {
+          const dur = Math.floor(video.duration);
+          actions.setTimerState({
+            ...state.timerState,
+            seconds: dur,
+            initialSeconds: dur,
+            startedAt: Date.now(),
+            running: true,
+          });
+        }
+        prevTime = curr;
+      };
+      video.addEventListener('timeupdate', handleTimeUpdate);
+      return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+
+    // Intentar adjuntar inmediatamente; si el video aún no existe, reintentar en 500ms
+    const cleanup = attach();
+    if (cleanup) return cleanup;
+    const t = setTimeout(() => { attach(); }, 500);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.timerState?.videoSync, state.timerState?.running]);
 
   return (
     <div
