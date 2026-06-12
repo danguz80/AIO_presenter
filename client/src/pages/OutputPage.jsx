@@ -75,43 +75,62 @@ export default function OutputPage() {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [showFsHint]);
 
-  // ── Detección de loop de video para sincronizar el timer ──────────────────
+  // ── Video sync: arranca countdown cuando el video hace play + reset en loop ────
   useEffect(() => {
-    const tm = state.timerState;
-    if (!tm?.videoSync || !tm?.running) return;
+    if (!state.timerState?.videoSync) return;
 
-    // Buscar el elemento <video> en la página (puede tardar un tick en montarse)
-    const attach = () => {
-      const video = document.querySelector('video');
-      if (!video) return false;
+    const video = document.querySelector('video');
+    if (!video) return; // Sin video en DOM: efecto re-corre cuando backgroundMedia.url cambie
 
-      let prevTime = video.currentTime;
-      const handleTimeUpdate = () => {
-        const curr = video.currentTime;
-        // Loop detectado: el tiempo retrocedió cerca del inicio después de estar cerca del final
-        if (prevTime > video.duration - 2 && curr < 1) {
-          const dur = Math.floor(video.duration);
-          actions.setTimerState({
-            ...state.timerState,
-            seconds: dur,
-            initialSeconds: dur,
-            startedAt: Date.now(),
-            running: true,
-          });
-        }
-        prevTime = curr;
-      };
-      video.addEventListener('timeupdate', handleTimeUpdate);
-      return () => video.removeEventListener('timeupdate', handleTimeUpdate);
+    let armed = true; // evitar doble-disparo antes del update de state
+
+    const doStart = () => {
+      if (!armed) return;
+      const dur = isFinite(video.duration) && video.duration > 0
+        ? Math.floor(video.duration) : 0;
+      if (dur <= 0) return;
+      armed = false;
+      actionsRef.current.setTimerState({
+        ...timerStateRef.current,
+        type:           'countdown',
+        seconds:        dur,
+        initialSeconds: dur,
+        running:        true,
+        startedAt:      Date.now(),
+      });
     };
 
-    // Intentar adjuntar inmediatamente; si el video aún no existe, reintentar en 500ms
-    const cleanup = attach();
-    if (cleanup) return cleanup;
-    const t = setTimeout(() => { attach(); }, 500);
-    return () => clearTimeout(t);
+    // Intentar arrancar si ya hay video reproduciendo con metadata lista
+    if (!video.paused && !video.ended && isFinite(video.duration) && video.duration > 0) {
+      doStart();
+    }
+
+    // play dispara antes de loadedmetadata en autoPlay: manejar ambos
+    const onPlay           = () => doStart();
+    const onLoadedMetadata = () => { if (!video.paused && !video.ended) doStart(); };
+
+    // Loop: currentTime vuelve al inicio después de estar cerca del final
+    let prevTime = video.currentTime;
+    const onTimeUpdate = () => {
+      const curr = video.currentTime;
+      const dur  = video.duration;
+      if (isFinite(dur) && dur > 0 && prevTime > dur - 2 && curr < 1) {
+        armed = true; // permitir re-arranque en cada loop
+        doStart();
+      }
+      prevTime = curr;
+    };
+
+    video.addEventListener('play',           onPlay);
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
+    video.addEventListener('timeupdate',     onTimeUpdate);
+    return () => {
+      video.removeEventListener('play',           onPlay);
+      video.removeEventListener('loadedmetadata', onLoadedMetadata);
+      video.removeEventListener('timeupdate',     onTimeUpdate);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.timerState?.videoSync, state.timerState?.running]);
+  }, [state.timerState?.videoSync, liveState.backgroundMedia?.url]);
 
   return (
     <div

@@ -253,8 +253,22 @@ function CustomMessages() {
   const dispatch = (patch) => actions.setTimerState({ ...timer, ...patch });
 
   const start = () => {
+    if (timerType === 'countdown' && totalSeconds === 0) return; // guard: no arrancar en 0
     const secs = timerType === 'timer' ? 0 : totalSeconds;
-    dispatch({ type: timerType, seconds: secs, running: true, label, startedAt: Date.now(), initialSeconds: secs, target: timerTarget, textColor, bgColor, strobe });
+    actions.setTimerState({
+      ...timer,
+      type:           timerType,
+      seconds:        secs,
+      initialSeconds: secs,
+      running:        true,
+      startedAt:      Date.now(),
+      label,
+      target:         timerTarget,
+      textColor,
+      bgColor,
+      strobe,
+      videoSync:      false, // limpiar videoSync al iniciar manualmente
+    });
   };
   const pause  = () => dispatch({ running: false, seconds: timerDisplay });
   const resume = () => dispatch({ running: true, startedAt: Date.now(), initialSeconds: timerDisplay });
@@ -357,7 +371,10 @@ function CustomMessages() {
       {/* Controles */}
       <div className="grid grid-cols-4 gap-2">
         {!timer.running ? (
-          <button onClick={start} className="col-span-2 flex items-center justify-center gap-2 py-2.5 bg-accent hover:bg-accent/80 text-white rounded-xl text-sm font-semibold transition-colors">
+          <button onClick={start}
+            disabled={timerType === 'countdown' && totalSeconds === 0}
+            title={timerType === 'countdown' && totalSeconds === 0 ? 'Ingresa minutos/segundos antes de iniciar' : ''}
+            className="col-span-2 flex items-center justify-center gap-2 py-2.5 bg-accent hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors">
             <Play size={14} /> Iniciar
           </button>
         ) : (
