@@ -82,7 +82,7 @@ export default function CancioneroSongs() {
         {!loading && showBanner && !query && (
           <div className="pt-4">
             <DemoPackBanner
-              onSongsImported={() => { setShowBanner(false); loadSongs(); }}
+              onSongsImported={() => { loadSongs(); }}
               onDismiss={() => setShowBanner(false)}
             />
           </div>

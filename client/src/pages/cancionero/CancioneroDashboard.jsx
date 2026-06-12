@@ -295,7 +295,7 @@ export default function CancioneroDashboard() {
       {/* ── Pack de inicio (solo si no hay canciones) ─────────── */}
       {showDemoBanner && (
         <DemoPackBanner
-          onSongsImported={() => setShowDemoBanner(false)}
+          onSongsImported={() => {}}
           onDismiss={() => setShowDemoBanner(false)}
         />
       )}
