@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Home, Music2, ListChecks, CalendarDays, Monitor, Settings2, ShieldCheck, MessageSquare, X } from 'lucide-react';
 import OrgSwitcher from '../../components/shared/OrgSwitcher';
 import MessagesPanel from '../../components/Controls/MessagesPanel';
+import { usePresenter } from '../../context/usePresenter';
 
 function getIsOwner() {
   try {
@@ -26,6 +27,22 @@ export default function CancioneroNavbar() {
   const navigate = useNavigate();
   const isOwner  = getIsOwner();
   const [showMessages, setShowMessages] = useState(false);
+  const { state } = usePresenter();
+
+  // Toast para mensajes internos entrantes
+  const [msgToast, setMsgToast] = useState(null);
+  const lastMsgId = useRef(null);
+  useEffect(() => {
+    const msgs = state.internalMessages;
+    if (!msgs?.length) return;
+    const last = msgs[msgs.length - 1];
+    if (last.id === lastMsgId.current) return;
+    lastMsgId.current = last.id;
+    if (last.own) return;
+    setMsgToast(last);
+    const t = setTimeout(() => setMsgToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [state.internalMessages]);
 
   const allItems = isOwner
     ? [...NAV, { label: 'Admin', icon: ShieldCheck, route: '/admin', gold: true }]
@@ -33,7 +50,19 @@ export default function CancioneroNavbar() {
 
   return (
     <>
-      {/* ── Drawer de mensajes ── */}
+      {/* Toast mensaje entrante */}
+      {msgToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-start gap-3 bg-[#0d1929] border border-white/15 text-white px-4 py-3 rounded-2xl shadow-2xl max-w-xs w-[90vw]">
+          <MessageSquare size={16} className="text-yellow-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-yellow-300 truncate">{msgToast.from}</p>
+            <p className="text-sm text-white/80 break-words">{msgToast.text}</p>
+          </div>
+          <button onClick={() => setMsgToast(null)} className="text-white/30 hover:text-white shrink-0"><X size={14} /></button>
+        </div>
+      )}
+
+      {/* ── Drawer de mensajes ── */}}
       {showMessages && (
         <div className="fixed inset-0 z-[9998] flex flex-col bg-[#0a1220]">
           <div className="flex items-center justify-between px-4 py-3 bg-[#0d1929] border-b border-white/10 shrink-0">
@@ -51,12 +80,12 @@ export default function CancioneroNavbar() {
         </div>
       )}
 
-      <nav className="flex-shrink-0 bg-[#0a1220]/95 backdrop-blur-sm border-t border-white/10 px-2 py-1 pb-safe">
+      <nav className="flex-shrink-0 bg-[#0a1220]/95 backdrop-blur-sm border-t border-white/10 pb-safe">
       {/* Org switcher — visible solo si hay varias orgs */}
       <div className="flex justify-center pt-1 pb-0.5">
         <OrgSwitcher variant="cancionero" />
       </div>
-      <div className="flex items-center justify-around max-w-lg mx-auto">
+      <div className="flex items-center overflow-x-auto scrollbar-none gap-0 px-1 py-0.5" style={{ scrollbarWidth: 'none' }}>
         {allItems.map(item => {
           const Icon = item.icon;
           const isActive =
@@ -68,14 +97,15 @@ export default function CancioneroNavbar() {
             <button
               key={item.label}
               onClick={() => navigate(item.route)}
-              className={`relative flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-colors ${
+              style={{ minWidth: '56px' }}
+              className={`relative flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-colors flex-shrink-0 ${
                 isActive
                   ? item.gold ? 'text-yellow-400' : 'text-yellow-400'
                   : item.gold ? 'text-yellow-600/60 hover:text-yellow-400/80' : 'text-white/35 hover:text-white/70'
               }`}
             >
               {isActive && (
-                <span className="absolute top-0.5 inset-x-4 h-0.5 bg-yellow-400 rounded-full" />
+                <span className="absolute top-0.5 inset-x-2 h-0.5 bg-yellow-400 rounded-full" />
               )}
               <Icon size={20} strokeWidth={isActive ? 2.2 : 1.6} />
               <span className="text-[10px] font-medium leading-none">{item.label}</span>
@@ -85,7 +115,8 @@ export default function CancioneroNavbar() {
         {/* Botón Mensajes */}
         <button
           onClick={() => setShowMessages(true)}
-          className="relative flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-colors text-white/35 hover:text-yellow-400"
+          style={{ minWidth: '56px' }}
+          className="relative flex flex-col items-center gap-0.5 py-2 px-2 rounded-xl transition-colors text-white/35 hover:text-yellow-400 flex-shrink-0"
         >
           <MessageSquare size={20} strokeWidth={1.6} />
           <span className="text-[10px] font-medium leading-none">Mensajes</span>
