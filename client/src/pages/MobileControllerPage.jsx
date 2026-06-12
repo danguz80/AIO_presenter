@@ -8,6 +8,8 @@ import ThemePanel      from '../components/Settings/ThemePanel';
 import DisplaysPanel   from '../components/Settings/DisplaysPanel';
 import SyncPanel       from '../components/Settings/SyncPanel';
 import MediaLibrary    from '../components/Library/MediaLibrary';
+import MessagesPanel   from '../components/Controls/MessagesPanel';
+import OrgSwitcher     from '../components/shared/OrgSwitcher';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
 import {
@@ -118,7 +120,8 @@ export default function MobileControllerPage() {
   const { internalMessages } = state;
 
   // ── Toast de mensajes internos ───────────────────────────────────────────────
-  const [msgToast, setMsgToast] = useState(null);
+  const [msgToast,      setMsgToast]      = useState(null);
+  const [showMessages,  setShowMessages]  = useState(false);
   const lastMsgId = useRef(null);
   useEffect(() => {
     if (!internalMessages?.length) return;
@@ -588,6 +591,23 @@ export default function MobileControllerPage() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
+      {/* ── Drawer: MessagesPanel ── */}
+      {showMessages && (
+        <div className="fixed inset-0 z-[9998] flex flex-col bg-surface-900">
+          <div className="flex items-center justify-between px-4 py-3 bg-surface-800 border-b border-surface-700 shrink-0">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={16} className="text-accent" />
+              <span className="text-sm font-semibold text-zinc-100">Mensajes</span>
+            </div>
+            <button onClick={() => setShowMessages(false)} className="text-zinc-400 hover:text-white p-1">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <MessagesPanel />
+          </div>
+        </div>
+      )}
       {/* ── Toast: mensaje interno ── */}
       {msgToast && (
         <div className="fixed top-3 left-3 right-3 z-[9999] flex items-start gap-3 bg-zinc-800 border border-accent/40 rounded-2xl px-4 py-3 shadow-xl">
@@ -705,31 +725,18 @@ export default function MobileControllerPage() {
           </button>
           {openPanels.has('navbar') && (
             <div className="px-4 py-3 flex flex-col gap-2 bg-surface-900/40">
-              <Link to="/output" className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95">
-                <MonitorPlay size={16} className="text-zinc-400" /> Ver pantalla de salida
-              </Link>
-              <button onClick={() => navigate('/cancionero')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
-                <Music2 size={16} className="text-yellow-400" /> Modo Cancionero
+              {/* Mensajes */}
+              <button onClick={() => { setShowMessages(true); togglePanel('navbar'); }} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
+                <MessageSquare size={16} className="text-accent" /> Mensajes
               </button>
+              {/* Calendario */}
               <button onClick={() => navigate('/calendar')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
                 <CalendarDays size={16} className="text-zinc-400" /> Calendario
               </button>
-              {(() => {
-                try {
-                  const t = localStorage.getItem('aio_sync_token');
-                  if (!t) return null;
-                  const p = JSON.parse(atob(t.split('.')[1]));
-                  if (!p?.isOwner && !p?.isAdmin) return null;
-                  return (
-                    <button onClick={() => navigate('/admin')} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
-                      <Settings size={16} className="text-yellow-500" /> Panel Admin
-                    </button>
-                  );
-                } catch { return null; }
-              })()}
-              <button onClick={() => window.location.reload()} className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-surface-800 hover:bg-surface-700 text-zinc-300 text-sm font-medium transition-colors active:scale-95 text-left w-full">
-                <RefreshCw size={16} className="text-zinc-400" /> Recargar
-              </button>
+              {/* OrgSwitcher — solo si hay más de 1 org (el componente se oculta solo si hay 1) */}
+              <div className="px-1 py-1">
+                <OrgSwitcher variant="presenter" />
+              </div>
             </div>
           )}
         </div>
