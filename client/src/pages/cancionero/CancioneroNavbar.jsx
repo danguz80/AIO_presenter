@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Home, Music2, ListChecks, CalendarDays, Monitor, Settings2, ShieldCheck } from 'lucide-react';
+import { Home, Music2, ListChecks, CalendarDays, Monitor, Settings2, ShieldCheck, MessageSquare, X } from 'lucide-react';
 import OrgSwitcher from '../../components/shared/OrgSwitcher';
+import MessagesPanel from '../../components/Controls/MessagesPanel';
 
 function getIsOwner() {
   try {
@@ -23,13 +25,33 @@ export default function CancioneroNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const isOwner  = getIsOwner();
+  const [showMessages, setShowMessages] = useState(false);
 
   const allItems = isOwner
     ? [...NAV, { label: 'Admin', icon: ShieldCheck, route: '/admin', gold: true }]
     : NAV;
 
   return (
-    <nav className="flex-shrink-0 bg-[#0a1220]/95 backdrop-blur-sm border-t border-white/10 px-2 py-1 pb-safe">
+    <>
+      {/* ── Drawer de mensajes ── */}
+      {showMessages && (
+        <div className="fixed inset-0 z-[9998] flex flex-col bg-[#0a1220]">
+          <div className="flex items-center justify-between px-4 py-3 bg-[#0d1929] border-b border-white/10 shrink-0">
+            <div className="flex items-center gap-2">
+              <MessageSquare size={16} className="text-yellow-400" />
+              <span className="text-sm font-semibold text-white/90">Mensajes</span>
+            </div>
+            <button onClick={() => setShowMessages(false)} className="text-white/40 hover:text-white p-1">
+              <X size={20} />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            <MessagesPanel />
+          </div>
+        </div>
+      )}
+
+      <nav className="flex-shrink-0 bg-[#0a1220]/95 backdrop-blur-sm border-t border-white/10 px-2 py-1 pb-safe">
       {/* Org switcher — visible solo si hay varias orgs */}
       <div className="flex justify-center pt-1 pb-0.5">
         <OrgSwitcher variant="cancionero" />
@@ -60,7 +82,16 @@ export default function CancioneroNavbar() {
             </button>
           );
         })}
+        {/* Botón Mensajes */}
+        <button
+          onClick={() => setShowMessages(true)}
+          className="relative flex flex-col items-center gap-0.5 py-2 px-3 rounded-xl transition-colors text-white/35 hover:text-yellow-400"
+        >
+          <MessageSquare size={20} strokeWidth={1.6} />
+          <span className="text-[10px] font-medium leading-none">Mensajes</span>
+        </button>
       </div>
     </nav>
+    </>
   );
 }

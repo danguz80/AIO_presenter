@@ -373,58 +373,66 @@ export default function StagePage() {
         )}
       </div>
 
-      {/* Overlay: mensaje a pantalla — cubre la mitad inferior (o 35% si no hay siguiente diapo) */}
+      {/* ── Overlay de mensaje/timer EN el área de siguiente slide ── */}
       {(() => {
         const sm = state.screenMessage;
-        if (!sm?.visible || !(sm.target === 'stage' || sm.target === 'both') || !sm.text) return null;
-        const h = showNextSlide ? '50%' : '35%';
-        const bg = sm.strobe
-          ? (smStrobe ? (sm.bgColor || 'rgba(0,0,0,0.88)') : '#000000')
-          : (sm.bgColor || 'rgba(0,0,0,0.88)');
+        const tm = state.timerState;
+        const showSm = sm?.visible && (sm.target === 'stage' || sm.target === 'both') && sm.text;
+        const showTm = tm?.running && (!tm.target || tm.target === 'stage' || tm.target === 'both');
+        if (!showSm && !showTm) return null;
+
+        // Si hay área de siguiente slide, el overlay la ocupa exactamente.
+        // Si no existe esa área, mostramos una banda fija en la parte inferior.
+        const style = showNextSlide
+          ? { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', zIndex: 10 }
+          : { position: 'absolute', bottom: 0, left: 0, right: 0, height: '30%', zIndex: 10 };
+
+        if (showSm) {
+          const bg = sm.strobe
+            ? (smStrobe ? (sm.bgColor || 'rgba(0,0,0,0.92)') : '#000000')
+            : (sm.bgColor || 'rgba(0,0,0,0.92)');
+          return (
+            <div style={{ ...style, display: 'flex', alignItems: 'center', justifyContent: 'center', background: bg, padding: '0 5%' }}>
+              <span style={{ color: sm.textColor || '#ffffff', fontWeight: 'bold', fontSize: '2.5rem', textAlign: 'center', lineHeight: 1.2 }}>
+                {sm.text}
+              </span>
+            </div>
+          );
+        }
+
+        // Timer
+        const bg = tm.strobe
+          ? (smStrobe ? (tm.bgColor || 'rgba(0,0,0,0.92)') : '#000000')
+          : (tm.bgColor || 'rgba(0,0,0,0.92)');
         return (
-          <div style={{
-            position: 'absolute', bottom: 0, left: 0, right: 0, height: h,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: bg, zIndex: 10, padding: '0 5%',
-          }}>
-            <span style={{ color: sm.textColor || '#ffffff', fontWeight: 'bold', fontSize: '2.5rem', textAlign: 'center', lineHeight: 1.2 }}>
-              {sm.text}
+          <div style={{ ...style, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: bg }}>
+            <span className="font-mono font-bold tabular-nums" style={{ color: tm.textColor || '#facc15', fontSize: sz(fontSizeNextSong + 20) }}>
+              {fmtTimer(timerSeconds)}
             </span>
+            {tm.label && (
+              <span style={{ color: (tm.textColor || '#facc15') + '99', fontSize: sz(fontSizeNextSong), marginTop: '0.25rem' }}>
+                {tm.label}
+              </span>
+            )}
           </div>
         );
       })()}
 
-      {/* ── BARRA INFERIOR: timer o próxima canción + reloj ── */}
-      {(showClock || nextSong || state.timerState?.running) && (
+      {/* ── BARRA INFERIOR: próxima canción + reloj (siempre visible si hay datos) ── */}
+      {(showClock || nextSong) && (
         <div
           className="shrink-0 bg-black/70 border-t border-white/10 px-5 py-2 flex items-center"
-          style={{ fontFamily: fontStyles.fontFamily, position: 'relative', zIndex: 1 }}
+          style={{ fontFamily: fontStyles.fontFamily, position: 'relative', zIndex: 11 }}
         >
-          {/* Columna izquierda (spacer) */}
           <div className="flex-1" />
 
-          {/* Columna central: timer > próxima canción */}
-          {(() => {
-            const tm = state.timerState;
-            if (tm?.running && (!tm.target || tm.target === 'stage' || tm.target === 'both')) {
-              return (
-                <span className="font-mono font-bold text-yellow-300 text-center" style={{ fontSize: sz(fontSizeNextSong + 6) }}>
-                  {fmtTimer(timerSeconds)}{tm.label ? ` · ${tm.label}` : ''}
-                </span>
-              );
-            }
-            if (nextSong) {
-              return (
-                <span className="font-bold leading-tight text-center"
-                  style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
-                  {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
-                </span>
-              );
-            }
-            return null;
-          })()}
+          {nextSong && (
+            <span className="font-bold leading-tight text-center"
+              style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
+              {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
+            </span>
+          )}
 
-          {/* Columna derecha: reloj */}
           <div className="flex-1 flex justify-end">
             {showClock && (
               <span
