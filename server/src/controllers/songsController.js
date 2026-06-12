@@ -236,7 +236,92 @@ const bulkTag = async (req, res) => {
   }
 };
 
-module.exports = { getAllSongs, getSongById, createSong, updateSong, deleteSong, getAllTags, bulkTag, updateStructure };
+// ─── POST /api/songs/import-demo ────────────────────────────────────────────
+// Inserta 3 canciones demo en la org del usuario (solo si no existen ya).
+const DEMO_SONGS = [
+  {
+    title: 'Santo',
+    author: 'Dominio Público',
+    song_key: 'G',
+    tags: ['demo', 'adoración'],
+    slides: [
+      { label: 'Verso 1', content: 'Santo, Santo, Santo\nEs el Señor Dios Todopoderoso\nQue era, que es, y que ha de venir' },
+      { label: 'Coro',    content: 'Santo, Santo, Santo\nSanto es el Señor\nToda la tierra está llena de Tu gloria' },
+      { label: 'Verso 2', content: 'Digno eres Tú, Señor nuestro Dios\nDe recibir la gloria, la honra y el poder\nPorque Tú creaste todas las cosas' },
+    ],
+  },
+  {
+    title: 'Sublime Gracia',
+    author: 'John Newton',
+    song_key: 'D',
+    tags: ['demo', 'himno'],
+    slides: [
+      { label: 'Verso 1', content: 'Sublime gracia del Señor\nQue a un pecador salvó\nFui ciego mas hoy veo yo\nPerdido y Él me halló' },
+      { label: 'Verso 2', content: 'Su gracia me enseñó a temer\nMis dudas ahuyentó\nOh cuán precioso fue a mi ser\nCuando Él me transformó' },
+      { label: 'Verso 3', content: 'En los peligros o aflicción\nQue yo he tenido aquí\nSu gracia siempre me libró\nY me guiará hasta el fin' },
+      { label: 'Verso 4', content: 'Y cuando en Sión por siglos mil\nBrillando esté cual sol\nYo cantaré por siempre allí\nSu amor que me salvó' },
+    ],
+  },
+  {
+    title: 'Grande Es Tu Fidelidad',
+    author: 'Thomas O. Chisholm',
+    song_key: 'A',
+    tags: ['demo', 'alabanza'],
+    slides: [
+      { label: 'Verso 1', content: 'Oh Dios eterno, Tu misericordia\nNi una sombra de duda tendrá\nTu compasión y bondad nunca fallan\nY por los siglos el mismo serás' },
+      { label: 'Coro',    content: 'Grande es Tu fidelidad\nGrande es Tu fidelidad\nMañana tras mañana nuevas misericordias veré\nTodo lo necesario de Tu mano recibiré\nGrande es Tu fidelidad Señor en mí' },
+      { label: 'Verso 2', content: 'Tú me has dado la dicha del cielo\nY la dulce promesa de vida eternal\nCon Tu espíritu, fuerza y esperanza\nSoy perdonado, llamado a vivir para Ti' },
+    ],
+  },
+];
+
+const importDemo = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const orgId = req.user.orgId;
+
+    // Verificar cuáles ya existen (por tag 'demo')
+    const { rows: existing } = await pool.query(
+      `SELECT title FROM songs WHERE organization_id = $1 AND 'demo' = ANY(tags)`,
+      [orgId]
+    );
+    const existingTitles = new Set(existing.map(r => r.title));
+
+    const toInsert = DEMO_SONGS.filter(s => !existingTitles.has(s.title));
+    if (toInsert.length === 0) {
+      return res.json({ inserted: 0, message: 'Las canciones demo ya están en tu biblioteca.' });
+    }
+
+    await client.query('BEGIN');
+    const inserted = [];
+    for (const song of toInsert) {
+      const { rows: [s] } = await client.query(
+        `INSERT INTO songs (title, author, song_key, language, tags, organization_id)
+         VALUES ($1, $2, $3, 'es', $4, $5) RETURNING *`,
+        [song.title, song.author, song.song_key, song.tags, orgId]
+      );
+      for (let i = 0; i < song.slides.length; i++) {
+        const sl = song.slides[i];
+        await client.query(
+          `INSERT INTO song_slides (song_id, label, content, position) VALUES ($1, $2, $3, $4)`,
+          [s.id, sl.label, sl.content, i]
+        );
+      }
+      inserted.push(s);
+    }
+    await client.query('COMMIT');
+
+    res.json({ inserted: inserted.length, songs: inserted });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Songs] importDemo:', err.message);
+    res.status(500).json({ error: 'Error al importar canciones demo' });
+  } finally {
+    client.release();
+  }
+};
+
+module.exports = { getAllSongs, getSongById, createSong, updateSong, deleteSong, getAllTags, bulkTag, updateStructure, importDemo };
 
 // PATCH /api/songs/:id/structure
 async function updateStructure(req, res) {

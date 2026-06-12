@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X, Plus } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 import SongFormModal from '../../components/Library/SongFormModal';
+import DemoPackBanner from '../../components/shared/DemoPackBanner';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -15,12 +16,18 @@ export default function CancioneroSongs() {
   const [loading, setLoading]   = useState(true);
   const [query, setQuery]       = useState('');
   const [newSongOpen, setNewSongOpen] = useState(false);
+  const [showBanner, setShowBanner]   = useState(false);
 
   const loadSongs = () => {
     setLoading(true);
     fetch(`${API}/api/songs`, { headers: authHeaders() })
       .then(r => r.json())
-      .then(data => { setSongs(Array.isArray(data) ? data : data.songs ?? []); setLoading(false); })
+      .then(data => {
+        const list = Array.isArray(data) ? data : data.songs ?? [];
+        setSongs(list);
+        setShowBanner(list.length === 0);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
   };
 
@@ -71,6 +78,15 @@ export default function CancioneroSongs() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
+        {/* Banner pack de inicio — visible cuando no hay canciones */}
+        {!loading && showBanner && !query && (
+          <div className="pt-4">
+            <DemoPackBanner
+              onSongsImported={() => { setShowBanner(false); loadSongs(); }}
+              onDismiss={() => setShowBanner(false)}
+            />
+          </div>
+        )}
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 size={32} className="text-yellow-400 animate-spin" />
