@@ -24,7 +24,6 @@ const blockedDatesRouter = require('./routes/blockedDates');
 const notificationsRouter = require('./routes/notifications');
 const annotationsRouter = require('./routes/annotations');
 const paypalRouter = require('./routes/paypal');
-const ndi          = require('./ndi/ndiSender');
 const { requireAuth, requireActivePlan } = require('./middleware/auth');
 
 const app    = express();
@@ -126,7 +125,7 @@ function defaultOrgState() {
       fontColor: '#ffffff', fontStrokeWidth: 0, fontStrokeColor: '#000000',
       alignX: 'center', alignY: 'center', textBg: false, textBgColor: '#000000',
       textBgOpacity: 0.5, textBgShape: 'rectangle', textBgPadX: 24, textBgPadY: 12,
-      ndiEnabled: false, showComments: false,
+      showComments: false,
       bibleRefEnabled: false, bibleRefFontSize: 24, bibleRefBgColor: '#000000',
       bibleRefBgShape: 'rounded', bibleRefBgOpacity: 0.6, bibleRefPosition: 'bottom-right',
     },
@@ -388,16 +387,6 @@ async function saveOrgSetting(orgId, key, value) {
   }
 })();
 
-// ─── NDI ─────────────────────────────────────────────────────────────────────
-(async () => {
-  const result = await ndi.init();
-  if (result.ok) {
-    // NDI usa el estado del org 1 por defecto hasta que haya org activa
-    const s = getOrgState(1);
-    ndi.updateState(s.liveState, s.virtualConfig);
-  }
-})();
-
 // ─── SOCKET.IO AUTH MIDDLEWARE ───────────────────────────────────────────────
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -470,7 +459,6 @@ io.on('connection', (socket) => {
   socket.emit('output:config',     s.outputConfig);
   socket.emit('output:templates',  s.outputTemplates);
   socket.emit('virtual:templates', s.virtualTemplates);
-  socket.emit('ndi:status',        ndi.getStatus());
   socket.emit('schedule:update',   s.schedule);
   if (s.eventPlays.ids.length > 0) socket.emit('event:plays', s.eventPlays);
   socket.emit('event:reservas_mode', s.reservasMode);
@@ -493,7 +481,6 @@ io.on('connection', (socket) => {
       }
       const bgMedia = data.slideData?.slideBackground ?? s.outputConfig.titleBackground ?? null;
       s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
-      ndi.updateState(s.liveState, s.virtualConfig);
       emitToOrg('live:state', s.liveState);
       return;
     }
@@ -501,7 +488,6 @@ io.on('connection', (socket) => {
     // Media de fondo (primerPlano=false)
     if (data.type === 'media' && data.slideData?.primerPlano === false) {
       s.liveState = { ...s.liveState, backgroundMedia: data.slideData, isBlank: false };
-      ndi.updateState(s.liveState, s.virtualConfig);
       emitToOrg('live:state', s.liveState);
       return;
     }
@@ -535,7 +521,6 @@ io.on('connection', (socket) => {
         const bgMedia = s.outputConfig.titleBackground || null;
         const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null;
         s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
-        ndi.updateState(s.liveState, s.virtualConfig);
         emitToOrg('live:state', s.liveState);
         return;
       }
@@ -548,7 +533,6 @@ io.on('connection', (socket) => {
     }
     const { slides, ...rest } = data;
     s.liveState = { ...s.liveState, ...rest, totalSlides: slides?.length ?? null, isBlank: false };
-    ndi.updateState(s.liveState, s.virtualConfig);
     emitToOrg('live:state', s.liveState);
   });
 
@@ -556,7 +540,6 @@ io.on('connection', (socket) => {
   socket.on('live:blank', (isBlank) => {
     s.liveState.isBlank = isBlank;
     if (isBlank) s.liveState.backgroundMedia = null;
-    ndi.updateState(s.liveState, s.virtualConfig);
     emitToOrg('live:state', s.liveState);
   });
 
@@ -633,18 +616,11 @@ io.on('connection', (socket) => {
     emitToOrg('display:config', s.displayConfig);
   });
 
-  // Actualizar configuración virtual / NDI
+  // Actualizar configuración virtual
   socket.on('virtual:config', (config) => {
     s.virtualConfig = { ...s.virtualConfig, ...config };
     saveOrgSetting(orgId, 'virtualConfig', s.virtualConfig);
-    ndi.updateState(s.liveState, s.virtualConfig);
-    if (s.virtualConfig.ndiEnabled) {
-      ndi.start();
-    } else {
-      ndi.stop();
-    }
     emitToOrg('virtual:config', s.virtualConfig);
-    emitToOrg('ndi:status', ndi.getStatus());
   });
 
   // Navegar: el móvil u otro cliente pide avanzar/retroceder
@@ -666,7 +642,6 @@ io.on('connection', (socket) => {
             slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content },
             nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
           };
-          ndi.updateState(s.liveState, s.virtualConfig);
           emitToOrg('live:state', s.liveState);
         }
         return;
@@ -687,7 +662,6 @@ io.on('connection', (socket) => {
           slideData: { type: 'title', songTitle, songAuthor, songId, songKey: songKey || null },
           nextSlideData: { type: 'song', label: slides[0].label, content: slides[0].content },
         };
-        ndi.updateState(s.liveState, s.virtualConfig);
         emitToOrg('live:state', s.liveState);
         return;
       }
@@ -707,7 +681,6 @@ io.on('connection', (socket) => {
         },
         nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
       };
-      ndi.updateState(s.liveState, s.virtualConfig);
       emitToOrg('live:state', s.liveState);
     } else {
       socket.broadcast.to(`org:${orgId}`).emit('navigate', dir);

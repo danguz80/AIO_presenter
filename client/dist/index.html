@@ -14,6 +14,43 @@
         document.write('<meta name="viewport" content="' + content + '">');
       })();
     </script>
+    <!-- Pantalla completa automática para ventanas de salida/escenario/virtual.
+         Chrome no transfiere transient-activation a popups, así que el primer
+         click o keydown (ej: avanzar diapositiva) dispara el fullscreen.
+         Al entrar a fullscreen, notifica al controlador via BroadcastChannel
+         para que haga focus a la siguiente ventana pendiente. -->
+    <script>
+      ;(function(){
+        if (location.search.indexOf('fs=1') === -1) return;
+        var el = document.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (!req) return;
+        var notified = false;
+        function notifyFullscreen() {
+          if (notified) return;
+          notified = true;
+          try {
+            var ch = new BroadcastChannel('aio_fullscreen');
+            ch.postMessage({ type: 'window:fullscreen', path: location.pathname });
+            ch.close();
+          } catch(e) {}
+        }
+        function tryFS() {
+          req.call(el).then(function(){ notifyFullscreen(); }).catch(function(){});
+        }
+        // Intento síncrono (funciona en Firefox y algunos contextos de Chrome)
+        tryFS();
+        // Fallback: primer click O primera tecla dispara fullscreen
+        function onFirst() {
+          document.removeEventListener('click',   onFirst, true);
+          document.removeEventListener('keydown', onFirst, true);
+          if (!document.fullscreenElement) tryFS();
+          else notifyFullscreen();
+        }
+        document.addEventListener('click',   onFirst, true);
+        document.addEventListener('keydown', onFirst, true);
+      })();
+    </script>
     <title>AIO Presenter — Proyección de letras y Biblias para iglesias</title>
     <meta name="description" content="La plataforma completa para gestionar las alabanzas y proyecciones de tu iglesia. Modo Presenter para proyecciones en tiempo real y Modo Cancionero para músicos." />
     <meta name="keywords" content="proyección iglesia, letras alabanza, acordes iglesia, cancionero digital, presenter iglesia, AIO Presenter" />
@@ -41,12 +78,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/assets/index-C2gYYhZR.js"></script>
+    <script type="module" crossorigin src="/assets/index-CR73QuMm.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/vendor-react-HzbaP9b1.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-socket-BcxXcwBL.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-misc-J9DaQOj9.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-CM2aN055.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-G5k0-0VU.css">
+    <link rel="modulepreload" crossorigin href="/assets/vendor-icons-DU0aIKye.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-Bxeu-Qnw.css">
   <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
   <body>
     <div id="root"></div>

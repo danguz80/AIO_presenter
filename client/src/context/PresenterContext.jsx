@@ -91,7 +91,6 @@ const initialState = {
     textBgShape:    'rectangle',
     textBgPadX:     24,
     textBgPadY:     12,
-    ndiEnabled:  false,
     showComments: false,
     // Cita bíblica (referencia)
     bibleRefEnabled:   false,
@@ -165,16 +164,6 @@ const initialState = {
   outputTemplates: [],
   // Plantillas streaming/virtual
   virtualTemplates: [],
-
-  // Estado NDI (del servidor)
-  ndiStatus: {
-    grandioseInstalled: false,
-    senderReady:        false,
-    sending:            false,
-    sourceName:         'AIO Presenter',
-    resolution:         '1920×1080',
-    fps:                30,
-  },
 
   // Canciones tocadas del evento activo: Set de song_ids
   eventPlays: new Set(),        // song_ids ya tocadas
@@ -263,8 +252,6 @@ function reducer(state, action) {
       return { ...state, outputConfig: { ...state.outputConfig, ...action.payload } };
     case 'SET_OUTPUT_TEMPLATES':
       return { ...state, outputTemplates: action.payload };
-    case 'SET_NDI_STATUS':
-      return { ...state, ndiStatus: action.payload };
     case 'NAVIGATE':
       return { ...state, navigateRequest: action.payload };
     case 'SET_PENDING_SONG':
@@ -366,7 +353,6 @@ export function PresenterProvider({ children }) {
     socket.on('output:config',   (data) => dispatch({ type: 'SET_OUTPUT_CONFIG',   payload: data }));
     socket.on('output:templates',  (data) => dispatch({ type: 'SET_OUTPUT_TEMPLATES',  payload: data }));
     socket.on('virtual:templates', (data) => dispatch({ type: 'SET_VIRTUAL_TEMPLATES', payload: data }));
-    socket.on('ndi:status',      (data) => dispatch({ type: 'SET_NDI_STATUS',      payload: data }));
     socket.on('navigate',          (dir)  => dispatch({ type: 'NAVIGATE',          payload: { dir, ts: Date.now() } }));
     socket.on('event:plays',       (data) => dispatch({ type: 'SET_EVENT_PLAYS',   payload: data }));
     socket.on('event:reservas_mode', (mode) => dispatch({ type: 'SET_RESERVAS_MODE', payload: mode }));

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import {
   ChevronDown, ChevronUp, Radio, Copy, CheckCheck,
-  Tv, Wifi, WifiOff, AlertCircle, Save, BookOpen, X, Check, LayoutTemplate,
+  Tv, Save, BookOpen, X, Check, LayoutTemplate,
 } from 'lucide-react';
 
 // ─── Helpers UI reutilizables ─────────────────────────────────────────────────
@@ -93,7 +93,7 @@ const VIRTUAL_URL = `${window.location.origin}/virtual`;
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function VirtualControls({ defaultOpen = false }) {
   const { state, actions } = usePresenter();
-  const { virtualConfig, virtualTemplates = [], ndiStatus, liveState } = state;
+  const { virtualConfig, virtualTemplates = [], liveState } = state;
   const [open, setOpen]     = useState(defaultOpen);
   const [copied, setCopied] = useState(false);
   const [templateName, setTemplateName]   = useState('');
@@ -191,7 +191,7 @@ export default function VirtualControls({ defaultOpen = false }) {
         onClick={() => setOpen(v => !v)}
         className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-semibold text-zinc-400 uppercase tracking-wider hover:text-zinc-200 transition-colors"
       >
-        <div className="flex items-center gap-2"><Tv size={12} /> Virtual / NDI</div>
+        <div className="flex items-center gap-2"><Tv size={12} /> Virtual</div>
         {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
       </button>
 
@@ -499,67 +499,9 @@ export default function VirtualControls({ defaultOpen = false }) {
               onChange={v => update({ showComments: v })} />
           </SubSection>
 
-          {/* ── NDI ────────────────────────────────────────────────── */}
-          <SubSection title="NDI Server">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-zinc-500">Estado</span>
-              <NdiStatusBadge status={ndiStatus} />
-            </div>
-            {ndiStatus.grandioseInstalled ? (
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[10px] text-zinc-500">
-                  <span>Fuente</span>
-                  <span className="text-zinc-300">{ndiStatus.sourceName}</span>
-                </div>
-                <div className="flex justify-between text-[10px] text-zinc-500">
-                  <span>Resolución</span>
-                  <span className="text-zinc-300">{ndiStatus.resolution} @ {ndiStatus.fps}fps</span>
-                </div>
-                <button
-                  onClick={() => update({ ndiEnabled: !vc.ndiEnabled })}
-                  className={`w-full py-1.5 rounded text-xs font-medium transition-colors ${
-                    vc.ndiEnabled
-                      ? 'bg-red-700/60 hover:bg-red-700/80 text-red-200'
-                      : 'bg-accent/20 hover:bg-accent/30 text-accent'
-                  }`}>
-                  {vc.ndiEnabled ? 'Detener emisión NDI' : 'Iniciar emisión NDI'}
-                </button>
-              </div>
-            ) : (
-              <div className="bg-surface-700 rounded p-2 space-y-1">
-                <p className="text-[10px] text-zinc-400 flex items-start gap-1.5">
-                  <AlertCircle size={11} className="text-yellow-500 mt-0.5 shrink-0" />
-                  Para usar NDI instala las dependencias en el servidor:
-                </p>
-                <code className="block text-[9px] bg-surface-800 rounded p-1.5 text-zinc-300 leading-relaxed">
-                  cd server<br />
-                  npm install grandiose canvas<br />
-                  <span className="text-zinc-500"># + NDI SDK: ndi.video/download-ndi-sdk</span>
-                </code>
-              </div>
-            )}
-          </SubSection>
-
         </div>
       )}
     </div>
-  );
-}
-
-function NdiStatusBadge({ status }) {
-  if (!status.grandioseInstalled) return (
-    <span className="flex items-center gap-1 text-[10px] text-zinc-500"><WifiOff size={10} /> No instalado</span>
-  );
-  if (status.sending) return (
-    <span className="flex items-center gap-1 text-[10px] text-green-400">
-      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> Emitiendo
-    </span>
-  );
-  if (status.senderReady) return (
-    <span className="flex items-center gap-1 text-[10px] text-yellow-400"><Wifi size={10} /> Listo</span>
-  );
-  return (
-    <span className="flex items-center gap-1 text-[10px] text-red-400"><WifiOff size={10} /> Error</span>
   );
 }
 
