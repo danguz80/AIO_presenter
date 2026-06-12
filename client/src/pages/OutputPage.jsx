@@ -75,17 +75,16 @@ export default function OutputPage() {
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, [showFsHint]);
 
-  // ── Video sync: arranca countdown cuando el video hace play + reset en loop ────
+  // ── Video sync: arranca countdown cuando un video hace play + reset en loop ─
   useEffect(() => {
     if (!state.timerState?.videoSync) return;
 
-    const video = document.querySelector('video');
-    if (!video) return; // Sin video en DOM: efecto re-corre cuando backgroundMedia.url cambie
+    let disposed   = false;
+    let attached   = null; // elemento <video> al que ya enganchamos listeners
+    let armed      = true; // evitar doble-disparo mientras el state actualiza
 
-    let armed = true; // evitar doble-disparo antes del update de state
-
-    const doStart = () => {
-      if (!armed) return;
+    const doStart = (video) => {
+      if (!armed || disposed) return;
       const dur = isFinite(video.duration) && video.duration > 0
         ? Math.floor(video.duration) : 0;
       if (dur <= 0) return;
@@ -100,37 +99,62 @@ export default function OutputPage() {
       });
     };
 
-    // Intentar arrancar si ya hay video reproduciendo con metadata lista
-    if (!video.paused && !video.ended && isFinite(video.duration) && video.duration > 0) {
-      doStart();
-    }
-
-    // play dispara antes de loadedmetadata en autoPlay: manejar ambos
-    const onPlay           = () => doStart();
-    const onLoadedMetadata = () => { if (!video.paused && !video.ended) doStart(); };
-
-    // Loop: currentTime vuelve al inicio después de estar cerca del final
-    let prevTime = video.currentTime;
-    const onTimeUpdate = () => {
-      const curr = video.currentTime;
-      const dur  = video.duration;
-      if (isFinite(dur) && dur > 0 && prevTime > dur - 2 && curr < 1) {
-        armed = true; // permitir re-arranque en cada loop
-        doStart();
-      }
-      prevTime = curr;
+    const detachFrom = (video) => {
+      if (!video) return;
+      video.removeEventListener('loadedmetadata', video._syncMeta);
+      video.removeEventListener('timeupdate',     video._syncTU);
+      video._syncMeta = video._syncTU = null;
     };
 
-    video.addEventListener('play',           onPlay);
-    video.addEventListener('loadedmetadata', onLoadedMetadata);
-    video.addEventListener('timeupdate',     onTimeUpdate);
+    const attachTo = (video) => {
+      if (attached === video) return; // ya enganchado
+      detachFrom(attached);
+      attached = video;
+
+      let prevTime = video.currentTime;
+
+      video._syncMeta = () => {
+        if (!video.paused && !video.ended) doStart(video);
+      };
+      video._syncTU = () => {
+        const curr = video.currentTime;
+        const dur  = video.duration;
+        if (isFinite(dur) && dur > 0 && prevTime > dur - 2 && curr < 1) {
+          armed = true;
+          doStart(video);
+        }
+        prevTime = curr;
+      };
+      video.addEventListener('loadedmetadata', video._syncMeta);
+      video.addEventListener('timeupdate',     video._syncTU);
+    };
+
+    // Polling cada 250ms: busca video, engancha listeners, e intenta arrancar
+    const poll = setInterval(() => {
+      if (disposed) { clearInterval(poll); return; }
+
+      const video = document.querySelector('video');
+      if (!video) return; // aún no hay video en DOM
+
+      attachTo(video); // enganchar si no estaba enganchado
+
+      // Si ya está reproduciéndose y tenemos duración → arrancar
+      if (!video.paused && !video.ended) {
+        if (isFinite(video.duration) && video.duration > 0) {
+          doStart(video);
+          if (!armed) clearInterval(poll); // parar polling una vez que arrancó
+        }
+        // si duration=NaN esperamos loadedmetadata (listener ya adjunto)
+      }
+    }, 250);
+
     return () => {
-      video.removeEventListener('play',           onPlay);
-      video.removeEventListener('loadedmetadata', onLoadedMetadata);
-      video.removeEventListener('timeupdate',     onTimeUpdate);
+      disposed = true;
+      clearInterval(poll);
+      detachFrom(attached);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.timerState?.videoSync, liveState.backgroundMedia?.url]);
+  }, [state.timerState?.videoSync]);
 
   return (
     <div
