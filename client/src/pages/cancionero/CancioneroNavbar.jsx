@@ -40,8 +40,6 @@ export default function CancioneroNavbar() {
     lastMsgId.current = last.id;
     if (last.own) return;
     setMsgToast(last);
-    const t = setTimeout(() => setMsgToast(null), 5000);
-    return () => clearTimeout(t);
   }, [state.internalMessages]);
 
   const allItems = isOwner
