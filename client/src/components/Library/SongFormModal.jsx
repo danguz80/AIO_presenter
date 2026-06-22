@@ -30,7 +30,7 @@ function slidesToText(slides) {
 // Regex para detectar si una cadena es símbolo de acorde musical (A, Am, G#m, F#, etc.)
 const CHORD_SYMBOL_RE = /^[A-G][#b]?(?:m|M|maj|min|dim|aug|sus[24]?|add\d*|dom|alt)?[0-9]*(?:b\d+|#\d+)*(?:\/[A-G][#b]?)?$/;
 // Versión case-insensitive para el modo acordes (acepta Cm y cm por igual)
-const CHORD_MODE_RE   = /^[A-Ga-g][#b]?(?:m|M|maj|min|dim|aug|sus[24]?|add\d*|dom|alt)?[0-9]*(?:b\d+|#\d+)*(?:\/[A-Ga-g][#b]?)?$/
+const CHORD_MODE_RE   = /^[A-Ga-g][#b]?(?:m|M|maj|min|dim|aug|sus[24]?|add\d*|dom|alt)?[0-9]*(?:b\d+|#\d+)*(?:\/[A-Ga-g][#b]?)?$/;
 
 /**
  * Convierte líneas de sección con corchetes ([Verso], [Coro], etc.)
@@ -553,7 +553,9 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                   if (chordMode && (e.key === ' ' || e.key === 'Enter')) {
                     const ta = textareaRef.current;
                     const pos = ta.selectionStart;
-                    const textBefore = body.slice(0, pos);
+                    // Usar ta.value (DOM) en lugar del estado body para evitar closures obsoletos
+                    const currentVal = ta.value;
+                    const textBefore = currentVal.slice(0, pos);
                     const wordMatch  = textBefore.match(/(\S+)$/);
                     if (wordMatch) {
                       const word = wordMatch[1];
@@ -562,7 +564,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                         const wordStart = pos - word.length;
                         const suffix    = e.key === 'Enter' ? '\n' : ' ';
                         const wrapped   = `[${word}]${suffix}`;
-                        const newBody   = body.slice(0, wordStart) + wrapped + body.slice(pos);
+                        const newBody   = currentVal.slice(0, wordStart) + wrapped + currentVal.slice(pos);
                         const newPos    = wordStart + wrapped.length;
                         setBody(newBody);
                         setCursorPos(newPos);
