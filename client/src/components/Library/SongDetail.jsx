@@ -427,6 +427,14 @@ export default function SongDetail() {
   const thumbW     = gridWidth > 0 ? (gridWidth - GAP * (thumbCols - 1)) / thumbCols : 0;
   const thumbScale = thumbW > 0 ? thumbW / resW : 0;
 
+  // Para que el texto sea visible tras el scale, amplificamos fontSize ~11px target
+  const boostedFontPx = thumbScale > 0
+    ? Math.min(180, Math.max(40, Math.round(11 / thumbScale)))
+    : 72;
+  const thumbOutputCfg = { ...outputCfg, fontSize: String(boostedFontPx), progressEnabled: false };
+  // Fondo global si es imagen (evitamos videos en thumbnails)
+  const thumbGlobalBg = liveState.backgroundMedia?.mediaType === 'image' ? liveState.backgroundMedia : null;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Cabecera de la canción */}
@@ -738,7 +746,7 @@ export default function SongDetail() {
                         transformOrigin: 'top left',
                       }}>
                         <OutputRenderer
-                          cfg={outputCfg}
+                          cfg={thumbOutputCfg}
                           slideData={{
                             type:      'song',
                             slideId:   slide.id,
@@ -749,7 +757,11 @@ export default function SongDetail() {
                           }}
                           isBlank={false}
                           background={liveState.background ?? { type: 'color', color: '#000000' }}
-                          backgroundMedia={slide.slide_background?.mediaType === 'image' ? slide.slide_background : null}
+                          backgroundMedia={
+                            slide.slide_background?.mediaType === 'image'
+                              ? slide.slide_background
+                              : thumbGlobalBg
+                          }
                           slideIndex={index}
                           totalSlides={orderedSlides.length}
                         />
