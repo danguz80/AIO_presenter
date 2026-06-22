@@ -120,20 +120,6 @@ export default function MobileControllerPage() {
   const { state, actions } = usePresenter();
   const { internalMessages } = state;
 
-  // ── DEBUG: captura de teclas de volumen ─────────────────────────────────
-  const [debugKeys,  setDebugKeys]  = useState([]);
-  const [showDebug,  setShowDebug]  = useState(true);
-  useEffect(() => {
-    const capture = (e) => {
-      setDebugKeys(prev => [
-        { type: e.type, key: e.key, code: e.code, kc: e.keyCode, ts: Date.now() },
-        ...prev,
-      ].slice(0, 6));
-    };
-    ['keydown','keyup','keypress'].forEach(t => document.addEventListener(t, capture, true));
-    return () => ['keydown','keyup','keypress'].forEach(t => document.removeEventListener(t, capture, true));
-  }, []);
-
   // ── Toast de mensajes internos ───────────────────────────────────────────────
   const [msgToast,      setMsgToast]      = useState(null);
   const [showMessages,  setShowMessages]  = useState(false);
@@ -509,15 +495,29 @@ export default function MobileControllerPage() {
   const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
   const handleNext  = () => trigger(() => actions.navigate('next'), 'next');
 
-  // Botones de volumen del celular → avanzar / retroceder diapositivas
-  useVolumeKeys(handleNext, handlePrev);
   const handleBlank = () => trigger(() => actions.toggleBlank(!isBlank), 'blank');
 
-  const onTouchStart = (e) => { if (tab !== 'live') return; touchStart.current = e.touches[0].clientX; };
-  const onTouchEnd   = (e) => {
+  // Swipe + tap: tap izquierdo = anterior, tap derecho = siguiente
+  const onTouchStart = (e) => {
+    if (tab !== 'live') return;
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e) => {
     if (touchStart.current === null) return;
-    const delta = e.changedTouches[0].clientX - touchStart.current;
-    if (Math.abs(delta) > 60) delta < 0 ? handleNext() : handlePrev();
+    const dx = e.changedTouches[0].clientX - touchStart.current.x;
+    const dy = e.changedTouches[0].clientY - touchStart.current.y;
+    if (Math.abs(dx) > 60) {
+      // Swipe horizontal
+      dx < 0 ? handleNext() : handlePrev();
+    } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+      // Tap — ignorar si el toque fue sobre un elemento interactivo
+      const el = e.target;
+      if (!el.closest('button, input, select, textarea, a, [role="button"], label')) {
+        e.changedTouches[0].clientX > window.innerWidth / 2 ? handleNext() : handlePrev();
+      }
+    }
+    touchStart.current = null;
+  };
     touchStart.current = null;
   };
 
@@ -609,26 +609,6 @@ export default function MobileControllerPage() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* ── DEBUG overlay teclas ── */}
-      <div className="fixed top-0 left-0 right-0 z-[99999] pointer-events-none">
-        <div className="pointer-events-auto">
-          <button
-            onClick={() => setShowDebug(v => !v)}
-            className="absolute top-1 right-1 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded z-10"
-          >
-            {showDebug ? 'OCULTAR DEBUG' : 'DEBUG TECLAS'}
-          </button>
-          {showDebug && (
-            <div className="bg-black/90 text-green-400 font-mono text-[11px] px-2 py-1 space-y-0.5 min-h-[40px]">
-              <p className="text-yellow-400 font-bold">DEBUG: pulsa volumen ↑↓</p>
-              {debugKeys.length === 0 && <p className="text-white/50">— sin eventos —</p>}
-              {debugKeys.map((k, i) => (
-                <p key={i}>[{k.type}] key="{k.key}" code="{k.code}" keyCode={k.kc}</p>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
       {/* ── Drawer: MessagesPanel ── */}
       {showMessages && (
         <div className="fixed inset-0 z-[9998] flex flex-col bg-surface-900">
