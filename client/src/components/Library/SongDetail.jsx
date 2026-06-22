@@ -427,11 +427,9 @@ export default function SongDetail() {
   const thumbW     = gridWidth > 0 ? (gridWidth - GAP * (thumbCols - 1)) / thumbCols : 0;
   const thumbScale = thumbW > 0 ? thumbW / resW : 0;
 
-  // Para que el texto sea visible tras el scale, amplificamos fontSize ~11px target
-  const boostedFontPx = thumbScale > 0
-    ? Math.min(180, Math.max(40, Math.round(11 / thumbScale)))
-    : 72;
-  const thumbOutputCfg = { ...outputCfg, fontSize: String(boostedFontPx), progressEnabled: false };
+  // Sin boosting: pasamos las dimensiones reales del contenedor para que OutputRenderer
+  // calcule fuentes en px puros (mismo wrapping que el output real, solo escalado)
+  const thumbOutputCfg = { ...outputCfg, progressEnabled: false };
   // Fondo global si es imagen (evitamos videos en thumbnails)
   const thumbGlobalBg = liveState.backgroundMedia?.mediaType === 'image' ? liveState.backgroundMedia : null;
 
@@ -747,6 +745,8 @@ export default function SongDetail() {
                       }}>
                         <OutputRenderer
                           cfg={thumbOutputCfg}
+                          containerWidth={resW}
+                          containerHeight={resH}
                           slideData={{
                             type:      'song',
                             slideId:   slide.id,

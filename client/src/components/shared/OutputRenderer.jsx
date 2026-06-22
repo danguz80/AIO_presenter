@@ -13,7 +13,7 @@ import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
  *  - background: { type, color, url }
  *  - slideIndex, totalSlides: para indicador de progreso
  */
-export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia }) {
+export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia, containerWidth = null, containerHeight = null }) {
   // Inyectar Google Fonts
   useEffect(() => {
     injectGoogleFont(cfg.fontFamily);
@@ -121,7 +121,7 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
       {/* Contenido del slide (texto sobre el fondo) */}
       {!isBlank && slideData && (slideData.type !== 'media' || !hasBg) ? (
         <div style={{ position: 'relative', zIndex: 1, width: '100%', height: '100%' }}>
-          <SlideContent slideData={slideData} cfg={cfg} />
+          <SlideContent slideData={slideData} cfg={cfg} cw={containerWidth} ch={containerHeight} />
         </div>
       ) : null}
       {/* Logo en pantalla en negro */}
@@ -157,7 +157,7 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
 }
 
 // ─── Contenido del slide ──────────────────────────────────────────────────────
-function SlideContent({ slideData, cfg }) {
+function SlideContent({ slideData, cfg, cw = null, ch = null }) {
   const { type } = slideData;
 
   if (type === 'title') {
@@ -202,7 +202,15 @@ function SlideContent({ slideData, cfg }) {
                 : lineCount <= 10 ? 4.5
                 : 3.5;
     let fontSize;
-    if (cfg.fontSize && cfg.fontSize !== 'auto') {
+    if (cw && ch) {
+      // Modo contenedor fijo: calcular px puros para que transform:scale() escale el texto igual que el output real
+      const vwPct = lineCount <= 3 ? 5 : lineCount <= 5 ? 4 : lineCount <= 7 ? 3.2 : lineCount <= 10 ? 2.6 : 2;
+      if (cfg.fontSize && cfg.fontSize !== 'auto') {
+        fontSize = `${Math.min(Number(cfg.fontSize), ch * maxVh / 100)}px`;
+      } else {
+        fontSize = `${Math.min(cw * vwPct / 100, ch * maxVh / 100)}px`;
+      }
+    } else if (cfg.fontSize && cfg.fontSize !== 'auto') {
       // Respetar tamaño fijo del usuario pero caparlo en pantallas bajas (landscape móvil)
       fontSize = `min(${cfg.fontSize}px, ${maxVh}vh)`;
     } else {
@@ -272,8 +280,8 @@ function SlideContent({ slideData, cfg }) {
     const refFontFamily = resolveFont(useTpl ? (cfg.bibleRefFontFamily ?? 'sans') : 'sans');
     const refFontSize   = useTpl ? (cfg.bibleRefFontSize ?? 24) : null; // null = usar clamp auto
     const versionPos    = useTpl ? (cfg.bibleVersionPosition ?? 'inline-right') : 'inline-right';
-    const refFs         = refFontSize ? `${refFontSize}px` : 'clamp(0.9rem, 2vw, 1.5rem)';
-    const verFs         = refFontSize ? `${Math.round(refFontSize * 0.75)}px` : 'clamp(0.7rem, 1.4vw, 1.1rem)';
+    const refFs         = refFontSize ? `${refFontSize}px` : (cw ? `${Math.round(cw * 0.02)}px` : 'clamp(0.9rem, 2vw, 1.5rem)');
+    const verFs         = refFontSize ? `${Math.round(refFontSize * 0.75)}px` : (cw ? `${Math.round(cw * 0.014)}px` : 'clamp(0.7rem, 1.4vw, 1.1rem)');
 
     const versionSpan = slideData.version
       ? <span style={{ color: refColor, fontSize: verFs, fontFamily: refFontFamily, fontWeight: 'normal', opacity: 0.8 }}>{slideData.version}</span>
@@ -293,7 +301,15 @@ function SlideContent({ slideData, cfg }) {
                      : lineCount <= 8 ? 5.5
                      : 4;
     let fontSize;
-    if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
+    if (cw && ch) {
+      // Modo contenedor fijo: calcular px puros
+      const bibleVwPct = lineCount <= 3 ? 4.5 : lineCount <= 5 ? 3.5 : lineCount <= 8 ? 2.5 : 1.8;
+      if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
+        fontSize = `${Math.min(Number(cfg.bibleFontSize), ch * bibleMaxVh / 100)}px`;
+      } else {
+        fontSize = `${Math.min(cw * bibleVwPct / 100, ch * bibleMaxVh / 100)}px`;
+      }
+    } else if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
       fontSize = `min(${cfg.bibleFontSize}px, ${bibleMaxVh}vh)`;
     } else {
       fontSize = lineCount <= 3 ? `clamp(1.8rem, min(4.5vw, ${bibleMaxVh}vh), 4rem)`
