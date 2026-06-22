@@ -511,9 +511,9 @@ function EventsPanel() {
     actions.setSchedule(selectedEv?.songs ?? []);
   }, [selectedEv]); // eslint-disable-line
 
-  // Cargar todas las canciones una vez al abrir
+  // Cargar todas las canciones cada vez que se abre el panel
   useEffect(() => {
-    if (open && allSongs.length === 0) {
+    if (open) {
       authFetch('/api/songs').then(r => r.json()).then(setAllSongs).catch(() => {});
     }
   }, [open]); // eslint-disable-line
