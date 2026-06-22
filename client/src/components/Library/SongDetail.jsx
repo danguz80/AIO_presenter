@@ -70,6 +70,11 @@ export default function SongDetail() {
     seenSlideIds.current = new Set();
   }, [selectedSong?.id]);
 
+  // Deseleccionar cuando la pantalla se pone en negro
+  useEffect(() => {
+    if (liveState.isBlank) setLocalSelectedKey(null);
+  }, [liveState.isBlank]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Estado local de selección (para el toggle deseleccionar) ────────────
   const [localSelectedKey, setLocalSelectedKey] = useState(null);
 
