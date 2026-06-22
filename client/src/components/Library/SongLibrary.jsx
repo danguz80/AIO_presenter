@@ -334,7 +334,12 @@ export default function SongLibrary() {
                   <Music size={14} className="text-zinc-500 shrink-0" />
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-zinc-100 truncate">{song.title}</p>
+                    <div className="flex items-baseline gap-1.5 min-w-0">
+                      <p className="text-sm text-zinc-100 truncate flex-1 min-w-0">{song.title}</p>
+                      {song.song_key && (
+                        <span className="shrink-0 text-[10px] font-bold bg-accent/10 text-accent border border-accent/30 rounded px-1 py-px leading-none">{song.song_key}</span>
+                      )}
+                    </div>
                     {song.author && (
                       <p className="text-xs text-zinc-500 truncate">{song.author}</p>
                     )}

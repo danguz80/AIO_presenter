@@ -1684,7 +1684,12 @@ function EventsPanel() {
                         <span className="text-[11px] text-zinc-600 w-4 text-right shrink-0">{i + 1}</span>
                         <Music size={12} className="text-accent shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-[13px] truncate leading-tight group-hover:text-white transition-colors">{s.title}</p>
+                          <div className="flex items-baseline gap-1.5 min-w-0">
+                            <p className="text-[13px] truncate leading-tight group-hover:text-white transition-colors flex-1 min-w-0">{s.title}</p>
+                            {s.song_key && (
+                              <span className="shrink-0 text-[10px] font-bold text-accent/80">{s.song_key}</span>
+                            )}
+                          </div>
                           {s.author && <p className="text-[11px] text-zinc-500 truncate">{s.author}</p>}
                           {s.tags && s.tags.length > 0 && (
                             <div className="flex flex-wrap gap-0.5 mt-0.5">
