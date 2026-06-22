@@ -120,6 +120,20 @@ export default function MobileControllerPage() {
   const { state, actions } = usePresenter();
   const { internalMessages } = state;
 
+  // ── DEBUG: captura de teclas de volumen ─────────────────────────────────
+  const [debugKeys,  setDebugKeys]  = useState([]);
+  const [showDebug,  setShowDebug]  = useState(true);
+  useEffect(() => {
+    const capture = (e) => {
+      setDebugKeys(prev => [
+        { type: e.type, key: e.key, code: e.code, kc: e.keyCode, ts: Date.now() },
+        ...prev,
+      ].slice(0, 6));
+    };
+    ['keydown','keyup','keypress'].forEach(t => document.addEventListener(t, capture, true));
+    return () => ['keydown','keyup','keypress'].forEach(t => document.removeEventListener(t, capture, true));
+  }, []);
+
   // ── Toast de mensajes internos ───────────────────────────────────────────────
   const [msgToast,      setMsgToast]      = useState(null);
   const [showMessages,  setShowMessages]  = useState(false);
@@ -595,6 +609,26 @@ export default function MobileControllerPage() {
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
+      {/* ── DEBUG overlay teclas ── */}
+      <div className="fixed top-0 left-0 right-0 z-[99999] pointer-events-none">
+        <div className="pointer-events-auto">
+          <button
+            onClick={() => setShowDebug(v => !v)}
+            className="absolute top-1 right-1 bg-yellow-500 text-black text-[10px] font-bold px-2 py-0.5 rounded z-10"
+          >
+            {showDebug ? 'OCULTAR DEBUG' : 'DEBUG TECLAS'}
+          </button>
+          {showDebug && (
+            <div className="bg-black/90 text-green-400 font-mono text-[11px] px-2 py-1 space-y-0.5 min-h-[40px]">
+              <p className="text-yellow-400 font-bold">DEBUG: pulsa volumen ↑↓</p>
+              {debugKeys.length === 0 && <p className="text-white/50">— sin eventos —</p>}
+              {debugKeys.map((k, i) => (
+                <p key={i}>[{k.type}] key="{k.key}" code="{k.code}" keyCode={k.kc}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       {/* ── Drawer: MessagesPanel ── */}
       {showMessages && (
         <div className="fixed inset-0 z-[9998] flex flex-col bg-surface-900">
