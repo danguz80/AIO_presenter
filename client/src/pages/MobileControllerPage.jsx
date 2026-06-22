@@ -518,8 +518,6 @@ export default function MobileControllerPage() {
     }
     touchStart.current = null;
   };
-    touchStart.current = null;
-  };
 
   // ── Canciones ────────────────────────────────────────────────────────────
   const openSong = async (id) => {
