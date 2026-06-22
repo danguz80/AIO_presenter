@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X, Plus } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 import SongFormModal from '../../components/Library/SongFormModal';
 import DemoPackBanner from '../../components/shared/DemoPackBanner';
+import useVolumeKeys from '../../hooks/useVolumeKeys';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -11,7 +12,12 @@ function authHeaders() {
 }
 
 export default function CancioneroSongs() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const scrollRef = useRef(null);
+  useVolumeKeys(
+    () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
+    () => scrollRef.current?.scrollBy({ top:  150, behavior: 'smooth' }),
+  );
   const [songs, setSongs]       = useState([]);
   const [loading, setLoading]   = useState(true);
   const [query, setQuery]       = useState('');
@@ -77,7 +83,7 @@ export default function CancioneroSongs() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {/* Banner pack de inicio — visible cuando no hay canciones */}
         {!loading && showBanner && !query && (
           <div className="pt-4">

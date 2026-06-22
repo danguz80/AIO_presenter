@@ -9,6 +9,7 @@ import { stripChords, parseChordLine, isCommentLine, extractInlineComment, trans
 import SongFormModal from '../../components/Library/SongFormModal';
 import AnnotationCanvas from '../../components/cancionero/AnnotationCanvas';
 import CancioneroNavbar from './CancioneroNavbar';
+import useVolumeKeys from '../../hooks/useVolumeKeys';
 
 const API = import.meta.env.VITE_API_URL || '';
 const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
@@ -594,6 +595,12 @@ export default function CancioneroSongDetail() {
   const scrollSlideIdxRef = useRef(null);
 
   const scrollRef      = useRef(null);
+
+  // Botones de volumen → scroll manual de la letra
+  useVolumeKeys(
+    () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
+    () => scrollRef.current?.scrollBy({ top:  150, behavior: 'smooth' }),
+  );
   const rafRef         = useRef(null);
   const lastTs         = useRef(null);
   const scrollSpeedRef = useRef(scrollSpeed); // siempre actualizado, sin reiniciar el loop

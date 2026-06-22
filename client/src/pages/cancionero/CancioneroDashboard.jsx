@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Music2, CalendarDays, Settings2, Bell,
@@ -7,6 +7,7 @@ import {
 import { io as socketIo } from 'socket.io-client';
 import CancioneroNavbar from './CancioneroNavbar';
 import DemoPackBanner from '../../components/shared/DemoPackBanner';
+import useVolumeKeys from '../../hooks/useVolumeKeys';
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -68,7 +69,12 @@ function getIsAdmin() {
 }
 
 export default function CancioneroDashboard() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const scrollRef = useRef(null);
+  useVolumeKeys(
+    () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
+    () => scrollRef.current?.scrollBy({ top:  150, behavior: 'smooth' }),
+  );
   const [user, setUser]   = useState(null);
   const [org, setOrg]     = useState(null);
   const [events, setEvents] = useState([]);
@@ -235,7 +241,7 @@ export default function CancioneroDashboard() {
       </header>
 
       {/* ── Hero greeting ────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
       <section className="px-5 pt-8 pb-6">
         <p className="text-white/40 text-sm mb-1">Bienvenido,</p>
         <h1 className="text-2xl font-extrabold text-white leading-tight">

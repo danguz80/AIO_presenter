@@ -12,6 +12,7 @@ import MessagesPanel   from '../components/Controls/MessagesPanel';
 import OrgSwitcher     from '../components/shared/OrgSwitcher';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
+import useVolumeKeys from '../hooks/useVolumeKeys';
 import {
   ChevronLeft, ChevronRight, EyeOff, Eye,
   Wifi, WifiOff, Music, Music2, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
@@ -493,6 +494,9 @@ export default function MobileControllerPage() {
   const trigger = (fn, dir) => { fn(); setFlash(dir); setTimeout(() => setFlash(null), 200); };
   const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
   const handleNext  = () => trigger(() => actions.navigate('next'), 'next');
+
+  // Botones de volumen del celular → avanzar / retroceder diapositivas
+  useVolumeKeys(handleNext, handlePrev);
   const handleBlank = () => trigger(() => actions.toggleBlank(!isBlank), 'blank');
 
   const onTouchStart = (e) => { if (tab !== 'live') return; touchStart.current = e.touches[0].clientX; };

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History, AlertTriangle, Users } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
+import useVolumeKeys from '../../hooks/useVolumeKeys';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -36,7 +37,12 @@ function daysAgo(dateStr) {
 }
 
 export default function CancioneroEvents() {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const scrollRef = useRef(null);
+  useVolumeKeys(
+    () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
+    () => scrollRef.current?.scrollBy({ top:  150, behavior: 'smooth' }),
+  );
   const [events,      setEvents]      = useState([]);
   const [pastEvents,  setPastEvents]  = useState([]);
   const [loading,     setLoading]     = useState(true);
@@ -280,7 +286,7 @@ export default function CancioneroEvents() {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5">
         {loading ? (
           <div className="flex justify-center py-16">
             <Loader2 size={32} className="text-yellow-400 animate-spin" />

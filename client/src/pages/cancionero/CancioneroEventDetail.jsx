@@ -6,6 +6,7 @@ import {
   FileText, ListMusic,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
+import useVolumeKeys from '../../hooks/useVolumeKeys';
 
 // ─── Abreviaciones de sección ─────────────────────────────────────────────────
 const SECTION_ABBR = {
@@ -266,7 +267,12 @@ function EventEditModal({ event, occurrenceDate, onClose, onSaved }) {
   const [loadedTplMsg,     setLoadedTplMsg]     = useState('');
   const [dragOver,         setDragOver]         = useState(null); // índice sobre el que se hace hover
   const dragIndexRef = useRef(null);
-  const searchRef = useRef(null);
+  const searchRef    = useRef(null);
+  const scrollRef    = useRef(null);
+  useVolumeKeys(
+    () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
+    () => scrollRef.current?.scrollBy({ top:  150, behavior: 'smooth' }),
+  );
 
   const openTemplatePicker = async () => {
     try {
@@ -953,7 +959,7 @@ export default function CancioneroEventDetail() {
       </header>
 
       {/* Cuerpo */}
-      <div className="flex-1 overflow-y-auto px-4 py-5 max-w-2xl mx-auto w-full space-y-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 max-w-2xl mx-auto w-full space-y-5">
 
         {/* Info del evento */}
         {isAdmin && !event?.is_published && (
