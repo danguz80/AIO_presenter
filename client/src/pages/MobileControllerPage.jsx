@@ -232,7 +232,9 @@ export default function MobileControllerPage() {
       const last  = new Date(y, m + 1, 0).getDate();
       const start = `${y}-${pad(m + 1)}-01`;
       const end   = `${y}-${pad(m + 1)}-${pad(last)}`;
-      const res   = await fetch(`${getApiBase()}/api/events?start=${start}&end=${end}`);
+      const token = localStorage.getItem('aio_sync_token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res   = await fetch(`${getApiBase()}/api/events?start=${start}&end=${end}`, { headers });
       if (res.ok) setEvents(await res.json());
       else console.error('[Events] HTTP', res.status, await res.text().catch(() => ''));
     } catch (err) { console.error('[Events] fetch error:', err?.message || err); }
