@@ -255,6 +255,8 @@ export default function LivePreview() {
               }}>
                 <OutputRenderer
                   cfg={outputCfg}
+                  containerWidth={res.width}
+                  containerHeight={res.height}
                   slideData={liveState.slideData}
                   isBlank={liveState.isBlank}
                   background={liveState.background}
