@@ -446,11 +446,14 @@ export default function MobileControllerPage() {
   }, [eventDetail?.id, eventDetail?.songs?.length]); // eslint-disable-line
 
   // Sincronizar diapo activa cuando el servidor navega (flechas prev/next)
+  // Si está en negro, limpiar la selección
   useEffect(() => {
-    if (slideData?.type === 'song' && slideData.slideId) {
+    if (isBlank) {
+      setActiveSongSlideId(null);
+    } else if (slideData?.type === 'song' && slideData.slideId) {
       setActiveSongSlideId(slideData.slideId);
     }
-  }, [slideData]);
+  }, [slideData, isBlank]);
 
   // Auto-scroll a la diapo activa cuando cambia (centrada dentro del panel)
   useEffect(() => {
@@ -495,10 +498,7 @@ export default function MobileControllerPage() {
   const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
   const handleNext  = () => trigger(() => actions.navigate('next'), 'next');
 
-  const handleBlank = () => {
-    if (!isBlank) setActiveSongSlideId(null); // al blanquear, deseleccionar diapositiva activa
-    trigger(() => actions.toggleBlank(!isBlank), 'blank');
-  };
+  const handleBlank = () => trigger(() => actions.toggleBlank(!isBlank), 'blank');
 
   // Swipe + tap: tap izquierdo = anterior, tap derecho = siguiente
   const onTouchStart = (e) => {
