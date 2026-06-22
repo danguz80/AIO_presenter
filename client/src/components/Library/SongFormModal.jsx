@@ -1,6 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { usePresenterOptional } from '../../context/usePresenter';
-import { X, Trash2, Tag, Plus } from 'lucide-react';
+import { X, Trash2, Tag, Plus, Music2 } from 'lucide-react';
 import api from '../../hooks/useApi';
 import { getLabelColor } from '../../utils/labelColors';
 import { buildScaleChords } from '../../utils/chordUtils';
@@ -29,6 +29,8 @@ function slidesToText(slides) {
 
 // Regex para detectar si una cadena es símbolo de acorde musical (A, Am, G#m, F#, etc.)
 const CHORD_SYMBOL_RE = /^[A-G][#b]?(?:m|M|maj|min|dim|aug|sus[24]?|add\d*|dom|alt)?[0-9]*(?:b\d+|#\d+)*(?:\/[A-G][#b]?)?$/;
+// Versión case-insensitive para el modo acordes (acepta Cm y cm por igual)
+const CHORD_MODE_RE   = /^[A-Ga-g][#b]?(?:m|M|maj|min|dim|aug|sus[24]?|add\d*|dom|alt)?[0-9]*(?:b\d+|#\d+)*(?:\/[A-Ga-g][#b]?)?$/
 
 /**
  * Convierte líneas de sección con corchetes ([Verso], [Coro], etc.)
@@ -169,6 +171,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const savedCursorPos  = useRef(null);
   const [cursorPos,     setCursorPos]    = useState(0);
   const [keyPickerOpen, setKeyPickerOpen] = useState(false);
+  const [chordMode,     setChordMode]     = useState(false);
 
   // Clave activa: el último marcador {key:X} que aparece antes del cursor en el texto
   const activeKey = useMemo(() => {
@@ -505,11 +508,25 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
           {/* Editor de letra */}
           <div className="px-4 sm:px-6 pt-2 pb-6 flex flex-col gap-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs text-zinc-400">
+                <label className="text-xs text-zinc-400 flex items-center gap-2">
                   Letra
                   {songKey && (
-                    <span className="ml-2 text-accent font-semibold">{songKey}</span>
+                    <span className="text-accent font-semibold">{songKey}</span>
                   )}
+                  {/* Botón modo acordes */}
+                  <button
+                    type="button"
+                    onClick={() => setChordMode(v => !v)}
+                    title="Modo acordes: cada palabra detectada como acorde se envuelve en [] automáticamente al presionar Espacio o Enter"
+                    className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                      chordMode
+                        ? 'bg-accent/20 border-accent/50 text-accent'
+                        : 'bg-surface-700 border-surface-600 text-zinc-400 hover:text-accent hover:border-accent/40'
+                    }`}
+                  >
+                    <Music2 size={10} />
+                    {chordMode ? 'Acordes ON' : 'Modo acordes'}
+                  </button>
                 </label>
                 <span className="text-xs text-zinc-600 hidden sm:inline">
                   Línea en blanco = nueva diapositiva.{' '}
@@ -532,6 +549,32 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 onClick={() => setCursorPos(textareaRef.current?.selectionStart ?? 0)}
                 onKeyUp={() => setCursorPos(textareaRef.current?.selectionStart ?? 0)}
                 onKeyDown={e => {
+                  // Modo acordes: Space o Enter envuelve la última palabra en [] si es un acorde
+                  if (chordMode && (e.key === ' ' || e.key === 'Enter')) {
+                    const ta = textareaRef.current;
+                    const pos = ta.selectionStart;
+                    const textBefore = body.slice(0, pos);
+                    const wordMatch  = textBefore.match(/(\S+)$/);
+                    if (wordMatch) {
+                      const word = wordMatch[1];
+                      if (!word.startsWith('[') && !word.startsWith('{') && CHORD_MODE_RE.test(word)) {
+                        e.preventDefault();
+                        const wordStart = pos - word.length;
+                        const suffix    = e.key === 'Enter' ? '\n' : ' ';
+                        const wrapped   = `[${word}]${suffix}`;
+                        const newBody   = body.slice(0, wordStart) + wrapped + body.slice(pos);
+                        const newPos    = wordStart + wrapped.length;
+                        setBody(newBody);
+                        setCursorPos(newPos);
+                        savedCursorPos.current = newPos;
+                        requestAnimationFrame(() => {
+                          if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(newPos, newPos); }
+                        });
+                        return;
+                      }
+                    }
+                  }
+                  // Tab → navegación de sílabas
                   if (e.key !== 'Tab') return;
                   e.preventDefault();
                   const ta = textareaRef.current;
