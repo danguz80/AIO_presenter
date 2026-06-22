@@ -152,6 +152,29 @@ function getOrgState(orgId) {
   return orgStates.get(orgId);
 }
 
+async function refreshOrgFromDB(orgId) {
+  try {
+    const { rows } = await pool.query(
+      "SELECT key, value FROM app_settings WHERE key LIKE $1",
+      [`${orgId}:%`]
+    );
+    const s = getOrgState(orgId);
+    for (const row of rows) {
+      const settingKey = row.key.slice(row.key.indexOf(':') + 1);
+      if (settingKey === 'stageConfig')      s.stageConfig      = { ...s.stageConfig,      ...row.value };
+      if (settingKey === 'stageTemplates')   s.stageTemplates   = Array.isArray(row.value) ? row.value : [];
+      if (settingKey === 'outputConfig')     s.outputConfig     = { ...s.outputConfig,     ...row.value };
+      if (settingKey === 'outputTemplates')  s.outputTemplates  = Array.isArray(row.value) ? row.value : [];
+      if (settingKey === 'virtualConfig')    s.virtualConfig    = { ...s.virtualConfig,    ...row.value };
+      if (settingKey === 'virtualTemplates') s.virtualTemplates = Array.isArray(row.value) ? row.value : [];
+      if (settingKey === 'displayConfig')    s.displayConfig    = { ...s.displayConfig,    ...row.value };
+      if (settingKey === 'appTheme')         s.appTheme = typeof row.value === 'string' ? row.value : (row.value?.theme ?? 'oscuro');
+    }
+  } catch (e) {
+    console.error(`[Settings] Error refrescando org ${orgId} desde DB:`, e.message);
+  }
+}
+
 async function saveOrgSetting(orgId, key, value) {
   try {
     await pool.query(
@@ -440,10 +463,13 @@ function getConnectedUsers(orgId) {
   return users;
 }
 
-io.on('connection', (socket) => {
+io.on('connection', async (socket) => {
   const orgId = socket.orgId;
   socket.join(`org:${orgId}`);
   console.log(`[Socket] Org ${orgId} — cliente conectado: ${socket.id}`);
+
+  // Refrescar settings desde DB para capturar cambios hechos desde otras instancias
+  await refreshOrgFromDB(orgId);
 
   const s = getOrgState(orgId);
 
