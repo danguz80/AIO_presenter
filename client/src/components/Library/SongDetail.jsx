@@ -65,17 +65,24 @@ export default function SongDetail() {
 
   // ── Tracking slides vistos para auto-marcar ──────────────────────────────
   const seenSlideIds = useRef(new Set());
-  // Medir el ancho del grid para escalar los thumbnails igual que el proyector
-  const gridRef   = useRef(null);
+  // Medir el ancho del grid — callback ref: lee el tamaño síncronamente al montar
+  // y observa cambios futuros. Evita el problema del ResizeObserver con deps=[]
+  // donde el contenedor aún no tiene ancho al primer render.
+  const gridRoRef = useRef(null);
   const [gridWidth, setGridWidth] = useState(0);
-  useEffect(() => {
-    if (!gridRef.current) return;
+  const gridRef = useCallback((node) => {
+    if (gridRoRef.current) { gridRoRef.current.disconnect(); gridRoRef.current = null; }
+    if (!node) return;
+    // Leer tamaño actual de inmediato (síncrono)
+    const rect = node.getBoundingClientRect();
+    if (rect.width > 0) setGridWidth(rect.width);
+    // Observar cambios futuros (redimensión del panel, zoom, etc.)
     const ro = new ResizeObserver(entries => {
       const w = entries[0].contentRect.width;
       if (w > 0) setGridWidth(w);
     });
-    ro.observe(gridRef.current);
-    return () => ro.disconnect();
+    ro.observe(node);
+    gridRoRef.current = ro;
   }, []);
   // Resetear cuando cambia la canción (nueva canción = ningún slide seleccionado)
   useEffect(() => {
