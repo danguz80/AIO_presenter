@@ -631,8 +631,8 @@ export default function SongDetail() {
                     )}
                   </div>
                   {/* Banner inferior */}
-                  <div className="absolute bottom-0 inset-x-0 z-10 px-1 py-0.5 bg-zinc-700">
-                    <p className="text-[8px] font-semibold text-center truncate text-zinc-300">Título</p>
+                  <div className="absolute bottom-0 inset-x-0 z-10 px-1 py-1 bg-zinc-700">
+                    <p className="text-[11px] font-semibold text-center truncate text-zinc-300">Título</p>
                   </div>
                 </div>
               );
@@ -778,8 +778,8 @@ export default function SongDetail() {
 
                   {/* Banner de etiqueta */}
                   {slide.label && (
-                    <div className="absolute bottom-0 inset-x-0 z-10 px-1 py-0.5" style={{ backgroundColor: labelColor }}>
-                      <p className="text-[8px] font-semibold text-center truncate text-white">
+                    <div className="absolute bottom-0 inset-x-0 z-10 px-1 py-1" style={{ backgroundColor: labelColor }}>
+                      <p className="text-[11px] font-semibold text-center truncate text-white">
                         {slide.label}
                       </p>
                     </div>
