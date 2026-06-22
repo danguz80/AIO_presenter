@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
@@ -558,6 +558,8 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
             }
 
             // ── Línea con acordes ─────────────────────────────────────
+            // Si TODOS los segmentos son acorde sin letra = línea instrumental → separadores —
+            const isChordOnly = line.every(seg => !seg.text || !seg.text.trim());
             return (
               <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.15 }}>
                 {line.map((seg, si) => {
@@ -566,26 +568,40 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
                     ? { minWidth: `${(seg.chord.length + 2) * 0.30}em` }
                     : {};
                   return (
-                    <span key={si} className="inline-flex flex-col items-start" style={outerStyle}>
-                      <span
-                        className="font-bold font-mono"
-                        style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: chordsColor }}
-                      >
-                        {seg.chord || ''}
+                    <Fragment key={si}>
+                      <span className="inline-flex flex-col items-start" style={outerStyle}>
+                        <span
+                          className="font-bold font-mono"
+                          style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: chordsColor }}
+                        >
+                          {seg.chord || ''}
+                        </span>
+                        <span
+                          style={{
+                            color: lyricsColor,
+                            textShadow: stroke,
+                            lineHeight: 1.15,
+                            whiteSpace: 'pre',
+                          }}
+                        >
+                          {hasRealText
+                            ? seg.text.replace(/ /g, '\u00a0')
+                            : seg.chord ? '\u00a0' : ''}
+                        </span>
                       </span>
-                      <span
-                        style={{
-                          color: lyricsColor,
-                          textShadow: stroke,
-                          lineHeight: 1.15,
-                          whiteSpace: 'pre',
-                        }}
-                      >
-                        {hasRealText
-                          ? seg.text.replace(/ /g, '\u00a0')
-                          : seg.chord ? '\u00a0' : ''}
-                      </span>
-                    </span>
+                      {/* Guión separador entre acordes en líneas instrumentales */}
+                      {isChordOnly && seg.chord && si < line.length - 1 && (
+                        <span className="inline-flex flex-col items-center" style={{ padding: '0 0.1em' }}>
+                          <span
+                            className="font-mono"
+                            style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: chordsColor, opacity: 0.45 }}
+                          >
+                            —
+                          </span>
+                          <span style={{ lineHeight: 1.15, color: 'transparent' }}>&nbsp;</span>
+                        </span>
+                      )}
+                    </Fragment>
                   );
                 })}
                 {inlineComment}
