@@ -563,7 +563,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
                 {line.map((seg, si) => {
                   const hasRealText = seg.text && seg.text.trim().length > 0;
                   const outerStyle = (!hasRealText && seg.chord)
-                    ? { minWidth: `${(seg.chord.length + 2) * 0.22}em` }
+                    ? { minWidth: `${(seg.chord.length + 2) * 0.30}em` }
                     : {};
                   return (
                     <span key={si} className="inline-flex flex-col items-start" style={outerStyle}>

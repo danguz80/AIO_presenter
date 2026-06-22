@@ -592,8 +592,10 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                         if (curPos <= anchor) { chordAnchorRef.current = null; return; }
                         const candidate  = curVal.slice(anchor, curPos);
                         if (candidate && CHORD_MODE_RE.test(candidate)) {
-                          // Capitalizar la nota raíz (primera letra) → cmaj7 → Cmaj7
-                          const normalized = candidate[0].toUpperCase() + candidate.slice(1);
+                          // Capitalizar nota raíz y nota de bajo (slash chord): g/b → G/B
+                          const normalized = candidate
+                            .replace(/^[a-g]/, c => c.toUpperCase())
+                            .replace(/\/([a-g])/, (_, c) => '/' + c.toUpperCase());
                           const newBody = curVal.slice(0, anchor) + `[${normalized}]` + curVal.slice(curPos);
                           const newPos  = anchor + normalized.length + 2; // +2 por []
                           setBody(newBody);
