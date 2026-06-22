@@ -495,7 +495,10 @@ export default function MobileControllerPage() {
   const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
   const handleNext  = () => trigger(() => actions.navigate('next'), 'next');
 
-  const handleBlank = () => trigger(() => actions.toggleBlank(!isBlank), 'blank');
+  const handleBlank = () => {
+    if (!isBlank) setActiveSongSlideId(null); // al blanquear, deseleccionar diapositiva activa
+    trigger(() => actions.toggleBlank(!isBlank), 'blank');
+  };
 
   // Swipe + tap: tap izquierdo = anterior, tap derecho = siguiente
   const onTouchStart = (e) => {
