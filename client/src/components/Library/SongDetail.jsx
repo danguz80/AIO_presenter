@@ -5,6 +5,7 @@ import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
 import { stripChords, stripComments, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 import { getLabelColor } from '../../utils/labelColors';
+import OutputRenderer from '../shared/OutputRenderer';
 
 export default function SongDetail() {
   const { state, actions } = usePresenter();
@@ -12,6 +13,7 @@ export default function SongDetail() {
 
   // Config del proyector para reflejar en thumbnails
   const outputCfg      = state.outputConfig ?? {};
+  const displayCfg     = state.displayConfig ?? {};
   const thumbColor     = outputCfg.lyricsColor  ?? '#ffffff';
   const thumbFontFamily = resolveFont(outputCfg.fontFamily ?? 'sans');
   const thumbBold      = outputCfg.fontBold  ?? false;
@@ -63,7 +65,18 @@ export default function SongDetail() {
 
   // ── Tracking slides vistos para auto-marcar ──────────────────────────────
   const seenSlideIds = useRef(new Set());
-
+  // Medir el ancho del grid para escalar los thumbnails igual que el proyector
+  const gridRef   = useRef(null);
+  const [gridWidth, setGridWidth] = useState(0);
+  useEffect(() => {
+    if (!gridRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0].contentRect.width;
+      if (w > 0) setGridWidth(w);
+    });
+    ro.observe(gridRef.current);
+    return () => ro.disconnect();
+  }, []);
   // Resetear cuando cambia la canción (nueva canción = ningún slide seleccionado)
   useEffect(() => {
     setLocalSelectedKey(null);
@@ -407,6 +420,13 @@ export default function SongDetail() {
     liveState.slideData?.type    === 'song'    &&
     !liveState.isBlank;
 
+  // Escala de thumbnails: ancho del grid / resolución de salida
+  const resW       = displayCfg.principalResolution?.width  ?? 1920;
+  const resH       = displayCfg.principalResolution?.height ?? 1080;
+  const GAP        = 8; // gap-2 = 8px
+  const thumbW     = gridWidth > 0 ? (gridWidth - GAP * (thumbCols - 1)) / thumbCols : 0;
+  const thumbScale = thumbW > 0 ? thumbW / resW : 0;
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Cabecera de la canción */}
@@ -531,6 +551,7 @@ export default function SongDetail() {
           <p className="text-zinc-600 text-sm p-4">Esta canción no tiene secciones.</p>
         ) : viewMode === 'grid' ? (
           <div
+            ref={gridRef}
             className="grid gap-2"
             style={{ gridTemplateColumns: `repeat(${thumbCols}, minmax(0, 1fr))` }}
             onDragOver={e => { if (dragLabel) e.preventDefault(); }}
@@ -704,25 +725,37 @@ export default function SongDetail() {
                     <span className="absolute top-1 right-1 z-10 text-[8px] text-blue-300 leading-none drop-shadow" title={slideBg.fileName}>▶</span>
                   )}
 
-                  {/* Texto del slide centrado — línea por línea como el proyector */}
-                  <div className="absolute inset-0 flex items-center justify-center px-2 pb-4 z-10">
-                    <div className="text-center overflow-hidden w-full"
-                         style={{
-                           fontFamily: thumbFontFamily,
-                           fontWeight: thumbBold   ? 'bold'   : '600',
-                           fontStyle:  thumbItalic ? 'italic' : 'normal',
-                           lineHeight: 1.4,
-                         }}>
-                      {visibleLines.map((line, li) => {
-                        if (!line.trim()) return <div key={li} style={{ height: '0.25em' }} />;
-                        return (
-                          <div key={li} style={{ fontSize: thumbFontSize, color: thumbColor }}>
-                            {line.trim()}
-                          </div>
-                        );
-                      })}
+                  {/* Miniatura exacta de la salida — scaled igual que el proyector */}
+                  {thumbScale > 0 && (
+                    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 5 }}>
+                      <div style={{
+                        position:        'absolute',
+                        top:             0,
+                        left:            0,
+                        width:           `${resW}px`,
+                        height:          `${resH}px`,
+                        transform:       `scale(${thumbScale})`,
+                        transformOrigin: 'top left',
+                      }}>
+                        <OutputRenderer
+                          cfg={outputCfg}
+                          slideData={{
+                            type:      'song',
+                            slideId:   slide.id,
+                            songId:    selectedSong.id,
+                            songTitle: selectedSong.title,
+                            label:     slide.label,
+                            content:   slide.content,
+                          }}
+                          isBlank={false}
+                          background={liveState.background ?? { type: 'color', color: '#000000' }}
+                          backgroundMedia={slide.slide_background?.mediaType === 'image' ? slide.slide_background : null}
+                          slideIndex={index}
+                          totalSlides={orderedSlides.length}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Banner de etiqueta */}
                   {slide.label && (
