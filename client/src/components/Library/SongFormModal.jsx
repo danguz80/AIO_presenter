@@ -172,6 +172,18 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const [cursorPos,     setCursorPos]    = useState(0);
   const [keyPickerOpen, setKeyPickerOpen] = useState(false);
   const [chordMode,     setChordMode]     = useState(false);
+  // Refs para el modo acorde por debounce
+  const chordAnchorRef = useRef(null); // posición de inicio del acorde en curso
+  const chordTimerRef  = useRef(null); // timer de 1s para envolver el acorde
+
+  // Limpiar timer al desmontar o desactivar modo acorde
+  useEffect(() => {
+    if (!chordMode) {
+      clearTimeout(chordTimerRef.current);
+      chordAnchorRef.current = null;
+    }
+    return () => clearTimeout(chordTimerRef.current);
+  }, [chordMode]);
 
   // Clave activa: el último marcador {key:X} que aparece antes del cursor en el texto
   const activeKey = useMemo(() => {
@@ -546,34 +558,51 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                   savedCursorPos.current = p;
                   setCursorPos(p);
                 }}
-                onClick={() => setCursorPos(textareaRef.current?.selectionStart ?? 0)}
+                onClick={() => {
+                  setCursorPos(textareaRef.current?.selectionStart ?? 0);
+                  // Clic del ratón mueve el cursor: reiniciar anchor del acorde
+                  if (chordMode) {
+                    clearTimeout(chordTimerRef.current);
+                    chordAnchorRef.current = null;
+                  }
+                }}
                 onKeyUp={() => setCursorPos(textareaRef.current?.selectionStart ?? 0)}
                 onKeyDown={e => {
-                  // Modo acordes: Space o Enter envuelve la última palabra en [] si es un acorde
-                  if (chordMode && (e.key === ' ' || e.key === 'Enter')) {
-                    const ta = textareaRef.current;
-                    const pos = ta.selectionStart;
-                    // Usar ta.value (DOM) en lugar del estado body para evitar closures obsoletos
-                    const currentVal = ta.value;
-                    const textBefore = currentVal.slice(0, pos);
-                    const wordMatch  = textBefore.match(/(\S+)$/);
-                    if (wordMatch) {
-                      const word = wordMatch[1];
-                      if (!word.startsWith('[') && !word.startsWith('{') && CHORD_MODE_RE.test(word)) {
-                        e.preventDefault();
-                        const wordStart = pos - word.length;
-                        const suffix    = e.key === 'Enter' ? '\n' : ' ';
-                        const wrapped   = `[${word}]${suffix}`;
-                        const newBody   = currentVal.slice(0, wordStart) + wrapped + currentVal.slice(pos);
-                        const newPos    = wordStart + wrapped.length;
-                        setBody(newBody);
-                        setCursorPos(newPos);
-                        savedCursorPos.current = newPos;
-                        requestAnimationFrame(() => {
-                          if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(newPos, newPos); }
-                        });
-                        return;
+                  if (chordMode) {
+                    const ta  = textareaRef.current;
+                    const NAV = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'];
+
+                    if (NAV.includes(e.key) || e.ctrlKey || e.metaKey) {
+                      // Navegación: reiniciar anchor
+                      clearTimeout(chordTimerRef.current);
+                      chordAnchorRef.current = null;
+                    } else if (e.key !== 'Tab') {
+                      // Cualquier tecla de escritura: fijar anchor al inicio si aún no está fijado
+                      if (chordAnchorRef.current === null) {
+                        chordAnchorRef.current = ta.selectionStart;
                       }
+                      // Reiniciar debounce
+                      clearTimeout(chordTimerRef.current);
+                      chordTimerRef.current = setTimeout(() => {
+                        const el = textareaRef.current;
+                        if (!el || chordAnchorRef.current === null) return;
+                        const anchor     = chordAnchorRef.current;
+                        const curPos     = el.selectionStart;
+                        const curVal     = el.value;
+                        if (curPos <= anchor) { chordAnchorRef.current = null; return; }
+                        const candidate  = curVal.slice(anchor, curPos);
+                        if (candidate && CHORD_MODE_RE.test(candidate)) {
+                          const newBody = curVal.slice(0, anchor) + `[${candidate}]` + curVal.slice(curPos);
+                          const newPos  = anchor + candidate.length + 2; // +2 por []
+                          setBody(newBody);
+                          setCursorPos(newPos);
+                          savedCursorPos.current = newPos;
+                          requestAnimationFrame(() => {
+                            if (el) { el.focus({ preventScroll: true }); el.setSelectionRange(newPos, newPos); }
+                          });
+                        }
+                        chordAnchorRef.current = null;
+                      }, 1000);
                     }
                   }
                   // Tab → navegación de sílabas
