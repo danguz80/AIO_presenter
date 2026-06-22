@@ -474,6 +474,15 @@ export default function MobileControllerPage() {
     container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
   }, [activeSongSlideId]);
 
+  // Al abrir una canción desde un evento, ir al tope del grid
+  useEffect(() => {
+    if (songOriginTab !== 'events' || !songDetail) return;
+    const t = setTimeout(() => {
+      slideGridRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [songDetail?.id]); // eslint-disable-line
+
   // Cargar versiones de Biblia al abrir el panel acordeón
   useEffect(() => { if (openPanels.has('biblia') && !bibleVersions.length) loadBibleVersions(); }, [openPanels, bibleVersions.length, loadBibleVersions]);
 
