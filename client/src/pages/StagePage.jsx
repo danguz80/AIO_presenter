@@ -594,7 +594,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
                         <span className="inline-flex flex-col items-center" style={{ padding: '0 0.1em' }}>
                           <span
                             className="font-mono"
-                            style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: chordsColor, opacity: 0.45 }}
+                            style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: '#ffffff', opacity: 0.45 }}
                           >
                             —
                           </span>
