@@ -203,12 +203,21 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
                 : 3.5;
     let fontSize;
     if (cw && ch) {
-      // Modo contenedor fijo: calcular px puros para que transform:scale() escale el texto igual que el output real
-      const vwPct = lineCount <= 3 ? 5 : lineCount <= 5 ? 4 : lineCount <= 7 ? 3.2 : lineCount <= 10 ? 2.6 : 2;
+      // Modo contenedor fijo: replicar exactamente clamp(Xrem, min(Xvw, Xvh), Xrem)
+      // usando las dimensiones del contenedor en lugar de viewport.
+      // 1rem = 16px → mismos topes que el CSS original.
       if (cfg.fontSize && cfg.fontSize !== 'auto') {
         fontSize = `${Math.min(Number(cfg.fontSize), ch * maxVh / 100)}px`;
       } else {
-        fontSize = `${Math.min(cw * vwPct / 100, ch * maxVh / 100)}px`;
+        // [vwPct, minPx (rem→px), maxPx (rem→px)]
+        const [vwPct, minPx, maxPx] =
+          lineCount <= 3  ? [5,   2*16,   4.5*16] //  clamp(2rem, min(5vw,vh), 4.5rem)
+        : lineCount <= 5  ? [4,   1.6*16, 3.5*16] //  clamp(1.6rem,min(4vw,vh),3.5rem)
+        : lineCount <= 7  ? [3.2, 1.3*16, 2.8*16] //  clamp(1.3rem,min(3.2vw,vh),2.8rem)
+        : lineCount <= 10 ? [2.6, 1.1*16, 2.2*16] //  clamp(1.1rem,min(2.6vw,vh),2.2rem)
+        :                   [2,   0.9*16, 1.8*16]; //  clamp(0.9rem,min(2vw,vh),1.8rem)
+        const pref = Math.min(cw * vwPct / 100, ch * maxVh / 100);
+        fontSize = `${Math.max(minPx, Math.min(maxPx, pref))}px`;
       }
     } else if (cfg.fontSize && cfg.fontSize !== 'auto') {
       // Respetar tamaño fijo del usuario pero caparlo en pantallas bajas (landscape móvil)
@@ -302,12 +311,18 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
                      : 4;
     let fontSize;
     if (cw && ch) {
-      // Modo contenedor fijo: calcular px puros
-      const bibleVwPct = lineCount <= 3 ? 4.5 : lineCount <= 5 ? 3.5 : lineCount <= 8 ? 2.5 : 1.8;
+      // Modo contenedor fijo: replicar clamp(Xrem, min(Xvw, Xvh), Xrem) con dims del contenedor.
       if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
         fontSize = `${Math.min(Number(cfg.bibleFontSize), ch * bibleMaxVh / 100)}px`;
       } else {
-        fontSize = `${Math.min(cw * bibleVwPct / 100, ch * bibleMaxVh / 100)}px`;
+        // [vwPct, minPx, maxPx] replicando clamp CSS
+        const [bVwPct, bMinPx, bMaxPx] =
+          lineCount <= 3 ? [4.5, 1.8*16, 4*16]    // clamp(1.8rem,min(4.5vw,vh),4rem)
+        : lineCount <= 5 ? [3.5, 1.4*16, 3*16]    // clamp(1.4rem,min(3.5vw,vh),3rem)
+        : lineCount <= 8 ? [2.5, 1*16,   2.2*16]  // clamp(1rem,min(2.5vw,vh),2.2rem)
+        :                  [1.8, 0.75*16,1.6*16];  // clamp(0.75rem,min(1.8vw,vh),1.6rem)
+        const bPref = Math.min(cw * bVwPct / 100, ch * bibleMaxVh / 100);
+        fontSize = `${Math.max(bMinPx, Math.min(bMaxPx, bPref))}px`;
       }
     } else if (useTpl && cfg.bibleFontSize && cfg.bibleFontSize !== 'auto') {
       fontSize = `min(${cfg.bibleFontSize}px, ${bibleMaxVh}vh)`;
