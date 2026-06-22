@@ -219,14 +219,19 @@ export default function MobileControllerPage() {
   const [eventSepLabel,      setEventSepLabel]      = useState('');
   const [eventSaving,        setEventSaving]        = useState(false);
   const [confirmDeleteId,    setConfirmDeleteId]    = useState(null);
+  const today0 = new Date();
+  const [eventsYear,  setEventsYear]  = useState(today0.getFullYear());
+  const [eventsMonth, setEventsMonth] = useState(today0.getMonth()); // 0-indexed
 
-  const loadEvents = useCallback(async () => {
+  const MONTHS_ES_MOB = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  const loadEvents = useCallback(async (y, m) => {
     setEventsLoading(true);
     try {
-      const today = new Date();
-      // Desde el 1 del mes actual (no desde "hace 7 días") para no perder eventos del inicio del mes
-      const start = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-      const end   = new Date(today.getFullYear(), today.getMonth() + 3, 0).toISOString().split('T')[0];
+      const pad   = n => String(n).padStart(2, '0');
+      const last  = new Date(y, m + 1, 0).getDate();
+      const start = `${y}-${pad(m + 1)}-01`;
+      const end   = `${y}-${pad(m + 1)}-${pad(last)}`;
       const res   = await fetch(`${getApiBase()}/api/events?start=${start}&end=${end}`);
       if (res.ok) setEvents(await res.json());
       else console.error('[Events] HTTP', res.status, await res.text().catch(() => ''));
@@ -264,7 +269,7 @@ export default function MobileControllerPage() {
       if (res.ok) {
         if (isEdit) setEventDetail(prev => ({ ...prev, ...eventFormData }));
         setEventFormMode(null);
-        loadEvents();
+        loadEvents(eventsYear, eventsMonth);
       }
     } catch { /* noop */ }
     finally { setEventSaving(false); }
@@ -275,7 +280,7 @@ export default function MobileControllerPage() {
       await fetch(`${apiBase()}/api/events/${id}`, { method: 'DELETE', headers: authHeaders() });
       setConfirmDeleteId(null);
       setEventDetail(null);
-      loadEvents();
+      loadEvents(eventsYear, eventsMonth);
     } catch { /* noop */ }
   };
 
@@ -299,7 +304,7 @@ export default function MobileControllerPage() {
       if (res.ok) {
         setEventDetail(prev => ({ ...prev, songs: eventEditSongs }));
         setEventEditMode(false);
-        loadEvents();
+        loadEvents(eventsYear, eventsMonth);
         actions.setSchedule(eventEditSongs); // actualizar schedule en tiempo real
       }
     } catch { /* noop */ }
@@ -425,9 +430,8 @@ export default function MobileControllerPage() {
     return () => document.removeEventListener('fullscreenchange', handler);
   }, [liveView]);
 
-  // Cargar eventos al abrir esa tab
-  // Cargar eventos al abrir el panel acordeón
-  useEffect(() => { if (openPanels.has('eventos')) loadEvents(); }, [openPanels, loadEvents]);
+  // Cargar eventos al abrir el panel acordeón o cambiar de mes
+  useEffect(() => { if (openPanels.has('eventos')) loadEvents(eventsYear, eventsMonth); }, [openPanels, eventsYear, eventsMonth, loadEvents]); // eslint-disable-line
 
   // Cargar plays al abrir detalle de evento
   useEffect(() => {
@@ -1369,10 +1373,27 @@ export default function MobileControllerPage() {
         {/* ──── EVENTOS: lista ──── */}
         {!eventFormMode && !eventDetail && (
           <div className="flex flex-col flex-1 min-h-0">
-            <div className="px-4 pt-3 pb-2 shrink-0 border-b border-surface-700 flex items-center justify-between">
-              <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Próximos eventos</p>
-              <div className="flex items-center gap-2">
-                <button onPointerDown={loadEvents} className="text-zinc-500 text-xs">Actualizar</button>
+            <div className="px-4 pt-3 pb-2 shrink-0 border-b border-surface-700">
+              {/* Selector de mes */}
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onPointerDown={() => {
+                    if (eventsMonth === 0) { setEventsYear(y => y - 1); setEventsMonth(11); }
+                    else setEventsMonth(m => m - 1);
+                  }}
+                  className="p-1.5 rounded-lg active:bg-surface-700 text-zinc-400"
+                ><ChevronLeft size={15} /></button>
+                <span className="text-sm font-semibold text-zinc-200">{MONTHS_ES_MOB[eventsMonth]} {eventsYear}</span>
+                <button
+                  onPointerDown={() => {
+                    if (eventsMonth === 11) { setEventsYear(y => y + 1); setEventsMonth(0); }
+                    else setEventsMonth(m => m + 1);
+                  }}
+                  className="p-1.5 rounded-lg active:bg-surface-700 text-zinc-400"
+                ><ChevronRight size={15} /></button>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-zinc-500">Eventos del mes</p>
                 <button
                   onPointerDown={() => {
                     const today = new Date().toISOString().split('T')[0];
@@ -1399,7 +1420,7 @@ export default function MobileControllerPage() {
                 </div>
               )}
               {!eventsLoading && events.length === 0 && (
-                <p className="text-center text-zinc-600 text-sm pt-10">Sin eventos próximos</p>
+                <p className="text-center text-zinc-600 text-sm pt-10">Sin eventos este mes</p>
               )}
               {!eventsLoading && events.map(ev => (
                 <div
