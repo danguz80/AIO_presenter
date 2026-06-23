@@ -528,10 +528,33 @@ export default function MobileControllerPage() {
 
   // ── Navegación ──────────────────────────────────────────────────────────
   const trigger = (fn, dir) => { fn(); setFlash(dir); setTimeout(() => setFlash(null), 200); };
-  const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
-  const handleNext  = () => {
-    // Si estamos en la última diapo y hay siguiente canción en el programa → avanzar
+  const handlePrev  = () => {
     const slides = songDetail?.slides;
+    // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
+    // navegar localmente (enviar navigate haría que el servidor naviegue la canción anterior)
+    if (slides?.length && songDetail && slideData?.type === 'song' && slideData.songId && songDetail.id !== slideData.songId) {
+      const currentIdx = slides.findIndex(s => s.id === activeSongSlideId);
+      const newIdx = currentIdx <= 0 ? 0 : currentIdx - 1;
+      setFlash('prev'); setTimeout(() => setFlash(null), 200);
+      if (slides[newIdx]) sendSlide(songDetail, slides[newIdx], slides);
+      return;
+    }
+    trigger(() => actions.navigate('prev'), 'prev');
+  };
+  const handleNext  = () => {
+    const slides = songDetail?.slides;
+    // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
+    // navegar localmente en lugar de enviar navigate (evita proyectar slides de la canción anterior)
+    if (slides?.length && songDetail && slideData?.type === 'song' && slideData.songId && songDetail.id !== slideData.songId) {
+      const currentIdx = slides.findIndex(s => s.id === activeSongSlideId);
+      const newIdx = currentIdx < 0 ? 0 : currentIdx + 1;
+      if (newIdx < slides.length) {
+        setFlash('next'); setTimeout(() => setFlash(null), 200);
+        sendSlide(songDetail, slides[newIdx], slides);
+      }
+      return;
+    }
+    // Misma canción: lógica original con auto-avance al final del setlist
     const lastSlideId = slides?.[slides.length - 1]?.id;
     if (slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
       const currentIdx = schedule.findIndex(it => it.song_id === songDetail.id);
