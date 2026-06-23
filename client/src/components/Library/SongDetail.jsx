@@ -262,9 +262,10 @@ export default function SongDetail() {
       const currentSongId = selectedSong.id;
       const currentScheduleIdx = schedule.findIndex(s => s.song_id === currentSongId);
       if (currentScheduleIdx === -1) return;
-      // Buscar la siguiente entrada con song_id (saltando separadores)
+      // Buscar la siguiente entrada con song_id sin cruzar separadores de sección
       let nextSongItem = null;
       for (let i = currentScheduleIdx + 1; i < schedule.length; i++) {
+        if (schedule[i].item_type === 'separator') break; // No saltar a otra sección
         if (schedule[i].song_id) { nextSongItem = schedule[i]; break; }
       }
       if (!nextSongItem) return;

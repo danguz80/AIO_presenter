@@ -535,7 +535,13 @@ export default function MobileControllerPage() {
     const lastSlideId = slides?.[slides.length - 1]?.id;
     if (slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
       const currentIdx = schedule.findIndex(it => it.song_id === songDetail.id);
-      const nextItem   = currentIdx >= 0 ? schedule.slice(currentIdx + 1).find(it => it.song_id) : null;
+      let nextItem = null;
+      if (currentIdx >= 0) {
+        for (let i = currentIdx + 1; i < schedule.length; i++) {
+          if (schedule[i].item_type === 'separator') break; // No cruzar secciones
+          if (schedule[i].song_id) { nextItem = schedule[i]; break; }
+        }
+      }
       if (nextItem) {
         setFlash('next'); setTimeout(() => setFlash(null), 200);
         setLoadingSong(true);
