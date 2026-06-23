@@ -163,7 +163,7 @@ export default function SongLibrary() {
 
   const handleRowClick = async (song) => {
     if (selectedIds.size > 0) return; // en modo selección el click de fila no carga
-    await actions.loadSongDetail(song.id);
+    await actions.loadSongDetail(song.id, { broadcast: true });
   };
 
   const handleCheckbox = (e, song, idx) => {

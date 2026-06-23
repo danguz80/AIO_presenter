@@ -117,27 +117,42 @@ function isAuthenticated() {
   }
 }
 
+// Caché de sesión para evitar fetch repetido en cada navegación de ruta
+let _authCacheToken  = null;
+let _authCacheResult = null; // 'ok' | 'denied' | null
+
 // Guard de ruta: verifica JWT local y confirma con el servidor que el usuario sigue activo
 function RequireAuth({ children }) {
-  const [status, setStatus] = useState('checking'); // 'checking' | 'ok' | 'denied'
+  const [status, setStatus] = useState(() => {
+    const token = localStorage.getItem('aio_sync_token');
+    if (_authCacheToken && _authCacheToken === token && _authCacheResult) {
+      return _authCacheResult; // resultado cacheado → sin fetch, sin pantalla negra
+    }
+    return 'checking';
+  });
 
   useEffect(() => {
+    if (status !== 'checking') return; // ya resuelto desde caché
     if (!isAuthenticated()) { setStatus('denied'); return; }
     const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     const token = localStorage.getItem('aio_sync_token');
     fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => {
         if (!r.ok) throw new Error('no autorizado');
+        _authCacheToken  = token;
+        _authCacheResult = 'ok';
         setStatus('ok');
       })
       .catch(() => {
         localStorage.removeItem('aio_sync_token');
         localStorage.removeItem('aio_org_id');
+        _authCacheToken  = null;
+        _authCacheResult = null;
         setStatus('denied');
       });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (status === 'checking') return null; // sin flash — espera silenciosa
+  if (status === 'checking') return null; // solo en el primer login
   if (status === 'denied')   return <Navigate to="/" replace />;
   return children;
 }

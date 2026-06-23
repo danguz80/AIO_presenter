@@ -271,7 +271,7 @@ export default function SongDetail() {
       if (!nextSongItem) return;
       // Cargar la siguiente canción completa (con sus slides)
       try {
-        const nextSong = await actions.loadSongDetail(nextSongItem.song_id);
+        const nextSong = await actions.loadSongDetail(nextSongItem.song_id, { broadcast: true });
         if (!nextSong?.slides?.length) return;
         const firstSlide = nextSong.slides[0];
         const secondSlide = nextSong.slides[1] || null;

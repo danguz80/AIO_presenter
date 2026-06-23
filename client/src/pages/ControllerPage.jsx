@@ -1678,7 +1678,7 @@ function EventsPanel() {
                         <GripVertical size={12} />
                       </div>
                       <button
-                        onClick={() => actions.loadSongDetail(s.song_id)}
+                        onClick={() => actions.loadSongDetail(s.song_id, { broadcast: true })}
                         className="flex items-center gap-2 px-1.5 py-2 flex-1 min-w-0 hover:bg-accent/15 transition-colors text-left"
                       >
                         <span className="text-[11px] text-zinc-600 w-4 text-right shrink-0">{i + 1}</span>

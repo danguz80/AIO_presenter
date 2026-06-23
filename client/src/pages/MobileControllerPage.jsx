@@ -149,7 +149,7 @@ export default function MobileControllerPage() {
       // Sin auto-dismiss — el usuario lo cierra manualmente
     }
   }, [internalMessages]);
-  const { liveState, connected, songs, schedule, reservasMode, stageConfig, eventPlays, eventPlaysContext } = state;
+  const { liveState, connected, songs, schedule, reservasMode, stageConfig, eventPlays, eventPlaysContext, remoteSongSelected } = state;
   const { slideData, nextSlideData, isBlank } = liveState;
   const navigate = useNavigate();
 
@@ -610,6 +610,13 @@ export default function MobileControllerPage() {
     try { setSongDetail(await actions.loadSongDetail(id)); }
     finally { setLoadingSong(false); }
   };
+
+  // PC seleccionó una canción → el móvil la abre y cambia al tab de canciones
+  useEffect(() => {
+    if (!remoteSongSelected?.songId) return;
+    openSong(remoteSongSelected.songId);
+    setTab('songs');
+  }, [remoteSongSelected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // showTitle=false (default): el clic directo NO muestra diapositiva de título
   // showTitle=true: el auto-avance SÍ muestra diapositiva de título

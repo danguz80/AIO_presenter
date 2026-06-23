@@ -786,6 +786,11 @@ io.on('connection', async (socket) => {
     s.songKeyOffsets[songId] = offset;
     emitToOrg('song:keyOffset', { songId, offset });
   });
+
+  // PC seleccionó una canción → notificar a los demás (móvil)
+  socket.on('song:selected', ({ songId, ts }) => {
+    socket.broadcast.to(`org:${orgId}`).emit('song:selected', { songId, ts });
+  });
 });
 
 // ─── MIDDLEWARES ─────────────────────────────────────────────────────────────

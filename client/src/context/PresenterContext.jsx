@@ -194,6 +194,9 @@ const initialState = {
   // Bloquea la auto-sincronización cuando el usuario eligió una canción explícitamente
   syncLocked: false,
 
+  // Canción seleccionada remotamente (PC → móvil)
+  remoteSongSelected: null, // { songId, ts }
+
   // Socket
   connected: false,
   // Mensajería
@@ -265,6 +268,8 @@ function reducer(state, action) {
     case 'SET_PENDING_SONG':
       // La canción se sincronizó desde el móvil → desbloquear para seguir sincronizando
       return { ...state, selectedSong: action.payload.song, selectedSlide: action.payload.slide, pendingSongId: null, pendingSlideId: null, syncLocked: false };
+    case 'SET_REMOTE_SONG_SELECTED':
+      return { ...state, remoteSongSelected: action.payload };
     case 'SET_CONNECTED':
       return { ...state, connected: action.payload };
     case 'SET_EVENT_PLAYS':
@@ -372,6 +377,7 @@ export function PresenterProvider({ children }) {
     socket.on('msg:internal:receive',(data) => dispatch({ type: 'ADD_INTERNAL_MSG',   payload: data }));
     socket.on('msg:screen',          (data) => dispatch({ type: 'SET_SCREEN_MSG',     payload: data }));
     socket.on('msg:timer',           (data) => dispatch({ type: 'SET_TIMER_STATE',    payload: data }));
+    socket.on('song:selected',         ({ songId, ts }) => dispatch({ type: 'SET_REMOTE_SONG_SELECTED', payload: { songId, ts } }));
     return () => socket.disconnect();
   }, []);
 
@@ -445,9 +451,12 @@ export function PresenterProvider({ children }) {
 
   // ─── Acciones ────────────────────────────────────────────────────────────
   const actions = {
-    loadSongDetail: async (id) => {
+    loadSongDetail: async (id, { broadcast = false } = {}) => {
       const res = await api.get(`/songs/${id}`);
       dispatch({ type: 'SET_SELECTED_SONG', payload: res.data });
+      if (broadcast) {
+        socketRef.current?.emit('song:selected', { songId: id, ts: Date.now() });
+      }
       return res.data;
     },
 
