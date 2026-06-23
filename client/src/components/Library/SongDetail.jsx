@@ -436,7 +436,7 @@ export default function SongDetail() {
 
   // Sin boosting: pasamos las dimensiones reales del contenedor para que OutputRenderer
   // calcule fuentes en px puros (mismo wrapping que el output real, solo escalado)
-  const thumbOutputCfg = { ...outputCfg, progressEnabled: false };
+  const thumbOutputCfg = { ...outputCfg, progressEnabled: false, thumbnailMode: true, showComments: true };
   // Fondo global si es imagen (evitamos videos en thumbnails)
   const thumbGlobalBg = liveState.backgroundMedia?.mediaType === 'image' ? liveState.backgroundMedia : null;
 

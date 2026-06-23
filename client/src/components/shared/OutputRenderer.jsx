@@ -176,6 +176,9 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
   const commentColor     = cfg.commentColor     ?? '#facc15';
   const commentFontSize  = cfg.commentFontSize  ?? 16;
   const commentFF        = resolveFont(cfg.commentFontFamily ?? 'sans');
+  const thumbnailMode    = cfg.thumbnailMode    ?? false;
+  // En modo thumbnail: siempre mostrar comentarios
+  const effectiveShowComments = showComments || thumbnailMode;
 
   const textShadow = fontStrokeWidth > 0
     ? `0 0 ${fontStrokeWidth}px ${fontStrokeColor}, 0 0 ${fontStrokeWidth}px ${fontStrokeColor}, 0 2px 8px rgba(0,0,0,0.8)`
@@ -248,7 +251,7 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
         <div className="w-full" style={{ fontSize, textShadow }}>
           {lineData.map((ld, i) => {
             if (ld.isFullComment) {
-              if (!showComments) return null;
+              if (!effectiveShowComments) return null;
               return (
                 <div key={i} style={{ color: commentColor, fontSize: `${commentFontSize}px`, fontFamily: commentFF, fontStyle: 'italic', lineHeight: 1.4 }}>
                   {ld.comment}
@@ -256,11 +259,15 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
               );
             }
             const visibleText = stripChords(ld.visible);
-            if (!visibleText.trim() && !ld.comment) return <div key={i} style={{ height: '0.4em' }} />;
+            // Thumbnail mode: línea solo-acordes → mostrar nombres de acordes
+            const chordFallback = (thumbnailMode && !visibleText.trim())
+              ? ld.visible.replace(/\[([^\]]+)\]/g, '$1 ').trim()
+              : null;
+            if (!visibleText.trim() && !ld.comment && !chordFallback) return <div key={i} style={{ height: '0.4em' }} />;
             return (
-              <div key={i} style={lyricStyle}>
-                {visibleText}
-                {showComments && ld.comment && (
+              <div key={i} style={chordFallback ? { ...lyricStyle, fontFamily: 'monospace', opacity: 0.65 } : lyricStyle}>
+                {chordFallback || visibleText}
+                {effectiveShowComments && ld.comment && (
                   <span style={{ color: commentColor, fontSize: `${commentFontSize}px`, fontFamily: commentFF, fontStyle: 'italic', marginLeft: '0.5em' }}>
                     {ld.comment}
                   </span>
