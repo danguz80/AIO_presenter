@@ -243,4 +243,28 @@ router.delete('/pending-licenses/:id', async (req, res) => {
   }
 });
 
+// ─── Biblia ───────────────────────────────────────────────────────────────────
+const { listVersions, deleteVersion, importBible } = require('../controllers/bibleImportController');
+const rateLimit = require('express-rate-limit');
+
+// Rate limiter: max 10 requests per minute per IP for Bible management routes.
+// These routes already require requireAuth + requireOwner; this adds a second
+// layer of protection against accidental rapid-fire or brute-force attempts.
+const bibleLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Espera un momento.' },
+});
+
+// GET  /admin/bible/versions — lista todas las versiones con estadísticas
+router.get('/bible/versions', bibleLimiter, listVersions);
+
+// POST /admin/bible/import   — importar una versión desde archivo JSON
+router.post('/bible/import', bibleLimiter, importBible);
+
+// DELETE /admin/bible/versions/:id — eliminar versión y todos sus versículos
+router.delete('/bible/versions/:id', bibleLimiter, deleteVersion);
+
 module.exports = router;

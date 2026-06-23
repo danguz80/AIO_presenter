@@ -161,9 +161,74 @@ Si la app sigue en modo *Development*, cada usuario de Spotify que vaya a usarla
 
 ## Próximas fases
 
-- [ ] Módulo Biblia (navegación libro/capítulo/versículo)
+- [x] Módulo Biblia (navegación libro/capítulo/versículo)
+- [x] Importar Biblia en formato JSON (admin panel)
+- [x] Programa / Schedule (lista de canciones del servicio)
+- [x] Temas visuales personalizados (fuente, tamaño, color de texto)
+- [x] Imágenes y videos de fondo
+- [x] Importar letras desde ChordPro / OpenSong
 - [ ] Importar Biblia en formato OSIS/XML
-- [ ] Programa / Schedule (lista de canciones del servicio)
-- [ ] Temas visuales personalizados (fuente, tamaño, color de texto)
-- [ ] Imágenes y videos de fondo
-- [ ] Importar letras desde ChordPro / OpenSong
+
+---
+
+## Importar datos de la Biblia
+
+El **Panel de Administración** (`/admin`) incluye una sección de gestión de Biblia.  
+Desde allí puedes cargar versiones completas sin acceso directo al servidor.
+
+### Formatos soportados
+
+#### Formato A — thiagobodruk/bible (recomendado)
+
+Array de 66 libros en orden canónico. Cada libro tiene un campo `chapters` que es
+un array de capítulos, y cada capítulo es un array de strings (versículos).
+
+```json
+[
+  {
+    "abbrev": "gn",
+    "book": "Genesis",
+    "chapters": [
+      ["En el principio creó Dios los cielos y la tierra.", "Y la tierra estaba desordenada y vacía..."],
+      ["..."]
+    ]
+  }
+]
+```
+
+Fuente pública de ejemplo (RVR):  
+`https://raw.githubusercontent.com/thiagobodruk/bible/master/json/es_rvr.json`
+
+#### Formato B — Unificado (con metadatos explícitos)
+
+Objeto con campo `books`. Útil para versiones con datos de libros no estándar.
+
+```json
+{
+  "version": "NVI",
+  "name": "Nueva Versión Internacional",
+  "language": "es",
+  "books": [
+    {
+      "number": 1,
+      "name": "Génesis",
+      "abbrev": "Gn",
+      "testament": "OT",
+      "chapters": [
+        ["En el principio, Dios creó los cielos y la tierra."],
+        ["..."]
+      ]
+    }
+  ]
+}
+```
+
+### Cómo importar
+
+1. Inicia sesión como **owner** y ve a `/admin`.
+2. Despliega la sección **Gestión de Biblia**.
+3. Completa la abreviatura (ej. `RVR60`), el nombre y el idioma.
+4. Selecciona el archivo JSON.
+5. Haz clic en **Importar versión**.
+
+> Si ya existe una versión con la misma abreviatura, sus versículos se reemplazarán por los del archivo nuevo.

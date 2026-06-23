@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, CreditCard, Shield, Plus, Trash2,
   ChevronDown, ChevronUp, RefreshCw, AlertCircle, Check, X, Mail, Send,
-  Monitor, Music2
+  Monitor, Music2, BookOpen, Upload, Globe
 } from 'lucide-react';
 
 const API = import.meta.env.VITE_API_URL || '';
@@ -296,6 +296,219 @@ function OrgCard({ org, onRefresh }) {
   );
 }
 
+// ─── Helper: auth headers without Content-Type (for FormData uploads) ─────────
+// Omitting Content-Type lets the browser set it automatically with the correct
+// multipart boundary required for FormData requests.
+function multipartHeaders() {
+  const h = authHeaders();
+  delete h['Content-Type'];
+  return h;
+}
+
+// ─── Sección de gestión de Biblia ─────────────────────────────────────────────
+function BibleSection() {
+  const [versions,   setVersions]   = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [expanded,   setExpanded]   = useState(false);
+  const [importing,  setImporting]  = useState(false);
+  const [deleting,   setDeleting]   = useState(null);
+  const [result,     setResult]     = useState(null);
+  const [error,      setError]      = useState('');
+  const [loadError,  setLoadError]  = useState('');
+
+  // Import form fields
+  const [abbrev,    setAbbrev]   = useState('');
+  const [vName,     setVName]    = useState('');
+  const [language,  setLanguage] = useState('es');
+  const [file,      setFile]     = useState(null);
+
+  const loadVersions = useCallback(async () => {
+    setLoading(true); setLoadError('');
+    try {
+      const r = await fetch(`${API}/admin/bible/versions`, { headers: authHeaders() });
+      const d = await r.json();
+      if (r.ok) setVersions(Array.isArray(d) ? d : []);
+      else setLoadError(d.error || 'Error al cargar versiones');
+    } catch { setLoadError('No se pudo conectar al servidor'); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadVersions(); }, [loadVersions]);
+
+  const handleImport = async () => {
+    if (!abbrev || !vName || !file) return;
+    setImporting(true); setResult(null); setError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('abbreviation', abbrev);
+      fd.append('name', vName);
+      fd.append('language', language);
+      const r = await fetch(`${API}/admin/bible/import`, {
+        method: 'POST',
+        headers: multipartHeaders(),
+        body: fd,
+      });
+      const d = await r.json();
+      if (!r.ok) { setError(d.error || 'Error al importar'); }
+      else {
+        setResult(d);
+        setAbbrev(''); setVName(''); setLanguage('es'); setFile(null);
+        loadVersions();
+      }
+    } catch (e) { setError(e instanceof TypeError ? 'No se pudo conectar al servidor' : 'Error inesperado al importar'); }
+    setImporting(false);
+  };
+
+  const [deleteError, setDeleteError] = useState('');
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`¿Eliminar la versión "${name}" y todos sus versículos? Esta acción es irreversible.`)) return;
+    setDeleting(id); setDeleteError('');
+    try {
+      const r = await fetch(`${API}/admin/bible/versions/${id}`, { method: 'DELETE', headers: authHeaders() });
+      if (!r.ok) { const d = await r.json(); setDeleteError(d.error || 'Error al eliminar'); }
+      else loadVersions();
+    } catch { setDeleteError('No se pudo conectar al servidor'); }
+    setDeleting(null);
+  };
+
+  return (
+    <div className="bg-white/4 border border-white/8 rounded-2xl overflow-hidden">
+      <button
+        onClick={() => setExpanded(v => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/4 transition-colors"
+      >
+        <div className="flex items-center gap-2 text-sm font-semibold text-white">
+          <BookOpen size={15} className="text-blue-400" />
+          Gestión de Biblia
+          {!loading && (
+            <span className="text-[11px] font-normal text-white/40">
+              ({versions.length} versión{versions.length !== 1 ? 'es' : ''})
+            </span>
+          )}
+        </div>
+        {expanded ? <ChevronUp size={14} className="text-white/30" /> : <ChevronDown size={14} className="text-white/30" />}
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-4 border-t border-white/8 pt-3 space-y-4">
+
+          {/* Versiones existentes */}
+          {loading ? (
+            <p className="text-xs text-white/30">Cargando...</p>
+          ) : loadError ? (
+            <p className="text-xs text-red-400">{loadError}</p>
+          ) : versions.length === 0 ? (
+            <p className="text-xs text-white/30 italic">Sin versiones cargadas. Importa tu primer archivo de Biblia.</p>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-white/40 uppercase tracking-wider mb-2">Versiones en la base de datos</p>
+              {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
+              {versions.map(v => (
+                <div key={v.id} className="flex items-center gap-3 text-xs bg-white/4 rounded-lg px-3 py-2">
+                  <Globe size={11} className="text-blue-400 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="font-semibold text-white/90">{v.abbreviation}</span>
+                    <span className="text-white/50 ml-2">{v.name}</span>
+                    <span className="text-white/30 ml-2">· {v.language}</span>
+                  </div>
+                  <div className="text-white/30 shrink-0 text-[10px]">
+                    {v.book_count} libros · {v.verse_count.toLocaleString()} versículos
+                  </div>
+                  <button
+                    onClick={() => handleDelete(v.id, v.name)}
+                    disabled={deleting === v.id}
+                    className="text-red-400/40 hover:text-red-400 transition-colors shrink-0"
+                    title="Eliminar versión"
+                  >
+                    {deleting === v.id ? <RefreshCw size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Formulario de importación */}
+          <div className="border-t border-white/8 pt-3 space-y-3">
+            <p className="text-[10px] text-white/40 uppercase tracking-wider">Importar versión desde archivo JSON</p>
+            <p className="text-[10px] text-white/30 leading-relaxed">
+              Formatos soportados: <strong className="text-white/50">thiagobodruk/bible</strong> (array de 66 libros) o
+              <strong className="text-white/50"> formato unificado</strong> (objeto con campo "books").
+              Consulta la documentación para conocer la estructura esperada.
+            </p>
+
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="bible-abbrev" className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Abreviatura *</label>
+                <input
+                  id="bible-abbrev"
+                  type="text" value={abbrev} onChange={e => setAbbrev(e.target.value.toUpperCase())}
+                  placeholder="RVR60"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25"
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="bible-name" className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Nombre *</label>
+                <input
+                  id="bible-name"
+                  type="text" value={vName} onChange={e => setVName(e.target.value)}
+                  placeholder="Reina-Valera 1960"
+                  className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder:text-white/25"
+                />
+              </div>
+              <div>
+                <label htmlFor="bible-language" className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Idioma</label>
+                <select
+                  id="bible-language"
+                  value={language} onChange={e => setLanguage(e.target.value)}
+                  className="w-full bg-[#0d1929] border border-white/10 rounded-lg px-3 py-2 text-sm text-white"
+                >
+                  <option value="es">Español (es)</option>
+                  <option value="en">Inglés (en)</option>
+                  <option value="pt">Portugués (pt)</option>
+                  <option value="fr">Francés (fr)</option>
+                  <option value="de">Alemán (de)</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label htmlFor="bible-file" className="text-[10px] text-white/40 uppercase tracking-wider block mb-1">Archivo JSON *</label>
+                <label htmlFor="bible-file" className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/60 cursor-pointer hover:bg-white/8 transition-colors">
+                  <Upload size={13} className="shrink-0" />
+                  <span className="truncate">{file ? file.name : 'Seleccionar archivo .json...'}</span>
+                  <input
+                    id="bible-file"
+                    type="file" accept=".json" className="hidden"
+                    onChange={e => setFile(e.target.files[0] || null)}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {error  && <p className="text-xs text-red-400">{error}</p>}
+            {result && (
+              <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+                <Check size={13} />
+                Importado: <strong>{result.name}</strong> — {result.booksImported} libros, {result.versesImported.toLocaleString()} versículos
+              </div>
+            )}
+
+            <button
+              onClick={handleImport}
+              disabled={importing || !abbrev || !vName || !file}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 border border-blue-400/30 text-blue-300 rounded-lg text-sm font-semibold disabled:opacity-40 hover:bg-blue-500/30 transition-colors"
+            >
+              {importing
+                ? <><RefreshCw size={13} className="animate-spin" /> Importando...</>
+                : <><Upload size={13} /> Importar versión</>
+              }
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -553,6 +766,9 @@ export default function AdminPage() {
             </button>
           ))}
         </div>
+
+        {/* ── Gestión de Biblia ── */}
+        <BibleSection />
 
         {/* Lista de orgs */}
         {error && (
