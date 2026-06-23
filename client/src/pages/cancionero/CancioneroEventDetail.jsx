@@ -671,6 +671,12 @@ export default function CancioneroEventDetail() {
   const [bandConfigs,  setBandConfigs] = useState([]);
   const [savingBand,   setSavingBand]  = useState(false);
 
+  const scrollRef = useRef(null);
+  useVolumeKeys(
+    () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
+    () => scrollRef.current?.scrollBy({ top:  150, behavior: 'smooth' }),
+  );
+
   const isAdmin = (() => {
     try {
       const token = localStorage.getItem('aio_sync_token');
