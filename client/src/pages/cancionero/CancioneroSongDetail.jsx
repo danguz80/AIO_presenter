@@ -747,8 +747,8 @@ export default function CancioneroSongDetail() {
       if (lastTs.current !== null && scrollRef.current) {
         // Cap de 50 ms: evita saltos al volver de segundo plano
         const dt       = Math.min(ts - lastTs.current, 50);
-        // Escala lineal: speed 1 = 10px/s … speed 10 = 55px/s
-        const pxPerSec = scrollSpeedRef.current * 5 + 5;
+        // Escala lineal: speed 0.1 = 1px/s … speed 1 = 10px/s … speed 10 = 100px/s
+        const pxPerSec = scrollSpeedRef.current * 10;
 
         // Acumular píxeles fraccionarios y aplicar solo la parte entera
         // Esto elimina el efecto "entrecortado" a velocidades bajas donde
@@ -981,7 +981,7 @@ export default function CancioneroSongDetail() {
             <div className="flex items-center justify-between bg-white/10 border border-white/10 rounded-lg px-2.5 py-1.5">
               <span className="text-[10px] text-white/40 uppercase tracking-wide">Velocidad</span>
               <div className="flex items-center gap-1">
-                <button onClick={() => setScrollSpeed(s => Math.max(1.0, Math.round((s - 0.1) * 10) / 10))} className="p-0.5"><ChevronDown size={12} className="text-white/60" /></button>
+                <button onClick={() => setScrollSpeed(s => Math.max(0.1, Math.round((s - 0.1) * 10) / 10))} className="p-0.5"><ChevronDown size={12} className="text-white/60" /></button>
                 <span className="text-xs text-white/70 w-6 text-center">{scrollSpeed.toFixed(1)}</span>
                 <button onClick={() => setScrollSpeed(s => Math.min(10.0, Math.round((s + 0.1) * 10) / 10))} className="p-0.5"><ChevronUp size={12} className="text-white/60" /></button>
               </div>
@@ -1034,7 +1034,7 @@ export default function CancioneroSongDetail() {
           </div>
           {/* Velocidad scroll */}
           <div className="flex-shrink-0 flex items-center gap-1 bg-white/10 border border-white/10 rounded-lg px-1.5 py-1">
-            <button onClick={() => setScrollSpeed(s => Math.max(1.0, Math.round((s - 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors"><ChevronDown size={13} className="text-white/60" /></button>
+            <button onClick={() => setScrollSpeed(s => Math.max(0.1, Math.round((s - 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors"><ChevronDown size={13} className="text-white/60" /></button>
             <span className="text-xs text-white/60 w-8 text-center">{scrollSpeed.toFixed(1)}</span>
             <button onClick={() => setScrollSpeed(s => Math.min(10.0, Math.round((s + 0.1) * 10) / 10))} className="p-0.5 rounded hover:bg-white/10 transition-colors"><ChevronUp size={13} className="text-white/60" /></button>
           </div>
