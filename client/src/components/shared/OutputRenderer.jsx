@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, Fragment } from 'react';
 import { stripChords, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 
@@ -177,6 +177,7 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
   const commentFontSize  = cfg.commentFontSize  ?? 16;
   const commentFF        = resolveFont(cfg.commentFontFamily ?? 'sans');
   const thumbnailMode    = cfg.thumbnailMode    ?? false;
+  const chordsColor      = cfg.chordsColor      ?? '#f97316';
   // En modo thumbnail: siempre mostrar comentarios
   const effectiveShowComments = showComments || thumbnailMode;
 
@@ -259,14 +260,31 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
               );
             }
             const visibleText = stripChords(ld.visible);
-            // Thumbnail mode: línea solo-acordes → mostrar nombres de acordes
-            const chordFallback = (thumbnailMode && !visibleText.trim())
-              ? ld.visible.replace(/\[([^\]]+)\]/g, '$1 ').trim()
+            // Thumbnail mode: línea solo-acordes → extraer acordes como array
+            const chordTokens = (thumbnailMode && !visibleText.trim())
+              ? (ld.visible.match(/\[([^\]]+)\]/g) ?? []).map(c => c.slice(1, -1))
               : null;
-            if (!visibleText.trim() && !ld.comment && !chordFallback) return <div key={i} style={{ height: '0.4em' }} />;
+            const isChordOnlyLine = chordTokens && chordTokens.length > 0;
+            if (!visibleText.trim() && !ld.comment && !isChordOnlyLine) return <div key={i} style={{ height: '0.4em' }} />;
+            if (isChordOnlyLine) return (
+              <div key={i} className="flex flex-wrap justify-center" style={{ lineHeight: 1.5 }}>
+                {chordTokens.map((ch, ci) => (
+                  <Fragment key={ci}>
+                    <span style={{ color: chordsColor, fontFamily: 'monospace', fontWeight: 'bold', fontStyle: 'normal' }}>
+                      {ch}
+                    </span>
+                    {ci < chordTokens.length - 1 && (
+                      <span style={{ color: '#ffffff', fontFamily: 'monospace', fontWeight: 'normal', padding: '0 0.3em' }}>
+                        —
+                      </span>
+                    )}
+                  </Fragment>
+                ))}
+              </div>
+            );
             return (
-              <div key={i} style={chordFallback ? { ...lyricStyle, fontFamily: 'monospace', opacity: 0.65 } : lyricStyle}>
-                {chordFallback || visibleText}
+              <div key={i} style={lyricStyle}>
+                {visibleText}
                 {effectiveShowComments && ld.comment && (
                   <span style={{ color: commentColor, fontSize: `${commentFontSize}px`, fontFamily: commentFF, fontStyle: 'italic', marginLeft: '0.5em' }}>
                     {ld.comment}

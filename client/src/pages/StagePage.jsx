@@ -567,9 +567,10 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
                   const outerStyle = (!hasRealText && seg.chord)
                     ? { minWidth: `${(seg.chord.length + 2) * 0.30}em` }
                     : {};
+                  const alignItems = isChordOnly ? 'center' : 'flex-start';
                   return (
                     <Fragment key={si}>
-                      <span className="inline-flex flex-col items-start" style={outerStyle}>
+                      <span className="inline-flex flex-col" style={{ ...outerStyle, alignItems }}>
                         <span
                           className="font-bold font-mono"
                           style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: chordsColor }}
@@ -591,10 +592,10 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
                       </span>
                       {/* Guión separador entre acordes en líneas instrumentales */}
                       {isChordOnly && seg.chord && si < line.length - 1 && (
-                        <span className="inline-flex flex-col items-center" style={{ padding: '0 0.1em' }}>
+                        <span className="inline-flex flex-col items-center" style={{ padding: '0 0.3em' }}>
                           <span
                             className="font-mono"
-                            style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: '#ffffff', opacity: 0.45 }}
+                            style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: '#ffffff' }}
                           >
                             —
                           </span>
