@@ -59,6 +59,22 @@ function splitBibleVerse(text, threshold = 170) {
   return null;
 }
 
+// ─── Parsear contenido de diapo: comentarios + acordes-solo ──────────────────
+function parseSlideContent(content) {
+  return (content || '').split('\n').map(line => {
+    if (isCommentLine(line)) {
+      return { kind: 'comment', text: line.replace(/^\s*\/\/\s?/, '') };
+    }
+    const { visible } = extractInlineComment(line);
+    const text = stripChords(visible);
+    if (!text.trim() && /\[/.test(visible)) {
+      const chords = [...visible.matchAll(/\[([^\]]+)\]/g)].map(m => m[1]);
+      return chords.length ? { kind: 'chord', chords } : null;
+    }
+    return text.trim() ? { kind: 'lyric', text } : null;
+  }).filter(Boolean);
+}
+
 // ─── Helpers para editar letras de canciones ─────────────────────────────────
 function slidesToText(slides) {
   if (!slides || slides.length === 0) return '';
@@ -458,6 +474,8 @@ export default function MobileControllerPage() {
       setActiveSongSlideId(null);
     } else if (slideData?.type === 'song' && slideData.slideId) {
       setActiveSongSlideId(slideData.slideId);
+    } else if (slideData?.type === 'title') {
+      setActiveSongSlideId('__title__');
     }
   }, [slideData, isBlank]);
 
@@ -511,7 +529,25 @@ export default function MobileControllerPage() {
   // ── Navegación ──────────────────────────────────────────────────────────
   const trigger = (fn, dir) => { fn(); setFlash(dir); setTimeout(() => setFlash(null), 200); };
   const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
-  const handleNext  = () => trigger(() => actions.navigate('next'), 'next');
+  const handleNext  = () => {
+    // Si estamos en la última diapo y hay siguiente canción en el programa → avanzar
+    const slides = songDetail?.slides;
+    const lastSlideId = slides?.[slides.length - 1]?.id;
+    if (slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
+      const currentIdx = schedule.findIndex(it => it.song_id === songDetail.id);
+      const nextItem   = currentIdx >= 0 ? schedule.slice(currentIdx + 1).find(it => it.song_id) : null;
+      if (nextItem) {
+        setFlash('next'); setTimeout(() => setFlash(null), 200);
+        setLoadingSong(true);
+        actions.loadSongDetail(nextItem.song_id).then(detail => { // eslint-disable-line
+          setSongDetail(detail);
+          if (detail.slides?.length > 0) sendSlide(detail, detail.slides[0], detail.slides); // eslint-disable-line
+        }).finally(() => setLoadingSong(false));
+        return;
+      }
+    }
+    trigger(() => actions.navigate('next'), 'next');
+  };
 
   const handleBlank = () => trigger(() => actions.toggleBlank(!isBlank), 'blank');
 
@@ -545,13 +581,25 @@ export default function MobileControllerPage() {
   };
 
   const sendSlide = (song, slide, slides) => {
+    // Slide de título → enviar como 'title-direct' para que el servidor no lo intercepte
+    if (slide.type === 'title') {
+      const firstSlide = slides?.[0] || null;
+      setActiveSongSlideId('__title__');
+      actions.showSlide({
+        type: 'title-direct',
+        slides,
+        slideData: { type: 'title', songId: song.id, songTitle: song.title, songKey: song.song_key || null },
+        nextSlideData: firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null,
+      });
+      return;
+    }
     const idx  = slides.findIndex(s => s.id === slide.id);
     const next = slides[idx + 1] || null;
     setActiveSongSlideId(slide.id);
     actions.selectSlide(slide);
     actions.showSlide({
       type:       'song',
-      slides,            // el servidor los guarda para poder navegar
+      slides,
       slideIndex: idx,
       slideData:     { type: 'song', songId: song.id, slideId: slide.id, songTitle: song.title, label: slide.label, content: slide.content },
       nextSlideData: next ? { type: 'song', label: next.label, content: next.content } : null,
@@ -1007,9 +1055,9 @@ export default function MobileControllerPage() {
                 <div className="px-4 py-3 space-y-2">
                   {(songDetail.titleEnabled ?? true) && (
                     <div
-                      onClick={() => sendSlide(songDetail, { type: 'title' }, songDetail.slides, -1)}
+                      onClick={() => sendSlide(songDetail, { type: 'title' }, songDetail.slides)}
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
-                        false
+                        (activeSongSlideId === '__title__' || (slideData?.type === 'title' && slideData?.songId === songDetail?.id && !isBlank))
                           ? 'bg-accent/15 border-accent text-accent'
                           : 'bg-surface-800 border-surface-700 text-zinc-300'
                       }`}
@@ -1039,10 +1087,20 @@ export default function MobileControllerPage() {
                             {slide.label}
                           </span>
                         )}
-                        <p className="flex-1 text-zinc-300 leading-relaxed whitespace-pre-line line-clamp-3"
-                          style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)' }}>
-                          {stripChords(stripComments(slide.content || ''))}
-                        </p>
+                        <div className="flex-1 text-zinc-300 leading-relaxed min-w-0" style={{ fontSize: 'clamp(0.85rem, 3.5vw, 1rem)' }}>
+                          {(() => {
+                            const parsed = parseSlideContent(slide.content);
+                            const hasLyrics = parsed.some(l => l.kind === 'lyric');
+                            return parsed
+                              .filter(l => l.kind === 'comment' || (hasLyrics ? l.kind === 'lyric' : l.kind === 'chord'))
+                              .slice(0, 4)
+                              .map((l, idx) => {
+                                if (l.kind === 'comment') return <div key={idx} style={{ color: sc.commentColor ?? '#facc15', fontStyle: 'italic' }}>{l.text}</div>;
+                                if (l.kind === 'chord')   return <div key={idx} style={{ color: sc.chordsColor ?? '#fde047', fontWeight: '600' }}>{l.chords.join(' — ')}</div>;
+                                return <div key={idx}>{l.text}</div>;
+                              });
+                          })()}
+                        </div>
                         {isActive && <span className="w-1.5 h-1.5 rounded-full bg-accent shrink-0 mt-1.5" />}
                       </div>
                     );

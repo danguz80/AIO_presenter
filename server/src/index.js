@@ -665,6 +665,7 @@ io.on('connection', async (socket) => {
             ...s.liveState,
             backgroundMedia: bgMedia,
             isBlank: false,
+            slideIndex: 0,
             slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content },
             nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
           };
@@ -685,6 +686,7 @@ io.on('connection', async (socket) => {
           ...s.liveState,
           backgroundMedia: s.outputConfig.titleBackground || null,
           isBlank: false,
+          slideIndex: -1,
           slideData: { type: 'title', songTitle, songAuthor, songId, songKey: songKey || null },
           nextSlideData: { type: 'song', label: slides[0].label, content: slides[0].content },
         };
@@ -701,6 +703,7 @@ io.on('connection', async (socket) => {
         ...s.liveState,
         backgroundMedia: bgMedia,
         isBlank: false,
+        slideIndex: newIndex,
         slideData: {
           type: 'song', songId, slideId: slide.id, songTitle,
           songKey: songKey || null, label: slide.label, content: slide.content,
