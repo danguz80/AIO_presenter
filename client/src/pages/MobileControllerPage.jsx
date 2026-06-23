@@ -531,9 +531,10 @@ export default function MobileControllerPage() {
   const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
   const handleNext  = () => {
     // Si estamos en la última diapo y hay siguiente canción en el programa → avanzar
+    // (solo cuando venimos del panel de eventos, no desde la biblioteca)
     const slides = songDetail?.slides;
     const lastSlideId = slides?.[slides.length - 1]?.id;
-    if (slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
+    if (songOriginTab === 'events' && slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
       const currentIdx = schedule.findIndex(it => it.song_id === songDetail.id);
       const nextItem   = currentIdx >= 0 ? schedule.slice(currentIdx + 1).find(it => it.song_id) : null;
       if (nextItem) {
@@ -575,6 +576,7 @@ export default function MobileControllerPage() {
 
   // ── Canciones ────────────────────────────────────────────────────────────
   const openSong = async (id) => {
+    setActiveSongSlideId(null);   // limpiar indicador activo al cambiar canción
     setLoadingSong(true);
     try { setSongDetail(await actions.loadSongDetail(id)); }
     finally { setLoadingSong(false); }
@@ -1057,7 +1059,7 @@ export default function MobileControllerPage() {
                     <div
                       onClick={() => sendSlide(songDetail, { type: 'title' }, songDetail.slides)}
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
-                        (activeSongSlideId === '__title__' || (slideData?.type === 'title' && slideData?.songId === songDetail?.id && !isBlank))
+                        ((activeSongSlideId === '__title__' && slideData?.songId === songDetail?.id) || (slideData?.type === 'title' && slideData?.songId === songDetail?.id && !isBlank))
                           ? 'bg-accent/15 border-accent text-accent'
                           : 'bg-surface-800 border-surface-700 text-zinc-300'
                       }`}
