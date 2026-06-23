@@ -206,12 +206,13 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
                 : lineCount <= 10 ? 4.5
                 : 3.5;
     let fontSize;
+    let fontSizePx = 36; // valor numérico para derivar tamaño de comentarios en thumbnails
     if (cw && ch) {
       // Modo contenedor fijo: replicar exactamente clamp(Xrem, min(Xvw, Xvh), Xrem)
       // usando las dimensiones del contenedor en lugar de viewport.
       // 1rem = 16px → mismos topes que el CSS original.
       if (cfg.fontSize && cfg.fontSize !== 'auto') {
-        fontSize = `${Math.min(Number(cfg.fontSize), ch * maxVh / 100)}px`;
+        fontSizePx = Math.min(Number(cfg.fontSize), ch * maxVh / 100);
       } else {
         // [vwPct, minPx (rem→px), maxPx (rem→px)]
         const [vwPct, minPx, maxPx] =
@@ -221,8 +222,9 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
         : lineCount <= 10 ? [2.6, 1.1*16, 2.2*16] //  clamp(1.1rem,min(2.6vw,vh),2.2rem)
         :                   [2,   0.9*16, 1.8*16]; //  clamp(0.9rem,min(2vw,vh),1.8rem)
         const pref = Math.min(cw * vwPct / 100, ch * maxVh / 100);
-        fontSize = `${Math.max(minPx, Math.min(maxPx, pref))}px`;
+        fontSizePx = Math.max(minPx, Math.min(maxPx, pref));
       }
+      fontSize = `${fontSizePx}px`;
     } else if (cfg.fontSize && cfg.fontSize !== 'auto') {
       // Respetar tamaño fijo del usuario pero caparlo en pantallas bajas (landscape móvil)
       fontSize = `min(${cfg.fontSize}px, ${maxVh}vh)`;
@@ -233,6 +235,11 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
                : lineCount <= 10 ? `clamp(1.1rem, min(2.6vw, ${maxVh}vh), 2.2rem)`
                : `clamp(0.9rem, min(2vw, ${maxVh}vh), 1.8rem)`;
     }
+
+    // En modo thumbnail: comentarios al mismo tamaño que las letras (de lo contrario son invisibles)
+    const effectiveCommentFontSize = (thumbnailMode && cw && ch)
+      ? fontSizePx
+      : commentFontSize;
 
     const lyricStyle = {
       color:      lyricsColor,
@@ -254,7 +261,7 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
             if (ld.isFullComment) {
               if (!effectiveShowComments) return null;
               return (
-                <div key={i} style={{ color: commentColor, fontSize: `${commentFontSize}px`, fontFamily: commentFF, fontStyle: 'italic', lineHeight: 1.4 }}>
+                <div key={i} style={{ color: commentColor, fontSize: `${effectiveCommentFontSize}px`, fontFamily: commentFF, fontStyle: 'italic', lineHeight: 1.4 }}>
                   {ld.comment}
                 </div>
               );
@@ -267,7 +274,7 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
             const isChordOnlyLine = chordTokens && chordTokens.length > 0;
             if (!visibleText.trim() && !ld.comment && !isChordOnlyLine) return <div key={i} style={{ height: '0.4em' }} />;
             if (isChordOnlyLine) return (
-              <div key={i} className="flex flex-wrap justify-center" style={{ lineHeight: 1.5 }}>
+              <div key={i} className="flex flex-wrap justify-center" style={{ lineHeight: 1.5, fontSize: `${fontSizePx}px` }}>
                 {chordTokens.map((ch, ci) => (
                   <Fragment key={ci}>
                     <span style={{ color: chordsColor, fontFamily: 'monospace', fontWeight: 'bold', fontStyle: 'normal' }}>
@@ -286,7 +293,7 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
               <div key={i} style={lyricStyle}>
                 {visibleText}
                 {effectiveShowComments && ld.comment && (
-                  <span style={{ color: commentColor, fontSize: `${commentFontSize}px`, fontFamily: commentFF, fontStyle: 'italic', marginLeft: '0.5em' }}>
+                  <span style={{ color: commentColor, fontSize: `${effectiveCommentFontSize}px`, fontFamily: commentFF, fontStyle: 'italic', marginLeft: '0.5em' }}>
                     {ld.comment}
                   </span>
                 )}
