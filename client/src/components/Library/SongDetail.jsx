@@ -678,7 +678,7 @@ export default function SongDetail() {
               const slideBg = slide.slide_background ?? null;
 
               return (
-                <div key={slide.id} style={{ display: 'contents' }}>
+                <div key={`${slide.id}-${index}`} style={{ display: 'contents' }}>
                   <div
                     onClick={() => handleSlideClick(slide, index)}
                     onContextMenu={e => openCtx(e, slide, index)}
@@ -845,7 +845,7 @@ export default function SongDetail() {
                 .filter(l => l !== null);
               return (
                 <div
-                  key={slide.id}
+                  key={`${slide.id}-${index}`}
                   onClick={() => handleSlideClick(slide, index)}
                   onContextMenu={(e) => openCtx(e, slide, index)}
                   className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors hover:bg-surface-700/40 select-none ${
