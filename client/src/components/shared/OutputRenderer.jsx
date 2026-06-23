@@ -236,9 +236,9 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
                : `clamp(0.9rem, min(2vw, ${maxVh}vh), 1.8rem)`;
     }
 
-    // En modo thumbnail: comentarios al mismo tamaño que las letras (de lo contrario son invisibles)
+    // En modo thumbnail: comentarios al 50% del tamaño de letra (proporcional a escenario)
     const effectiveCommentFontSize = (thumbnailMode && cw && ch)
-      ? fontSizePx
+      ? Math.round(fontSizePx * 0.5)
       : commentFontSize;
 
     const lyricStyle = {
@@ -274,7 +274,7 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
             const isChordOnlyLine = chordTokens && chordTokens.length > 0;
             if (!visibleText.trim() && !ld.comment && !isChordOnlyLine) return <div key={i} style={{ height: '0.4em' }} />;
             if (isChordOnlyLine) return (
-              <div key={i} className="flex flex-wrap justify-center" style={{ lineHeight: 1.5, fontSize: `${fontSizePx}px` }}>
+              <div key={i} className="flex flex-wrap justify-center" style={{ lineHeight: 2.2, fontSize: `${Math.round(fontSizePx * 0.6)}px` }}>
                 {chordTokens.map((ch, ci) => (
                   <Fragment key={ci}>
                     <span style={{ color: chordsColor, fontFamily: 'monospace', fontWeight: 'bold', fontStyle: 'normal' }}>

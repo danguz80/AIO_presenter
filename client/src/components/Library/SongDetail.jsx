@@ -436,7 +436,16 @@ export default function SongDetail() {
 
   // Sin boosting: pasamos las dimensiones reales del contenedor para que OutputRenderer
   // calcule fuentes en px puros (mismo wrapping que el output real, solo escalado)
-  const thumbOutputCfg = { ...outputCfg, progressEnabled: false, thumbnailMode: true, showComments: true };
+  const stageCfg = state.stageConfig ?? {};
+  const thumbOutputCfg = {
+    ...outputCfg,
+    progressEnabled: false,
+    thumbnailMode: true,
+    showComments: true,
+    // Usar colores del escenario para acordes y comentarios en thumbnails
+    chordsColor:  stageCfg.chordsColor  ?? '#fde047',
+    commentColor: stageCfg.commentColor ?? '#facc15',
+  };
   // Fondo global si es imagen (evitamos videos en thumbnails)
   const thumbGlobalBg = liveState.backgroundMedia?.mediaType === 'image' ? liveState.backgroundMedia : null;
 
