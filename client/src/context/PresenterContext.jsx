@@ -191,6 +191,8 @@ const initialState = {
   // Canción pendiente de cargar (sincronización desde otro cliente)
   pendingSongId:  null,
   pendingSlideId: null,
+  // Bloquea la auto-sincronización cuando el usuario eligió una canción explícitamente
+  syncLocked: false,
 
   // Socket
   connected: false,
@@ -223,20 +225,26 @@ function reducer(state, action) {
       };
     }
     case 'SET_SELECTED_SONG':
-      return { ...state, selectedSong: action.payload, selectedSlide: null };
+      // Limpiar pendingSongId para cancelar cualquier fetch obsoleto en vuelo
+      // (el cleanup del efecto pendingSong pondrá cancelled=true).
+      // syncLocked=true: impide que SYNC_LIVE_SONG sobreescriba esta selección
+      // hasta que el móvil reproduzca la misma canción que el PC tiene abierta.
+      return { ...state, selectedSong: action.payload, selectedSlide: null, pendingSongId: null, pendingSlideId: null, syncLocked: true };
     case 'SET_SELECTED_SLIDE':
       return { ...state, selectedSlide: action.payload };
     case 'SET_LIVE_STATE':
       return { ...state, liveState: action.payload };
     case 'SYNC_LIVE_SONG': {
-      // Si es una canción diferente: marcar pendiente de carga
       const { songId, slideId } = action.payload;
-      if (state.selectedSong?.id !== songId) {
-        return { ...state, pendingSongId: songId, pendingSlideId: slideId };
+      if (state.selectedSong?.id === songId) {
+        // El móvil está en la misma canción que el PC → desbloquear sync
+        // (si el usuario tenía syncLocked, ahora ambos coinciden, se puede volver a seguir)
+        return state.syncLocked ? { ...state, syncLocked: false } : state;
       }
-      // Misma canción: NO sobreescribir selectedSlide (el usuario controla su selección).
-      // El indicador "en vivo" (verde) ya se actualiza con SET_LIVE_STATE.
-      return state;
+      // Canción diferente: si el usuario bloqueó el sync, ignorar
+      if (state.syncLocked) return state;
+      // Auto-sincronizar: marcar pendiente de carga
+      return { ...state, pendingSongId: songId, pendingSlideId: slideId };
     }
     case 'SET_STAGE_CONFIG':
       return { ...state, stageConfig: { ...DEFAULT_STAGE_CONFIG, ...state.stageConfig, ...action.payload } };
@@ -255,7 +263,8 @@ function reducer(state, action) {
     case 'NAVIGATE':
       return { ...state, navigateRequest: action.payload };
     case 'SET_PENDING_SONG':
-      return { ...state, selectedSong: action.payload.song, selectedSlide: action.payload.slide, pendingSongId: null, pendingSlideId: null };
+      // La canción se sincronizó desde el móvil → desbloquear para seguir sincronizando
+      return { ...state, selectedSong: action.payload.song, selectedSlide: action.payload.slide, pendingSongId: null, pendingSlideId: null, syncLocked: false };
     case 'SET_CONNECTED':
       return { ...state, connected: action.payload };
     case 'SET_EVENT_PLAYS':
