@@ -492,9 +492,9 @@ export default function MobileControllerPage() {
     container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
   }, [activeSongSlideId]);
 
-  // Al abrir una canción desde un evento, ir al tope del grid
+  // Al abrir cualquier canción, ir al tope del grid
   useEffect(() => {
-    if (songOriginTab !== 'events' || !songDetail) return;
+    if (!songDetail) return;
     const t = setTimeout(() => {
       slideGridRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }, 150);
@@ -531,10 +531,9 @@ export default function MobileControllerPage() {
   const handlePrev  = () => trigger(() => actions.navigate('prev'), 'prev');
   const handleNext  = () => {
     // Si estamos en la última diapo y hay siguiente canción en el programa → avanzar
-    // (solo cuando venimos del panel de eventos, no desde la biblioteca)
     const slides = songDetail?.slides;
     const lastSlideId = slides?.[slides.length - 1]?.id;
-    if (songOriginTab === 'events' && slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
+    if (slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
       const currentIdx = schedule.findIndex(it => it.song_id === songDetail.id);
       const nextItem   = currentIdx >= 0 ? schedule.slice(currentIdx + 1).find(it => it.song_id) : null;
       if (nextItem) {
@@ -542,7 +541,8 @@ export default function MobileControllerPage() {
         setLoadingSong(true);
         actions.loadSongDetail(nextItem.song_id).then(detail => { // eslint-disable-line
           setSongDetail(detail);
-          if (detail.slides?.length > 0) sendSlide(detail, detail.slides[0], detail.slides); // eslint-disable-line
+          // showTitle=true: el auto-avance SÍ muestra la diapositiva de título
+          if (detail.slides?.length > 0) sendSlide(detail, detail.slides[0], detail.slides, true); // eslint-disable-line
         }).finally(() => setLoadingSong(false));
         return;
       }
@@ -582,7 +582,9 @@ export default function MobileControllerPage() {
     finally { setLoadingSong(false); }
   };
 
-  const sendSlide = (song, slide, slides) => {
+  // showTitle=false (default): el clic directo NO muestra diapositiva de título
+  // showTitle=true: el auto-avance SÍ muestra diapositiva de título
+  const sendSlide = (song, slide, slides, showTitle = false) => {
     // Slide de título → enviar como 'title-direct' para que el servidor no lo intercepte
     if (slide.type === 'title') {
       const firstSlide = slides?.[0] || null;
@@ -600,11 +602,12 @@ export default function MobileControllerPage() {
     setActiveSongSlideId(slide.id);
     actions.selectSlide(slide);
     actions.showSlide({
-      type:       'song',
+      type:                'song',
       slides,
-      slideIndex: idx,
-      slideData:     { type: 'song', songId: song.id, slideId: slide.id, songTitle: song.title, label: slide.label, content: slide.content },
-      nextSlideData: next ? { type: 'song', label: next.label, content: next.content } : null,
+      slideIndex:          idx,
+      skipTitleIntercept:  !showTitle,  // true = ir directo al slide sin mostrar título
+      slideData:           { type: 'song', songId: song.id, slideId: slide.id, songTitle: song.title, label: slide.label, content: slide.content },
+      nextSlideData:       next ? { type: 'song', label: next.label, content: next.content } : null,
     });
   };
 

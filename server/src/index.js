@@ -506,7 +506,7 @@ io.on('connection', async (socket) => {
         };
       }
       const bgMedia = data.slideData?.slideBackground ?? s.outputConfig.titleBackground ?? null;
-      s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
+      s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
       emitToOrg('live:state', s.liveState);
       return;
     }
@@ -532,7 +532,7 @@ io.on('connection', async (socket) => {
         songKey:          data.slideData?.songKey    || null,
         titleSlideActive: false,
       };
-      if (s.outputConfig.titleSlideEnabled && isNewSong) {
+      if (s.outputConfig.titleSlideEnabled && isNewSong && !data.skipTitleIntercept) {
         s.currentSong.titleSlideActive = true;
         s.currentSong.slideIndex = -1;
         const firstSlide = data.slides[0];
@@ -546,7 +546,7 @@ io.on('connection', async (socket) => {
         };
         const bgMedia = s.outputConfig.titleBackground || null;
         const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null;
-        s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
+        s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
         emitToOrg('live:state', s.liveState);
         return;
       }
