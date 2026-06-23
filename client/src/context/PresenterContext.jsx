@@ -374,17 +374,24 @@ export function PresenterProvider({ children }) {
   }, []);
 
   // Cuando otro cliente cambia la canción activa, cargar el detalle completo
-  // para sincronizar la grilla del controlador de escritorio
+  // para sincronizar la grilla del controlador de escritorio.
+  // IMPORTANTE: solo depende de pendingSongId (no de pendingSlideId) para evitar
+  // lanzar múltiples fetch concurrentes por cada slide navegado, y usa `cancelled`
+  // para descartar respuestas obsoletas si la canción vuelve a cambiar antes de
+  // que resuelva el fetch anterior.
   useEffect(() => {
     if (!state.pendingSongId) return;
-    const songId   = state.pendingSongId;
-    const slideId  = state.pendingSlideId;
+    const songId  = state.pendingSongId;
+    const slideId = state.pendingSlideId; // valor al momento de iniciar el fetch
+    let cancelled = false;
     api.get(`/songs/${songId}`).then(res => {
+      if (cancelled) return; // respuesta obsoleta — ignorar
       const song  = res.data;
       const slide = song.slides?.find(s => s.id === slideId) || null;
       dispatch({ type: 'SET_PENDING_SONG', payload: { song, slide } });
     }).catch(console.error);
-  }, [state.pendingSongId, state.pendingSlideId]);
+    return () => { cancelled = true; }; // cancelar si cambia la canción antes de resolver
+  }, [state.pendingSongId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Auto-swap de plantilla bíblica (siempre activo) ───────────────────────
   useEffect(() => {
