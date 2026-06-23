@@ -229,6 +229,7 @@ function reducer(state, action) {
       // (el cleanup del efecto pendingSong pondrá cancelled=true).
       // syncLocked=true: impide que SYNC_LIVE_SONG sobreescriba esta selección
       // hasta que el móvil reproduzca la misma canción que el PC tiene abierta.
+      console.log('[AIO] SET_SELECTED_SONG', action.payload?.title, '| prev:', state.selectedSong?.title, '| syncLocked→true');
       return { ...state, selectedSong: action.payload, selectedSlide: null, pendingSongId: null, pendingSlideId: null, syncLocked: true };
     case 'SET_SELECTED_SLIDE':
       return { ...state, selectedSlide: action.payload };
@@ -239,11 +240,16 @@ function reducer(state, action) {
       if (state.selectedSong?.id === songId) {
         // El móvil está en la misma canción que el PC → desbloquear sync
         // (si el usuario tenía syncLocked, ahora ambos coinciden, se puede volver a seguir)
+        if (state.syncLocked) console.log('[AIO] SYNC_LIVE_SONG same song → unlock', songId);
         return state.syncLocked ? { ...state, syncLocked: false } : state;
       }
       // Canción diferente: si el usuario bloqueó el sync, ignorar
-      if (state.syncLocked) return state;
+      if (state.syncLocked) {
+        console.log('[AIO] SYNC_LIVE_SONG BLOQUEADO (syncLocked) songId:', songId, '| selected:', state.selectedSong?.id);
+        return state;
+      }
       // Auto-sincronizar: marcar pendiente de carga
+      console.log('[AIO] SYNC_LIVE_SONG → pendingSongId:', songId, '| prev selected:', state.selectedSong?.id);
       return { ...state, pendingSongId: songId, pendingSlideId: slideId };
     }
     case 'SET_STAGE_CONFIG':
@@ -264,6 +270,7 @@ function reducer(state, action) {
       return { ...state, navigateRequest: action.payload };
     case 'SET_PENDING_SONG':
       // La canción se sincronizó desde el móvil → desbloquear para seguir sincronizando
+      console.log('[AIO] SET_PENDING_SONG', action.payload.song?.title, '| prev:', state.selectedSong?.title, '| syncLocked→false');
       return { ...state, selectedSong: action.payload.song, selectedSlide: action.payload.slide, pendingSongId: null, pendingSlideId: null, syncLocked: false };
     case 'SET_CONNECTED':
       return { ...state, connected: action.payload };
