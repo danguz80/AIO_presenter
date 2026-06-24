@@ -486,8 +486,19 @@ export default function MobileControllerPage() {
       setActiveSongSlideId(slideData.slideId);
     } else if (slideData?.type === 'title') {
       setActiveSongSlideId('__title__');
+    } else if (slideData?.type === 'bible' && slideData.reference && bibleVerses.length) {
+      // Sincronizar versículo activo en móvil cuando el PC navega bíblicamente
+      const match = slideData.reference.trim().match(/^.+?\s+\d+:(\d+)$/);
+      const verseNum = match ? parseInt(match[1], 10) : null;
+      if (verseNum !== null) {
+        const v = bibleVerses.find(v => v.verse === verseNum);
+        if (v && v.id !== activeVerse?.id) {
+          setActiveVerse(v);
+          setActiveVerseList(bibleVerses);
+        }
+      }
     }
-  }, [slideData, isBlank]);
+  }, [slideData, isBlank]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll a la diapo activa cuando cambia (centrada dentro del panel)
   useEffect(() => {

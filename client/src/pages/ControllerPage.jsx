@@ -91,10 +91,13 @@ export default function ControllerPage() {
 
   const [activeTab, setActiveTab] = useState('songs'); // 'songs' | 'bible'
 
-  // Auto-switch to bible tab when a bible slide goes live
+  // Auto-switch tab based on live slide type
   useEffect(() => {
-    if (state.liveState?.slideData?.type === 'bible') {
+    const type = state.liveState?.slideData?.type;
+    if (type === 'bible') {
       setActiveTab('bible');
+    } else if (type === 'song' || type === 'title') {
+      setActiveTab('songs');
     }
   }, [state.liveState?.slideData?.type]);
   const [mediaOpen, setMediaOpen] = useState(false);
