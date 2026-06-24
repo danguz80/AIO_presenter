@@ -455,7 +455,18 @@ export default function SongDetail() {
       {/* Cabecera de la canción */}
       <div className="px-5 py-3 border-b border-surface-700 shrink-0 flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-white truncate">{selectedSong.title}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-base font-semibold text-white truncate">{selectedSong.title}</h2>
+            {selectedSong.song_key && (
+              <span className="text-xs font-semibold text-accent bg-accent/15 px-1.5 py-0.5 rounded shrink-0">{selectedSong.song_key}</span>
+            )}
+            {selectedSong.bpm && (
+              <span className="text-xs font-medium text-zinc-300 bg-surface-700 px-1.5 py-0.5 rounded shrink-0">{selectedSong.bpm} BPM</span>
+            )}
+            {selectedSong.time_sig && (
+              <span className="text-xs font-medium text-zinc-300 bg-surface-700 px-1.5 py-0.5 rounded shrink-0">{selectedSong.time_sig}</span>
+            )}
+          </div>
           {selectedSong.author && (
             <p className="text-xs text-zinc-400">{selectedSong.author}</p>
           )}
