@@ -430,7 +430,7 @@ export default function MobileControllerPage() {
   useEffect(() => {
     if (!activeVerse || !verseListRef.current) return;
     const el = verseListRef.current.querySelector(`[data-verse-id="${activeVerse.id}"]`);
-    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'instant' });
   }, [activeVerse]);
 
   useEffect(() => { document.title = 'AIO Remote'; }, []);
@@ -671,6 +671,15 @@ export default function MobileControllerPage() {
       setOpenPanels(prev => new Set([...prev, 'grid']));
     }
   }, [songDetail?.id]);
+
+  // Auto-cargar songDetail cuando hay un slide de canción activo pero songDetail es null o diferente
+  useEffect(() => {
+    const activeSongId = slideData?.songId;
+    if (!activeSongId) return;
+    if (slideData?.type !== 'song' && slideData?.type !== 'title') return;
+    if (songDetail?.id === activeSongId) return;
+    openSong(activeSongId);
+  }, [slideData?.songId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Datos del slide actual ────────────────────────────────────────────────
   const slideText      = slideData && (slideData.type === 'song' ? stripChords(stripComments(slideData.content)) : slideData.text);

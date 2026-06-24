@@ -233,10 +233,12 @@ export default function BibleBrowser() {
 
   // ─── Auto-navegar cuando se proyecta un versículo desde el móvil ────────
   const liveRef = state.liveState?.slideData?.reference;
+  const lastNavigatedRef = useRef(null);
   useEffect(() => {
     const sd = state.liveState?.slideData;
     if (sd?.type !== 'bible' || !sd?.reference) return;
     if (!books.length) return;
+    if (lastNavigatedRef.current === sd.reference) return; // ya navegado
 
     const match = sd.reference.trim().match(/^(.+?)\s+(\d+):(\d+)$/);
     if (!match) return;
@@ -248,6 +250,8 @@ export default function BibleBrowser() {
     const found = books.find(b => norm(b.name) === norm(bookName) || norm(b.abbrev) === norm(bookName));
     if (!found) return;
 
+    lastNavigatedRef.current = sd.reference;
+
     if (book?.id === found.id && chapter === chapNum && verses.length > 0) {
       const idx = verses.findIndex(v => v.verse === verseNum);
       if (idx !== -1) setActiveVerseIdx(idx);
@@ -257,7 +261,7 @@ export default function BibleBrowser() {
       setBook(found);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveRef]);
+  }, [liveRef, books.length]);
 
   // ─── Navegar capítulos ────────────────────────────────────────────────────
   const currentVersionName = versions.find(v => String(v.id) === versionId)?.abbreviation || '';
