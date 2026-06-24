@@ -134,8 +134,8 @@ async function getEvents(req, res) {
       const dates = expandRecurring(baseDateStr, ev.recurrence, recurEndStr, start, end);
       const evMap = recurSongMap[ev.id] || {};
       for (const d of dates) {
-        const entry = evMap[d] || evMap['__base__'] || { songs: [], song_count: 0 };
-        expanded.push({ ...ev, date: d, base_date: baseDateStr, songs: entry.songs, song_count: entry.song_count });
+        const entry = evMap[d] || { songs: [], song_count: 0 };
+        expanded.push({ ...ev, date: d, occurrence_date: d, base_date: baseDateStr, songs: entry.songs, song_count: entry.song_count });
       }
     }
 
