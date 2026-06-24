@@ -561,7 +561,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
             // Si TODOS los segmentos son acorde sin letra = línea instrumental → separadores —
             const isChordOnly = line.every(seg => !seg.text || !seg.text.trim());
             return (
-              <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.15 }}>
+              <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1.15, marginBottom: isChordOnly ? '0.3em' : 0 }}>
                 {line.map((seg, si) => {
                   const hasRealText = seg.text && seg.text.trim().length > 0;
                   const outerStyle = (!hasRealText && seg.chord)
@@ -577,18 +577,20 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
                         >
                           {seg.chord || ''}
                         </span>
-                        <span
-                          style={{
-                            color: lyricsColor,
-                            textShadow: stroke,
-                            lineHeight: 1.15,
-                            whiteSpace: 'pre',
-                          }}
-                        >
-                          {hasRealText
-                            ? seg.text.replace(/ /g, '\u00a0')
-                            : seg.chord ? '\u00a0' : ''}
-                        </span>
+                        {!isChordOnly && (
+                          <span
+                            style={{
+                              color: lyricsColor,
+                              textShadow: stroke,
+                              lineHeight: 1.15,
+                              whiteSpace: 'pre',
+                            }}
+                          >
+                            {hasRealText
+                              ? seg.text.replace(/ /g, '\u00a0')
+                              : seg.chord ? '\u00a0' : ''}
+                          </span>
+                        )}
                       </span>
                       {/* Guión separador entre acordes en líneas instrumentales */}
                       {isChordOnly && seg.chord && si < line.length - 1 && (
@@ -599,7 +601,6 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
                           >
                             —
                           </span>
-                          <span style={{ lineHeight: 1.15, color: 'transparent' }}>&nbsp;</span>
                         </span>
                       )}
                     </Fragment>
