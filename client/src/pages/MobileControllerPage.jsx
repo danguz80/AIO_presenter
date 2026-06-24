@@ -345,6 +345,8 @@ export default function MobileControllerPage() {
   const [activeSplit,   setActiveSplit]         = useState(null);  // { verse, part2, list } cuando se divide un verso largo
   const [verseHistory,  setVerseHistory]        = useState([]);    // historial de versículos proyectados
   const bibleSearchTimer = useRef(null);
+  const verseListRef     = useRef(null);
+  const [activeVerseList, setActiveVerseList] = useState([]); // lista activa al momento de sendVerse
 
   const loadBibleVersions = useCallback(async () => {
     try {
@@ -395,6 +397,7 @@ export default function MobileControllerPage() {
 
   const sendVerse = (verse, list = []) => {
     setActiveVerse(verse);
+    setActiveVerseList(list);
     const ref  = `${verse.book_name} ${verse.chapter}:${verse.verse}`;
     // Registrar en historial (mueve al tope si ya existe)
     setVerseHistory(prev => {
@@ -422,6 +425,13 @@ export default function MobileControllerPage() {
       });
     }
   };
+
+  // Scroll versículo activo al centro de la lista
+  useEffect(() => {
+    if (!activeVerse || !verseListRef.current) return;
+    const el = verseListRef.current.querySelector(`[data-verse-id="${activeVerse.id}"]`);
+    if (el) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, [activeVerse]);
 
   useEffect(() => { document.title = 'AIO Remote'; }, []);
 
@@ -2163,7 +2173,7 @@ export default function MobileControllerPage() {
                 {/* Paso 3: lista de versículos con su propio scroll + barra prev/next */}
                 {bibleBook && bibleChapter && (
                   <div className="flex flex-col flex-1 min-h-0">
-                    <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+                    <div ref={verseListRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
                       {bibleVerses.length === 0 && (
                         <div className="flex justify-center pt-8">
                           <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -2172,6 +2182,7 @@ export default function MobileControllerPage() {
                       {bibleVerses.map(v => (
                         <button
                           key={v.id}
+                          data-verse-id={v.id}
                           onClick={() => sendVerse(v, bibleVerses)}
                           className={`w-full text-left px-3 py-2.5 rounded-xl border transition-colors flex gap-2.5 ${
                             activeVerse?.id === v.id
@@ -2211,16 +2222,16 @@ export default function MobileControllerPage() {
                         ) : (
                           <>
                             <button
-                              onClick={() => { const i = bibleVerses.findIndex(v => v.id === activeVerse.id); if (i > 0) sendVerse(bibleVerses[i - 1], bibleVerses); }}
-                              disabled={bibleVerses.findIndex(v => v.id === activeVerse.id) <= 0}
+                              onClick={() => { const i = activeVerseList.findIndex(v => v.id === activeVerse.id); if (i > 0) sendVerse(activeVerseList[i - 1], activeVerseList); }}
+                              disabled={activeVerseList.findIndex(v => v.id === activeVerse.id) <= 0}
                               className="p-1.5 rounded-lg bg-surface-700 border border-surface-600 text-zinc-300 disabled:opacity-30"
                             ><ChevronLeft size={16} /></button>
                             <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
                               {activeVerse.book_name} {activeVerse.chapter}:{activeVerse.verse}
                             </p>
                             <button
-                              onClick={() => { const i = bibleVerses.findIndex(v => v.id === activeVerse.id); if (i < bibleVerses.length - 1) sendVerse(bibleVerses[i + 1], bibleVerses); }}
-                              disabled={bibleVerses.findIndex(v => v.id === activeVerse.id) >= bibleVerses.length - 1}
+                              onClick={() => { const i = activeVerseList.findIndex(v => v.id === activeVerse.id); if (i < activeVerseList.length - 1) sendVerse(activeVerseList[i + 1], activeVerseList); }}
+                              disabled={activeVerseList.findIndex(v => v.id === activeVerse.id) >= activeVerseList.length - 1}
                               className="p-1.5 rounded-lg bg-surface-700 border border-surface-600 text-zinc-300 disabled:opacity-30"
                             ><ChevronRight size={16} /></button>
                           </>
