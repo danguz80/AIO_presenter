@@ -738,6 +738,33 @@ function TeamSection({ members: initialMembers, onMembersUpdated }) {
   );
 }
 
+// ─── Input nombre libre músico ────────────────────────────────────────────────
+function AddMusicianByName({ onAdd }) {
+  const [name, setName] = useState('');
+  const submit = () => { if (name.trim()) { onAdd(name); setName(''); } };
+  return (
+    <div className="flex items-center gap-2">
+      <UserPlus size={13} className="text-white/25 flex-shrink-0" />
+      <input
+        type="text"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+        placeholder="Agregar por nombre…"
+        className="flex-1 text-xs bg-white/5 border border-dashed border-white/15 rounded-lg px-2 py-1.5 text-white/70 placeholder:text-white/30 focus:outline-none focus:border-yellow-400/40"
+      />
+      {name.trim() && (
+        <button
+          onClick={submit}
+          className="p-1.5 rounded-lg bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-300 transition-colors flex-shrink-0"
+        >
+          <Plus size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Banda ────────────────────────────────────────────────────────────────────
 function BandSection({ members, org, isAdmin, onOrgUpdated }) {
   const [bandName, setBandName]   = useState(org?.band_name || '');
@@ -801,12 +828,7 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
   const addConfig = async () => {
     const count = configs.length;
     const name  = count === 0 ? 'Configuración normal' : `Configuración ${count + 1}`;
-    const slots = members.map(m => ({
-      userId:     m.id,
-      userName:   m.display_name,
-      avatarUrl:  m.avatar_url,
-      instrument: (m.instruments || [])[0] || '',
-    }));
+    const slots = [];
     setSaving(true);
     try {
       const res = await fetch(`${API}/api/band-configs`, {
@@ -852,7 +874,7 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
   const addSlot = (configId, member) =>
     setConfigs(prev => prev.map(c => {
       if (c.id !== configId) return c;
-      if (c.slots.some(s => s.userId === member.id)) return c;
+      if (c.slots.some(s => String(s.userId) === String(member.id))) return c;
       return { ...c, slots: [...c.slots, {
         userId:     member.id,
         userName:   member.display_name,
@@ -860,6 +882,22 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
         instrument: (member.instruments || [])[0] || '',
       }]};
     }));
+
+  const addSlotByName = (configId, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setConfigs(prev => prev.map(c => {
+      if (c.id !== configId) return c;
+      if (c.slots.some(s => s.userName?.toLowerCase() === trimmed.toLowerCase())) return c;
+      return { ...c, slots: [...c.slots, {
+        userId:     `custom-${Date.now()}`,
+        userName:   trimmed,
+        avatarUrl:  null,
+        instrument: '',
+      }]};
+    }));
+  };
+
 
   const removeSlot = (configId, userId) =>
     setConfigs(prev => prev.map(c => {
@@ -1112,12 +1150,11 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
                   </div>
                 ))}
 
-                {/* Agregar músico que no está en la config */}
+                {/* Agregar músico: desde lista de miembros o por nombre libre */}
                 {(() => {
-                  const slotIds = new Set((config.slots || []).map(s => s.userId));
-                  const available = members.filter(m => !slotIds.has(m.id));
-                  if (!available.length) return null;
-                  return (
+                  const slotIds = new Set((config.slots || []).map(s => String(s.userId)));
+                  const available = members.filter(m => !slotIds.has(String(m.id)));
+                  return available.length > 0 ? (
                     <div className="flex items-center gap-2 pt-1">
                       <UserPlus size={13} className="text-white/25 flex-shrink-0" />
                       <select
@@ -1128,14 +1165,15 @@ function BandSection({ members, org, isAdmin, onOrgUpdated }) {
                         }}
                         className="flex-1 text-xs bg-white/5 border border-dashed border-white/15 rounded-lg px-2 py-1.5 text-white/40 focus:outline-none focus:border-yellow-400/40"
                       >
-                        <option value="">Agregar músico…</option>
+                        <option value="">Agregar desde el equipo…</option>
                         {available.map(m => (
-                          <option key={m.id} value={m.id}>{m.display_name}</option>
+                          <option key={m.id} value={String(m.id)}>{m.display_name}</option>
                         ))}
                       </select>
                     </div>
-                  );
+                  ) : null;
                 })()}
+                <AddMusicianByName onAdd={name => addSlotByName(config.id, name)} />
               </div>
 
               <button

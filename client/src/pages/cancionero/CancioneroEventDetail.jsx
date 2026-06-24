@@ -671,6 +671,8 @@ export default function CancioneroEventDetail() {
   const [bandConfigs,  setBandConfigs] = useState([]);
   const [savingBand,   setSavingBand]  = useState(false);
 
+  const scrollRef = useRef(null);
+
   const isAdmin = (() => {
     try {
       const token = localStorage.getItem('aio_sync_token');

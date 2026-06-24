@@ -78,7 +78,9 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
 
   // La plantilla bíblica puede inyectar su propio fondo por encima del backgroundMedia normal
   const bibleTemplateActive = !isBlank && cfg.bibleTemplateEnabled && slideData?.type === 'bible' && !!cfg.bibleBackground;
-  const effectiveBgMedia = bibleTemplateActive ? cfg.bibleBackground : (hasBgMedia ? backgroundMedia : null);
+  // La diapo de título puede tener su propio fondo específico (titleBackground)
+  const titleBgActive = !isBlank && slideData?.type === 'title' && !!cfg.titleBackground;
+  const effectiveBgMedia = bibleTemplateActive ? cfg.bibleBackground : titleBgActive ? cfg.titleBackground : (hasBgMedia ? backgroundMedia : null);
   const hasBg = !!effectiveBgMedia && (effectiveBgMedia.mediaType !== 'video' || (cfg.showVideo ?? true));
 
   // Logo en pantalla en negro
