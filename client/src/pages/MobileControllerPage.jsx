@@ -1886,10 +1886,10 @@ export default function MobileControllerPage() {
             <ChevronDown size={15} className={`text-zinc-500 transition-transform duration-200 ${openPanels.has('biblia') ? 'rotate-180' : ''}`} />
           </button>
           {openPanels.has('biblia') && (
-            <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
+            <div className="flex flex-col overflow-hidden" style={{ height: '65vh' }}>
         {/* ──── BIBLIA ──── */}
         {true && (
-          <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Selector de versión + toggle modo */}
             <div className="px-4 pt-3 pb-2 shrink-0 border-b border-surface-700 flex gap-1.5 items-center">
               <select

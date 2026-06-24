@@ -90,6 +90,13 @@ export default function ControllerPage() {
   }, [navigate]);
 
   const [activeTab, setActiveTab] = useState('songs'); // 'songs' | 'bible'
+
+  // Auto-switch to bible tab when a bible slide goes live
+  useEffect(() => {
+    if (state.liveState?.slideData?.type === 'bible') {
+      setActiveTab('bible');
+    }
+  }, [state.liveState?.slideData?.type]);
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaHeight, setMediaHeight] = useState(220);
   const mediaDragging = useRef(false);

@@ -25,6 +25,7 @@ export default function BibleBrowser() {
   const [activeVerseIdx,  setActiveVerseIdx]  = useState(null);
   const [pendingChapter,  setPendingChapter]  = useState(null);
   const [pendingVerse,    setPendingVerse]    = useState(null);
+  const [pendingHighlight, setPendingHighlight] = useState(null); // highlight-only (no proyectar)
 
   // ── Búsqueda ──────────────────────────────────────────────────────────────
   const [mode,          setMode]          = useState(MODE_BROWSE);
@@ -100,6 +101,10 @@ export default function BibleBrowser() {
           sendVerse(v, res.data[idx + 1] || null);
         }
         setPendingVerse(null);
+      } else if (pendingHighlight !== null) {
+        const idx = res.data.findIndex(v => v.verse === pendingHighlight);
+        if (idx !== -1) setActiveVerseIdx(idx);
+        setPendingHighlight(null);
       }
     }).catch(console.error).finally(() => setLoadingVerses(false));
   }, [chapter, book]);
@@ -225,6 +230,34 @@ export default function BibleBrowser() {
       verseTextRefs.current[activeVerseIdx]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [activeVerseIdx]);
+
+  // ─── Auto-navegar cuando se proyecta un versículo desde el móvil ────────
+  const liveRef = state.liveState?.slideData?.reference;
+  useEffect(() => {
+    const sd = state.liveState?.slideData;
+    if (sd?.type !== 'bible' || !sd?.reference) return;
+    if (!books.length) return;
+
+    const match = sd.reference.trim().match(/^(.+?)\s+(\d+):(\d+)$/);
+    if (!match) return;
+    const [, bookName, chapStr, verseStr] = match;
+    const chapNum  = parseInt(chapStr,  10);
+    const verseNum = parseInt(verseStr, 10);
+
+    const norm  = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const found = books.find(b => norm(b.name) === norm(bookName) || norm(b.abbrev) === norm(bookName));
+    if (!found) return;
+
+    if (book?.id === found.id && chapter === chapNum && verses.length > 0) {
+      const idx = verses.findIndex(v => v.verse === verseNum);
+      if (idx !== -1) setActiveVerseIdx(idx);
+    } else {
+      setPendingHighlight(verseNum);
+      setPendingChapter(chapNum);
+      setBook(found);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveRef]);
 
   // ─── Navegar capítulos ────────────────────────────────────────────────────
   const currentVersionName = versions.find(v => String(v.id) === versionId)?.abbreviation || '';
