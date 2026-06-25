@@ -198,6 +198,12 @@ export default function MobileControllerPage() {
   const [liveView, setLiveView] = useState('control'); // 'control' | 'stage'
   const [stageTime, setStageTime] = useState(() => new Date());
   const [stageLastLabel, setStageLastLabel] = useState(null);
+
+  // PIN del presentador al que este dispositivo está vinculado
+  const [pinInput,     setPinInput]     = useState('');
+  const [pinDetecting, setPinDetecting] = useState(false);
+  // currentPin: el PIN guardado en localStorage para este dispositivo
+  const currentPin = localStorage.getItem('aio_presenter_pin') || '';
   const touchStart      = useRef(null);
   const songEditBodyRef  = useRef(null);
   const savedCursorPos   = useRef(null);
@@ -270,6 +276,36 @@ export default function MobileControllerPage() {
   const authHeaders = () => {
     const token = localStorage.getItem('aio_sync_token');
     return token ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` } : { 'Content-Type': 'application/json' };
+  };
+
+  // Auto-detectar el PIN del presentador activo en la red local
+  const autoDetectPin = async () => {
+    setPinDetecting(true);
+    try {
+      const orgId = localStorage.getItem('aio_org_id') || '';
+      const res  = await fetch(`${getApiBase()}/api/presenter/pins?orgId=${orgId}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error('Error');
+      const { pins } = await res.json();
+      if (pins && pins.length > 0) {
+        setPinInput(pins[0]);
+      } else {
+        setFlash({ type: 'warn', msg: 'No se encontró ningún presentador activo' });
+        setTimeout(() => setFlash(null), 3000);
+      }
+    } catch {
+      setFlash({ type: 'warn', msg: 'No se pudo detectar. Intenta manualmente.' });
+      setTimeout(() => setFlash(null), 3000);
+    } finally {
+      setPinDetecting(false);
+    }
+  };
+
+  // Vincular con el presentador usando el PIN ingresado
+  const applyPresenterPin = (pin) => {
+    const clean = (pin || '').trim().toLowerCase().slice(0, 6);
+    if (!clean) return;
+    localStorage.setItem('aio_presenter_pin', clean);
+    window.location.reload();
   };
 
   const saveEventForm = async () => {
@@ -972,6 +1008,42 @@ export default function MobileControllerPage() {
                     <p className="text-zinc-300 text-sm whitespace-pre-line line-clamp-2">{nextText}</p>
                   </div>
                 )}
+              </div>
+
+              {/* ── Vincular presentador por PIN ── */}
+              <div className="mx-4 mb-3 rounded-xl border border-surface-600 bg-surface-900/60 overflow-hidden">
+                <div className="px-3 py-2 flex items-center justify-between border-b border-surface-700">
+                  <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Presentador vinculado</span>
+                  {currentPin
+                    ? <span className="text-xs font-mono font-bold text-accent bg-accent/15 px-2 py-0.5 rounded">{currentPin}</span>
+                    : <span className="text-xs text-zinc-600 italic">sin vincular</span>
+                  }
+                </div>
+                <div className="px-3 py-2.5 flex items-center gap-2">
+                  <input
+                    type="text"
+                    maxLength={6}
+                    placeholder="PIN (6 car.)"
+                    value={pinInput}
+                    onChange={e => setPinInput(e.target.value.toLowerCase().slice(0, 6))}
+                    className="flex-1 bg-surface-800 border border-surface-600 rounded-lg px-2.5 py-1.5 text-sm text-white placeholder:text-zinc-600 font-mono outline-none focus:border-accent"
+                  />
+                  <button
+                    onClick={autoDetectPin}
+                    disabled={pinDetecting}
+                    className="px-2.5 py-1.5 rounded-lg bg-surface-700 border border-surface-600 text-xs text-zinc-300 active:bg-surface-600 shrink-0"
+                    title="Auto-detectar presentador en la red"
+                  >
+                    {pinDetecting ? '...' : 'Auto'}
+                  </button>
+                  <button
+                    onClick={() => applyPresenterPin(pinInput)}
+                    disabled={!pinInput || pinInput.length < 4}
+                    className="px-2.5 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold active:bg-accent/80 disabled:opacity-40 shrink-0"
+                  >
+                    Vincular
+                  </button>
+                </div>
               </div>
 
               {/* Botones de acción */}

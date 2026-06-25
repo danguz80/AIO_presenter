@@ -152,6 +152,27 @@ function getOrgState(orgId) {
   return orgStates.get(orgId);
 }
 
+// ─── Estado vivo por PIN de presentador ──────────────────────────────────────
+// Cada instancia de ControllerPage genera un PIN único (6 hex chars).
+// Los comandos en vivo (live:show, navigate, schedule, etc.) van al PIN correcto.
+// Las configuraciones (stage:config, output:config, etc.) siguen siendo por org.
+const pinStates = new Map(); // key `${orgId}:${pin}` → live state
+
+function getPinState(orgId, pin) {
+  const key = `${orgId}:${pin}`;
+  if (!pinStates.has(key)) {
+    pinStates.set(key, {
+      liveState:    { type: null, slideData: null, nextSlideData: null, isBlank: false,
+                      background: { color: '#000000', type: 'color' }, backgroundMedia: null },
+      schedule:     [],
+      eventPlays:   { ids: [], ctx: null },
+      reservasMode: false,
+      currentSong:  null,
+    });
+  }
+  return pinStates.get(key);
+}
+
 async function refreshOrgFromDB(orgId) {
   try {
     const { rows } = await pool.query(
@@ -465,18 +486,25 @@ function getConnectedUsers(orgId) {
 
 io.on('connection', async (socket) => {
   const orgId = socket.orgId;
+  const pin   = socket.handshake.auth?.presenterPin || null;
+  socket.presenterPin = pin;
+
   socket.join(`org:${orgId}`);
-  console.log(`[Socket] Org ${orgId} — cliente conectado: ${socket.id}`);
+  if (pin) socket.join(`pres:${orgId}:${pin}`);
+  console.log(`[Socket] Org ${orgId} PIN ${pin || 'none'} — cliente conectado: ${socket.id}`);
 
   // Refrescar settings desde DB para capturar cambios hechos desde otras instancias
   await refreshOrgFromDB(orgId);
 
-  const s = getOrgState(orgId);
+  const s    = getOrgState(orgId);
+  // live: estado vivo para este PIN (o fallback al estado de la org para clientes sin PIN)
+  const live = pin ? getPinState(orgId, pin) : s;
 
-  const emitToOrg = (event, data) => io.to(`org:${orgId}`).emit(event, data);
+  const emitToOrg  = (event, data) => io.to(`org:${orgId}`).emit(event, data);
+  // emitToLive: envía solo al grupo del presentador (PIN) o a toda la org si no hay PIN
+  const emitToLive = (event, data) => io.to(pin ? `pres:${orgId}:${pin}` : `org:${orgId}`).emit(event, data);
 
-  // Enviar estado actual al cliente que se conecta
-  socket.emit('live:state',        s.liveState);
+  // Configuraciones (compartidas por org) → solo al cliente que conecta
   socket.emit('display:config',    s.displayConfig);
   socket.emit('app:theme',         s.appTheme);
   socket.emit('stage:config',      s.stageConfig);
@@ -485,45 +513,47 @@ io.on('connection', async (socket) => {
   socket.emit('output:config',     s.outputConfig);
   socket.emit('output:templates',  s.outputTemplates);
   socket.emit('virtual:templates', s.virtualTemplates);
-  socket.emit('schedule:update',   s.schedule);
-  if (s.eventPlays.ids.length > 0) socket.emit('event:plays', s.eventPlays);
-  socket.emit('event:reservas_mode', s.reservasMode);
+  // Estado vivo (por PIN si lo tiene, si no por org)
+  socket.emit('live:state',          live.liveState);
+  socket.emit('schedule:update',     live.schedule);
+  if (live.eventPlays.ids.length > 0) socket.emit('event:plays', live.eventPlays);
+  socket.emit('event:reservas_mode', live.reservasMode);
 
   // El operador envía un slide a proyectar
   socket.on('live:show', (data) => {
     // Clic directo en el thumbnail de título desde el grid — no re-evalúa isNewSong
     if (data.type === 'title-direct') {
       if (data.slides && Array.isArray(data.slides)) {
-        s.currentSong = {
-          ...s.currentSong,
+        live.currentSong = {
+          ...live.currentSong,
           slides:           data.slides,
-          songTitle:        data.slideData?.songTitle  || s.currentSong?.songTitle  || '',
-          songAuthor:       data.slideData?.songAuthor || s.currentSong?.songAuthor || '',
-          songId:           data.slideData?.songId     || s.currentSong?.songId     || null,
-          songKey:          data.slideData?.songKey    || s.currentSong?.songKey    || null,
+          songTitle:        data.slideData?.songTitle  || live.currentSong?.songTitle  || '',
+          songAuthor:       data.slideData?.songAuthor || live.currentSong?.songAuthor || '',
+          songId:           data.slideData?.songId     || live.currentSong?.songId     || null,
+          songKey:          data.slideData?.songKey    || live.currentSong?.songKey    || null,
           titleSlideActive: true,
           slideIndex:       -1,
         };
       }
       const bgMedia = data.slideData?.slideBackground ?? s.outputConfig.titleBackground ?? null;
-      s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
-      emitToOrg('live:state', s.liveState);
+      live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
+      emitToLive('live:state', live.liveState);
       return;
     }
 
     // Media de fondo (primerPlano=false)
     if (data.type === 'media' && data.slideData?.primerPlano === false) {
-      s.liveState = { ...s.liveState, backgroundMedia: data.slideData, isBlank: false };
-      emitToOrg('live:state', s.liveState);
+      live.liveState = { ...live.liveState, backgroundMedia: data.slideData, isBlank: false };
+      emitToLive('live:state', live.liveState);
       return;
     }
     if (data.type === 'media') {
-      s.liveState = { ...s.liveState, backgroundMedia: null };
+      live.liveState = { ...live.liveState, backgroundMedia: null };
     }
 
     if (data.slides && Array.isArray(data.slides)) {
-      const isNewSong = !s.currentSong || s.currentSong.songId !== (data.slideData?.songId ?? null);
-      s.currentSong = {
+      const isNewSong = !live.currentSong || live.currentSong.songId !== (data.slideData?.songId ?? null);
+      live.currentSong = {
         slides:           data.slides,
         slideIndex:       data.slideIndex ?? 0,
         songTitle:        data.slideData?.songTitle  || '',
@@ -533,46 +563,46 @@ io.on('connection', async (socket) => {
         titleSlideActive: false,
       };
       if (s.outputConfig.titleSlideEnabled && isNewSong && !data.skipTitleIntercept) {
-        s.currentSong.titleSlideActive = true;
-        s.currentSong.slideIndex = -1;
+        live.currentSong.titleSlideActive = true;
+        live.currentSong.slideIndex = -1;
         const firstSlide = data.slides[0];
         const titleSlideData = {
           type: 'title',
-          songTitle:  s.currentSong.songTitle,
-          songAuthor: s.currentSong.songAuthor,
-          songId:     s.currentSong.songId,
-          songKey:    s.currentSong.songKey || null,
+          songTitle:  live.currentSong.songTitle,
+          songAuthor: live.currentSong.songAuthor,
+          songId:     live.currentSong.songId,
+          songKey:    live.currentSong.songKey || null,
           slideBackground: s.outputConfig.titleBackground || null,
         };
         const bgMedia = s.outputConfig.titleBackground || null;
         const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null;
-        s.liveState = { ...s.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
-        emitToOrg('live:state', s.liveState);
+        live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
+        emitToLive('live:state', live.liveState);
         return;
       }
     } else if (data.type !== 'song') {
-      s.currentSong = null;
+      live.currentSong = null;
     }
 
     if (data.type === 'song' && data.slideData?.slideBackground) {
-      s.liveState = { ...s.liveState, backgroundMedia: data.slideData.slideBackground };
+      live.liveState = { ...live.liveState, backgroundMedia: data.slideData.slideBackground };
     }
     const { slides, ...rest } = data;
-    s.liveState = { ...s.liveState, ...rest, totalSlides: slides?.length ?? null, isBlank: false };
-    emitToOrg('live:state', s.liveState);
+    live.liveState = { ...live.liveState, ...rest, totalSlides: slides?.length ?? null, isBlank: false };
+    emitToLive('live:state', live.liveState);
   });
 
   // Pantalla en negro / en blanco
   socket.on('live:blank', (isBlank) => {
-    s.liveState.isBlank = isBlank;
-    if (isBlank) s.liveState.backgroundMedia = null;
-    emitToOrg('live:state', s.liveState);
+    live.liveState.isBlank = isBlank;
+    if (isBlank) live.liveState.backgroundMedia = null;
+    emitToLive('live:state', live.liveState);
   });
 
   // Cambiar fondo (pantalla principal)
   socket.on('live:background', (bg) => {
-    s.liveState.background = bg;
-    emitToOrg('live:state', s.liveState);
+    live.liveState.background = bg;
+    emitToLive('live:state', live.liveState);
   });
 
   // Actualizar plantillas de escenario
@@ -584,20 +614,20 @@ io.on('connection', async (socket) => {
 
   // Actualizar lista del evento del día
   socket.on('schedule:update', (songs) => {
-    s.schedule = Array.isArray(songs) ? songs : [];
-    emitToOrg('schedule:update', s.schedule);
+    live.schedule = Array.isArray(songs) ? songs : [];
+    emitToLive('schedule:update', live.schedule);
   });
 
   // Sincronizar canciones tocadas
   socket.on('event:plays', (data) => {
-    s.eventPlays = data;
-    emitToOrg('event:plays', data);
+    live.eventPlays = data;
+    emitToLive('event:plays', data);
   });
 
   // Sincronizar modo reservas
   socket.on('event:reservas_mode', (mode) => {
-    s.reservasMode = mode;
-    emitToOrg('event:reservas_mode', mode);
+    live.reservasMode = mode;
+    emitToLive('event:reservas_mode', mode);
   });
 
   // Actualizar configuración de pantalla de escenario
@@ -651,56 +681,56 @@ io.on('connection', async (socket) => {
 
   // Navegar: el móvil u otro cliente pide avanzar/retroceder
   socket.on('navigate', (dir) => {
-    if (s.currentSong && s.currentSong.slides.length > 0) {
-      const { slides, songId, songTitle, songAuthor, songKey } = s.currentSong;
+    if (live.currentSong && live.currentSong.slides.length > 0) {
+      const { slides, songId, songTitle, songAuthor, songKey } = live.currentSong;
 
-      if (s.currentSong.titleSlideActive) {
+      if (live.currentSong.titleSlideActive) {
         if (dir === 'next') {
-          s.currentSong.titleSlideActive = false;
-          s.currentSong.slideIndex = 0;
+          live.currentSong.titleSlideActive = false;
+          live.currentSong.slideIndex = 0;
           const slide     = slides[0];
           const nextSlide = slides[1] || null;
           const bgMedia = slide.slide_background || null;
-          s.liveState = {
-            ...s.liveState,
+          live.liveState = {
+            ...live.liveState,
             backgroundMedia: bgMedia,
             isBlank: false,
             slideIndex: 0,
             slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content },
             nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
           };
-          emitToOrg('live:state', s.liveState);
+          emitToLive('live:state', live.liveState);
         }
         return;
       }
 
-      const { slideIndex } = s.currentSong;
+      const { slideIndex } = live.currentSong;
       const newIndex = dir === 'next'
         ? Math.min(slideIndex + 1, slides.length - 1)
         : Math.max(slideIndex - 1, 0);
 
       if (dir === 'prev' && slideIndex === 0 && s.outputConfig.titleSlideEnabled) {
-        s.currentSong.titleSlideActive = true;
-        s.currentSong.slideIndex = -1;
-        s.liveState = {
-          ...s.liveState,
+        live.currentSong.titleSlideActive = true;
+        live.currentSong.slideIndex = -1;
+        live.liveState = {
+          ...live.liveState,
           backgroundMedia: s.outputConfig.titleBackground || null,
           isBlank: false,
           slideIndex: -1,
           slideData: { type: 'title', songTitle, songAuthor, songId, songKey: songKey || null },
           nextSlideData: { type: 'song', label: slides[0].label, content: slides[0].content },
         };
-        emitToOrg('live:state', s.liveState);
+        emitToLive('live:state', live.liveState);
         return;
       }
 
       if (newIndex === slideIndex) return;
-      s.currentSong.slideIndex = newIndex;
+      live.currentSong.slideIndex = newIndex;
       const slide     = slides[newIndex];
       const nextSlide = slides[newIndex + 1] || null;
-      const bgMedia = slide.slide_background || s.liveState.backgroundMedia;
-      s.liveState = {
-        ...s.liveState,
+      const bgMedia = slide.slide_background || live.liveState.backgroundMedia;
+      live.liveState = {
+        ...live.liveState,
         backgroundMedia: bgMedia,
         isBlank: false,
         slideIndex: newIndex,
@@ -710,9 +740,9 @@ io.on('connection', async (socket) => {
         },
         nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
       };
-      emitToOrg('live:state', s.liveState);
+      emitToLive('live:state', live.liveState);
     } else {
-      socket.broadcast.to(`org:${orgId}`).emit('navigate', dir);
+      socket.broadcast.to(pin ? `pres:${orgId}:${pin}` : `org:${orgId}`).emit('navigate', dir);
     }
   });
 
@@ -818,6 +848,29 @@ app.use('/admin',             adminRouter);
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Retorna los PINs de presentadores activos para esta org
+// Permite al móvil auto-descubrir el PIN del presentador en la misma LAN
+app.get('/api/presenter/pins', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  let orgId;
+  try {
+    const tok = authHeader.replace('Bearer ', '');
+    orgId = JSON.parse(Buffer.from(tok.split('.')[1], 'base64url').toString()).orgId;
+  } catch { /* fallback: orgId en query */ }
+  if (!orgId) orgId = req.query.orgId ? parseInt(req.query.orgId, 10) : null;
+  if (!orgId) return res.status(400).json({ error: 'orgId requerido' });
+
+  const pins = new Set();
+  const orgRoom = io.sockets.adapter.rooms.get(`org:${orgId}`);
+  if (orgRoom) {
+    for (const sid of orgRoom) {
+      const sock = io.sockets.sockets.get(sid);
+      if (sock?.presenterPin) pins.add(sock.presenterPin);
+    }
+  }
+  res.json({ pins: Array.from(pins) });
 });
 
 // Devuelve la IP local de la máquina para mostrar en el QR

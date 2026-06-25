@@ -330,9 +330,17 @@ export function PresenterProvider({ children }) {
     }
     const token = localStorage.getItem('aio_sync_token');
     const orgId = localStorage.getItem('aio_org_id');
+    // PIN de sesión del presentador: identifica esta instancia de ControllerPage.
+    // Todos los dispositivos que quieran controlar este presentador deben usar el mismo PIN.
+    let presenterPin = localStorage.getItem('aio_presenter_pin');
+    if (!presenterPin) {
+      presenterPin = Math.random().toString(16).slice(2, 8) + Math.random().toString(16).slice(2, 6);
+      presenterPin = presenterPin.slice(0, 6);
+      localStorage.setItem('aio_presenter_pin', presenterPin);
+    }
     const socket = io(backendUrl, {
       autoConnect: true,
-      auth: { token: token || undefined, orgId: orgId || undefined },
+      auth: { token: token || undefined, orgId: orgId || undefined, presenterPin },
     });
     socketRef.current = socket;
 
