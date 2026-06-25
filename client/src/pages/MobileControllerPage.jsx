@@ -202,8 +202,8 @@ export default function MobileControllerPage() {
   // PIN del presentador al que este dispositivo está vinculado
   const [pinInput,     setPinInput]     = useState('');
   const [pinDetecting, setPinDetecting] = useState(false);
-  // currentPin: el PIN guardado en localStorage para este dispositivo
-  const currentPin = localStorage.getItem('aio_presenter_pin') || '';
+  // currentPin: el PIN del presentador objetivo (aio_target_pin, lo setea el usuario)
+  const currentPin = localStorage.getItem('aio_target_pin') || '';
   const touchStart      = useRef(null);
   const songEditBodyRef  = useRef(null);
   const savedCursorPos   = useRef(null);
@@ -286,8 +286,11 @@ export default function MobileControllerPage() {
       const res  = await fetch(`${getApiBase()}/api/presenter/pins?orgId=${orgId}`, { headers: authHeaders() });
       if (!res.ok) throw new Error('Error');
       const { pins } = await res.json();
-      if (pins && pins.length > 0) {
-        setPinInput(pins[0]);
+      // Excluir el PIN propio de este dispositivo (aio_presenter_pin) para no auto-detectarse a sí mismo
+      const ownPin    = localStorage.getItem('aio_presenter_pin') || '';
+      const otherPins = (pins || []).filter(p => p !== ownPin);
+      if (otherPins.length > 0) {
+        setPinInput(otherPins[0]);
       } else {
         setFlash({ type: 'warn', msg: 'No se encontró ningún presentador activo' });
         setTimeout(() => setFlash(null), 3000);
@@ -304,7 +307,7 @@ export default function MobileControllerPage() {
   const applyPresenterPin = (pin) => {
     const clean = (pin || '').trim().toLowerCase().slice(0, 6);
     if (!clean) return;
-    localStorage.setItem('aio_presenter_pin', clean);
+    localStorage.setItem('aio_target_pin', clean);
     window.location.reload();
   };
 
