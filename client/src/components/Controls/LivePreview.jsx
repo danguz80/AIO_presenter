@@ -384,7 +384,7 @@ export default function LivePreview() {
 }
 
 // ─── Preview fiel al StagePage ────────────────────────────────────────────────
-function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, stageConfig, schedule, eventPlays, reservasMode }) {
+export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, stageConfig, schedule, eventPlays, reservasMode, fontBase }) {
   const {
     lyricsColor = '#ffffff', nextLyricsColor = '#ffffff',
     chordsColor = '#fde047',
@@ -451,11 +451,11 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
 
   return (
     <div className="w-full h-full flex flex-col select-none overflow-hidden"
-      style={{ ...stageBgStyle, fontSize: '7px' }}>
+      style={{ ...stageBgStyle, fontSize: fontBase ?? '7px' }}>
 
       {/* Top bar */}
       <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-b border-white/10 relative"
-        style={{ minHeight: '12px' }}>
+        style={{ minHeight: '1.7em' }}>
         {showSlideCounter && live && (
           <span style={{ color: '#94a3b8', fontSize: '0.85em' }}>
             {(stageConfig.slideIndex ?? 0) + 1}/{stageConfig.totalSlides ?? 1}
@@ -528,7 +528,7 @@ function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, s
 
       {/* Bottom bar — solo nextSong + reloj, igual que StagePage */}
       <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-t border-white/10"
-        style={{ minHeight: '12px' }}>
+        style={{ minHeight: '1.7em' }}>
         <div className="flex-1" />
         {nextSong && (
           <span className="font-semibold truncate max-w-[70%] text-center"

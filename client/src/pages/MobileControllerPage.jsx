@@ -9,6 +9,7 @@ import DisplaysPanel   from '../components/Settings/DisplaysPanel';
 import SyncPanel       from '../components/Settings/SyncPanel';
 import MediaLibrary    from '../components/Library/MediaLibrary';
 import MessagesPanel   from '../components/Controls/MessagesPanel';
+import { StagePreview } from '../components/Controls/LivePreview';
 import OrgSwitcher     from '../components/shared/OrgSwitcher';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
@@ -707,6 +708,12 @@ export default function MobileControllerPage() {
 
   // ── Stage view: valores computados ────────────────────────────────────────
   const sc = stageConfig ?? {};
+  const stageBgStyle = (() => {
+    const bg = sc.background ?? { type: 'color', color: '#000000' };
+    return bg.type === 'color'
+      ? { backgroundColor: bg.color ?? '#000000' }
+      : { backgroundImage: `url(${bg.url})`, backgroundSize: 'cover', backgroundPosition: 'center' };
+  })();
   const stageEffectiveLabel = slideLabel || stageLastLabel;
   const stageSectionColor   = stageEffectiveLabel ? getLabelColor(stageEffectiveLabel) : 'transparent';
 
@@ -909,113 +916,41 @@ export default function MobileControllerPage() {
           </button>
           {openPanels.has('salidas') && (
             <div className="overflow-y-auto max-h-[60vh]">
-              {/* Stage view (fullscreen overlay, sigue siendo fixed) */}
-              {liveView === 'stage' && (
-                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: '#000', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  {/* Barra superior: volver + franja color + título + tonalidad + etiqueta */}
-                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', borderBottom: '1px solid rgba(255,255,255,0.12)', background: 'rgba(0,0,0,0.6)' }}>
-                    <button
-                      onClick={() => setLiveView('control')}
-                      style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4, padding: '8px 12px', color: 'rgba(255,255,255,0.5)', fontSize: 12, background: 'none', border: 'none', cursor: 'pointer' }}
-                    >
-                      <ChevronLeft size={16} />
-                      <span>Volver</span>
-                    </button>
-                    {stageEffectiveLabel && (
-                      <div style={{ width: 3, flexShrink: 0, background: stageSectionColor }} />
-                    )}
-                    <div style={{ flex: 1, padding: '8px 10px', minWidth: 0 }}>
-                      {slideSongTitle ? (
-                        <p style={{ color: '#fff', fontSize: 13, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {slideSongTitle}{slideData?.songKey ? ` — ${slideData.songKey}` : ''}
-                        </p>
-                      ) : (
-                        <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, margin: 0 }}>Sin contenido</p>
-                      )}
-                      {stageEffectiveLabel && (
-                        <p style={{ color: stageSectionColor, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', margin: '2px 0 0', fontWeight: 600 }}>
-                          {stageEffectiveLabel}
-                        </p>
-                      )}
+              {/* Stage view (fullscreen overlay con StagePreview proporcional) */}
+              {liveView === 'stage' && (() => {
+                const availW = window.innerWidth;
+                const availH = window.innerHeight;
+                // Escala proporcional: StagePreview está diseñado para 7px en ~260px de ancho
+                const fontPx = Math.max(10, Math.round(7 * Math.min(availW, availH * 16 / 9) / 260));
+                return (
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    {/* Barra mínima con botón Volver */}
+                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.75)', borderBottom: '1px solid rgba(255,255,255,0.1)', padding: '6px 10px' }}>
+                      <button
+                        onClick={() => setLiveView('control')}
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'rgba(255,255,255,0.6)', fontSize: 14, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                      >
+                        <ChevronLeft size={16} /> Volver
+                      </button>
+                    </div>
+                    {/* Vista de escenario proporcional */}
+                    <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                      <StagePreview
+                        stageBgStyle={stageBgStyle}
+                        slideData={slideData}
+                        nextSlideData={nextSlideData}
+                        isBlank={isBlank}
+                        live={!isBlank && !!slideData}
+                        stageConfig={stageConfig ?? {}}
+                        schedule={schedule ?? []}
+                        eventPlays={eventPlays}
+                        reservasMode={reservasMode}
+                        fontBase={`${fontPx}px`}
+                      />
                     </div>
                   </div>
-                  {/* Área 50/50: slide actual (arriba) + siguiente (abajo) */}
-                  <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                      {isBlank ? (
-                        <p style={{ color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', fontSize: 15 }}>Pantalla en negro</p>
-                      ) : !slideData ? (
-                        <p style={{ color: 'rgba(255,255,255,0.2)', fontStyle: 'italic', fontSize: 15 }}>Sin contenido activo</p>
-                      ) : slideData.type !== 'song' ? (
-                        <p style={{ color: '#fff', fontSize: 22, fontWeight: 700, lineHeight: 1.4, whiteSpace: 'pre-line', textAlign: 'center', margin: 0 }}>
-                          {slideText}
-                        </p>
-                      ) : (
-                        <StageMobileSlide
-                          content={slideData.content}
-                          chordsColor={sc.chordsColor || '#fde047'}
-                          lyricsColor={sc.lyricsColor || '#ffffff'}
-                          showComments={sc.showComments ?? false}
-                          commentColor={sc.commentColor || '#facc15'}
-                        />
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'rgba(255,255,255,0.03)', opacity: isBlank ? 0.3 : 1 }}>
-                      {nextSlideData && !isBlank ? (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'stretch', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            {nextSlideData.label && (
-                              <div style={{ width: 3, flexShrink: 0, background: `${getLabelColor(nextSlideData.label)}70` }} />
-                            )}
-                            <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', margin: 0, padding: '4px 10px', fontWeight: 600 }}>
-                              {nextSlideData.label ? `↓ ${nextSlideData.label}` : '↓ Siguiente'}
-                            </p>
-                          </div>
-                          <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px 16px', overflow: 'hidden' }}>
-                            {nextSlideData.type !== 'song' ? (
-                              <p style={{ color: '#fde047', fontSize: 19, margin: 0, whiteSpace: 'pre-line', textAlign: 'center', fontWeight: 600 }}>{nextText}</p>
-                            ) : (
-                              <StageMobileSlide
-                                content={nextSlideData.content}
-                                chordsColor={sc.chordsColor || '#fde047'}
-                                lyricsColor='#fde047'
-                                showComments={false}
-                                commentColor='#facc15'
-                              />
-                            )}
-                          </div>
-                        </div>
-                      ) : stageNextSong ? (
-                        <div style={{ textAlign: 'center', padding: '16px' }}>
-                          <p style={{ color: 'rgba(34,197,94,0.55)', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 6px', fontWeight: 600 }}>Próxima canción</p>
-                          <p style={{ color: '#22c55e', fontSize: 18, fontWeight: 700, margin: 0, lineHeight: 1.3 }}>
-                            {stageNextSong.title}{stageNextSong.song_key ? ` — ${stageNextSong.song_key}` : ''}
-                          </p>
-                          {stageNextSong.author && (
-                            <p style={{ color: 'rgba(34,197,94,0.45)', fontSize: 12, margin: '5px 0 0' }}>{stageNextSong.author}</p>
-                          )}
-                        </div>
-                      ) : (
-                        <p style={{ color: 'rgba(255,255,255,0.15)', fontStyle: 'italic', fontSize: 14 }}>— fin —</p>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 14px', borderTop: '1px solid rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.5)', gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      {stageNextSong ? (
-                        <p style={{ color: '#22c55e', fontSize: 15, fontWeight: 700, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          ↑ {stageNextSong.title}{stageNextSong.song_key ? ` — ${stageNextSong.song_key}` : ''}
-                        </p>
-                      ) : (
-                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.15)' }}>—</span>
-                      )}
-                    </div>
-                    <p style={{ flexShrink: 0, color: sc.clockColor || '#ef4444', fontSize: 13, fontFamily: 'monospace', fontWeight: 700, margin: 0, letterSpacing: '0.05em' }}>
-                      {stageTime.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
-                    </p>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Vista compacta del estado actual */}
               <div className="px-4 py-3">
