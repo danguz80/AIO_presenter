@@ -330,20 +330,15 @@ export function PresenterProvider({ children }) {
     }
     const token = localStorage.getItem('aio_sync_token');
     const orgId = localStorage.getItem('aio_org_id');
-    // aio_presenter_pin: identidad de ESTE dispositivo (auto-generada, nunca cambia)
-    let ownPin = localStorage.getItem('aio_presenter_pin');
-    if (!ownPin) {
-      ownPin = (Math.random().toString(16).slice(2, 8) + Math.random().toString(16).slice(2, 6)).slice(0, 6);
-      localStorage.setItem('aio_presenter_pin', ownPin);
-    }
-    // aio_target_pin: el presentador que este dispositivo quiere controlar.
-    // Si está definido (lo configura el usuario en el móvil), se usa ESE PIN.
-    // Si no, se usa el PIN propio (caso ControllerPage / OutputPage / StagePage).
+    // aio_presenter_pin: generado únicamente por el ControllerPage (el PC presentador).
+    // aio_target_pin: configurado por el usuario en el móvil para apuntar a un presentador.
+    // Los móviles que no hayan configurado nada conectan sin PIN (modo org-wide fallback).
     const targetPin    = localStorage.getItem('aio_target_pin') || null;
-    const presenterPin = targetPin || ownPin;
+    const ownPin       = localStorage.getItem('aio_presenter_pin') || null;
+    const presenterPin = targetPin || ownPin || null;
     const socket = io(backendUrl, {
       autoConnect: true,
-      auth: { token: token || undefined, orgId: orgId || undefined, presenterPin },
+      auth: { token: token || undefined, orgId: orgId || undefined, presenterPin: presenterPin || undefined },
     });
     socketRef.current = socket;
 

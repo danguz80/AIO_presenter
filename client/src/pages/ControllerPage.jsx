@@ -142,6 +142,14 @@ export default function ControllerPage() {
     }
   }, [state.internalMessages]);
 
+  // Generar PIN del presentador si no existe (solo el ControllerPage lo genera)
+  useEffect(() => {
+    if (!localStorage.getItem('aio_presenter_pin')) {
+      const pin = (Math.random().toString(16).slice(2, 8) + Math.random().toString(16).slice(2, 6)).slice(0, 6);
+      localStorage.setItem('aio_presenter_pin', pin);
+    }
+  }, []);
+
   // Obtener IP local del servidor para construir URL del móvil
   useEffect(() => {
     fetch('/api/network-info')

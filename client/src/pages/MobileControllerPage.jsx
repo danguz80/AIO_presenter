@@ -154,6 +154,21 @@ export default function MobileControllerPage() {
   const { slideData, nextSlideData, isBlank } = liveState;
   const navigate = useNavigate();
 
+  // Leer PIN desde parámetro URL (?pin=abc123) — al escanear el QR del PC
+  useEffect(() => {
+    const params  = new URLSearchParams(window.location.search);
+    const pinFromUrl = params.get('pin');
+    if (pinFromUrl && pinFromUrl.length >= 4) {
+      const existing = localStorage.getItem('aio_target_pin');
+      if (existing !== pinFromUrl) {
+        localStorage.setItem('aio_target_pin', pinFromUrl);
+        // Limpiar el param de la URL y recargar para reconectar el socket con el nuevo PIN
+        window.history.replaceState({}, '', '/mobile');
+        window.location.reload();
+      }
+    }
+  }, []);
+
   // Solo redirigir a /app si es escritorio real (no táctil, pantalla grande)
   useEffect(() => {
     // Misma detección triple que ControllerPage
@@ -286,11 +301,8 @@ export default function MobileControllerPage() {
       const res  = await fetch(`${getApiBase()}/api/presenter/pins?orgId=${orgId}`, { headers: authHeaders() });
       if (!res.ok) throw new Error('Error');
       const { pins } = await res.json();
-      // Excluir el PIN propio de este dispositivo (aio_presenter_pin) para no auto-detectarse a sí mismo
-      const ownPin    = localStorage.getItem('aio_presenter_pin') || '';
-      const otherPins = (pins || []).filter(p => p !== ownPin);
-      if (otherPins.length > 0) {
-        setPinInput(otherPins[0]);
+      if (pins && pins.length > 0) {
+        setPinInput(pins[0]);
       } else {
         setFlash({ type: 'warn', msg: 'No se encontró ningún presentador activo' });
         setTimeout(() => setFlash(null), 3000);

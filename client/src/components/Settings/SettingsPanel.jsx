@@ -105,23 +105,25 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
               <div className="mt-3 text-center">
                 {mobileUrl ? (
                   <>
-                    <div className="bg-white p-3 rounded-xl inline-block mb-2">
-                      <QRCodeSVG value={mobileUrl} size={160} />
-                    </div>
-                    <p className="text-zinc-300 text-xs font-mono break-all mb-1">{mobileUrl}</p>
-                    <p className="text-zinc-500 text-xs leading-relaxed">
-                      Conecta tu móvil a la misma red WiFi<br />y escanea el código QR
-                    </p>
-                    {/* PIN de este presentador */}
                     {(() => {
                       const pin = localStorage.getItem('aio_presenter_pin');
-                      return pin ? (
-                        <div className="mt-3 px-3 py-2 bg-surface-800 rounded-lg border border-surface-600">
-                          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">PIN de este presentador</p>
-                          <p className="text-xl font-mono font-bold text-accent tracking-widest">{pin}</p>
-                          <p className="text-[10px] text-zinc-500 mt-1">Ingrésalo en el móvil → panel Salidas</p>
-                        </div>
-                      ) : null;
+                      const qrUrl = pin ? `${mobileUrl}?pin=${pin}` : mobileUrl;
+                      return (
+                        <>
+                          <div className="bg-white p-3 rounded-xl inline-block mb-2">
+                            <QRCodeSVG value={qrUrl} size={160} />
+                          </div>
+                          <p className="text-zinc-500 text-xs leading-relaxed mb-2">
+                            Escanea desde la app móvil para vincular<br />automáticamente
+                          </p>
+                          {pin && (
+                            <div className="px-3 py-2 bg-surface-800 rounded-lg border border-surface-600">
+                              <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">PIN de este presentador</p>
+                              <p className="text-2xl font-mono font-bold text-accent tracking-widest">{pin}</p>
+                            </div>
+                          )}
+                        </>
+                      );
                     })()}
                   </>
                 ) : (
