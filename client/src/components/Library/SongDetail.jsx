@@ -7,6 +7,29 @@ import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 import { getLabelColor } from '../../utils/labelColors';
 import OutputRenderer from '../shared/OutputRenderer';
 
+/** Muestra el primer frame de un video como imagen estática en thumbnails */
+function VideoFrameThumb({ url }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || !url) return;
+    const onMeta = () => { v.currentTime = 0.5; };
+    v.addEventListener('loadedmetadata', onMeta);
+    return () => v.removeEventListener('loadedmetadata', onMeta);
+  }, [url]);
+  return (
+    <video
+      ref={ref}
+      src={url}
+      muted
+      playsInline
+      preload="metadata"
+      className="absolute inset-0 w-full h-full object-cover"
+      style={{ zIndex: 0, pointerEvents: 'none' }}
+    />
+  );
+}
+
 export default function SongDetail() {
   const { state, actions } = usePresenter();
   const { selectedSong, selectedSlide, liveState, navigateRequest, schedule, eventPlays, eventPlaysContext } = state;
@@ -731,32 +754,36 @@ export default function SongDetail() {
                     ].join(' ')}
                     style={{ aspectRatio: '16/10' }}
                   >
-                  {/* Fondo del slide (color base o media guardada) */}
+                  {/* Fondo del slide: frame estático para videos, imagen para imágenes */}
                   {slideBg ? (
                     slideBg.mediaType === 'video'
-                      ? <video key={slideBg.url} src={slideBg.url} muted playsInline preload="metadata"
-                          className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
+                      ? <VideoFrameThumb url={slideBg.url} />
                       : <img src={slideBg.url} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
                   ) : (
                     <div className="absolute inset-0 bg-zinc-900" />
                   )}
 
-                  {/* Overlay semitransparente cuando hay fondo para legibilidad del texto */}
+                  {/* Overlay semitransparente para legibilidad del texto */}
                   {slideBg && <div className="absolute inset-0 bg-black/40" style={{ zIndex: 1 }} />}
 
                   {/* Número */}
-                  <span className="absolute top-1 left-1.5 text-[9px] font-bold text-zinc-300 z-10 leading-none drop-shadow">
-                    {index + 1}
-                  </span>
+                  <span className="absolute top-1 left-1.5 text-[9px] font-bold text-zinc-300 z-10 leading-none drop-shadow">{index + 1}</span>
 
                   {/* Indicador EN VIVO */}
                   {active && (
                     <span className="absolute top-1 right-1 z-10 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                   )}
 
-                  {/* Indicador de fondo asignado */}
-                  {slideBg && !active && (
-                    <span className="absolute top-1 right-1 z-10 text-[8px] text-blue-300 leading-none drop-shadow" title={slideBg.fileName}>▶</span>
+                  {/* Nombre del archivo de fondo, justo encima del banner de etiqueta */}
+                  {slideBg && (
+                    <div
+                      className={`absolute inset-x-1 z-10 ${slide.label ? 'bottom-7' : 'bottom-1'}`}
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      <span className="text-[7px] font-medium text-white/70 bg-black/55 px-1 py-0.5 rounded truncate block" title={slideBg.fileName}>
+                        {slideBg.mediaType === 'video' ? '▶ ' : '▪ '}{slideBg.fileName}
+                      </span>
+                    </div>
                   )}
 
                   {/* Miniatura exacta de la salida — scaled igual que el proyector */}
@@ -784,7 +811,11 @@ export default function SongDetail() {
                             content:   slide.content,
                           }}
                           isBlank={false}
-                          background={liveState.background ?? { type: 'color', color: '#000000' }}
+                          background={
+                            slideBg?.mediaType === 'video'
+                              ? { type: 'color', color: 'transparent' }
+                              : liveState.background ?? { type: 'color', color: '#000000' }
+                          }
                           backgroundMedia={
                             slide.slide_background?.mediaType === 'image'
                               ? slide.slide_background
@@ -882,7 +913,9 @@ export default function SongDetail() {
                       {visibleLines.join('\n') || '(vacío)'}
                     </p>
                     {slide.slide_background && (
-                      <p className="text-[9px] text-blue-400 mt-0.5">▶ fondo asignado</p>
+                      <p className="text-[9px] text-blue-400 mt-0.5 truncate" title={slide.slide_background.fileName}>
+                        {slide.slide_background.mediaType === 'video' ? '▶' : '▪'} {slide.slide_background.fileName || 'fondo asignado'}
+                      </p>
                     )}
                   </div>
                   <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
