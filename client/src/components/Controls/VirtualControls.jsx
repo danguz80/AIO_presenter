@@ -88,7 +88,10 @@ const ALIGN_Y = [
   { value: 'bottom', label: '⬇ Inf' },
 ];
 
-const VIRTUAL_URL = `${window.location.origin}/virtual`;
+const _obsOrgId = localStorage.getItem('aio_org_id');
+const VIRTUAL_URL = _obsOrgId
+  ? `${window.location.origin}/virtual?orgId=${_obsOrgId}`
+  : `${window.location.origin}/virtual`;
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function VirtualControls({ defaultOpen = false }) {
