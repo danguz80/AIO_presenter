@@ -60,8 +60,6 @@ export default function OutputPage() {
   const { slideData, isBlank, background, slideIndex, totalSlides, backgroundMedia } = liveState;
 
   // Auto-cachear fondos de video locales cuando cambian (soporte multi-PC con OneDrive/Dropbox)
-  // Si el archivo no está en la cache del SW de este browser, lo busca por nombre en las
-  // carpetas FSA configuradas localmente y lo cachea para que el <video> pueda cargarlo.
   const [bgCacheKey, setBgCacheKey] = useState(0);
   useEffect(() => {
     const url  = backgroundMedia?.url;
@@ -70,6 +68,19 @@ export default function OutputPage() {
     const fileName = name || decodeURIComponent(url.replace('/local-media/', ''));
     ensureMediaCached(fileName).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
   }, [backgroundMedia?.url]);
+
+  // También pre-cachear titleBackground y bibleBackground al cargar la config
+  useEffect(() => {
+    const name = cfg.titleBackground?.fileName || cfg.titleBackground?.name;
+    if (name && cfg.titleBackground?.url?.startsWith('/local-media/'))
+      ensureMediaCached(name).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+  }, [cfg.titleBackground?.url]);
+
+  useEffect(() => {
+    const name = cfg.bibleBackground?.fileName || cfg.bibleBackground?.name;
+    if (name && cfg.bibleBackground?.url?.startsWith('/local-media/'))
+      ensureMediaCached(name).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+  }, [cfg.bibleBackground?.url]);
   const timerSeconds = useTimerDisplay(state.timerState);
   const smStrobe = useStrobe(!!(state.screenMessage?.visible && state.screenMessage?.strobe &&
     (state.screenMessage.target === 'output' || state.screenMessage.target === 'both')));

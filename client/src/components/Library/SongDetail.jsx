@@ -64,6 +64,19 @@ export default function SongDetail() {
     injectGoogleFont(outputCfg.artistFontFamily);
   }, [outputCfg.fontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
 
+  // Pre-cachear fondo del título y bíblico para que el thumbnail lo muestre
+  useEffect(() => {
+    const name = outputCfg.titleBackground?.fileName || outputCfg.titleBackground?.name;
+    if (name && outputCfg.titleBackground?.url?.startsWith('/local-media/'))
+      ensureMediaCached(name).catch(() => {});
+  }, [outputCfg.titleBackground?.url]);
+
+  useEffect(() => {
+    const name = outputCfg.bibleBackground?.fileName || outputCfg.bibleBackground?.name;
+    if (name && outputCfg.bibleBackground?.url?.startsWith('/local-media/'))
+      ensureMediaCached(name).catch(() => {});
+  }, [outputCfg.bibleBackground?.url]);
+
   // ── Estructura activa (misma lógica que cancionero) ───────────────────────
   const [activeStructIdx, setActiveStructIdx] = useState(0);
   // Reiniciar índice al cambiar de canción y cargar el guardado en localStorage

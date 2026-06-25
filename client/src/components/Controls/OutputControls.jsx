@@ -4,6 +4,10 @@ import { ChevronDown, ChevronUp, Monitor, Save, BookOpen, X, Check, LayoutTempla
 import GoogleFontPicker from '../shared/GoogleFontPicker';
 import { resolveFont } from '../../utils/fontUtils';
 import api from '../../hooks/useApi';
+import {
+  FSA_SUPPORTED, listFolders as fsaListFolders, listMediaFiles,
+  cacheMediaFile, generateThumbnail, verifyPermission,
+} from '../../utils/fsaUtils';
 
 const SERVER_BASE = (() => {
   const savedIp   = localStorage.getItem('aio_server_ip');
@@ -12,78 +16,111 @@ const SERVER_BASE = (() => {
   return `http://${host}:${savedPort}`;
 })();
 
-// ─── Selector de media (carpetas + archivos) ──────────────────────────────────
+// ─── Miniatura FSA rápida ──────────────────────────────────────────────────────
+function FsaThumbMini({ file }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    let canceled = false;
+    generateThumbnail(file.handle, file.type).then(url => { if (!canceled) setSrc(url); }).catch(() => {});
+    return () => { canceled = true; };
+  }, [file.handle, file.type]);
+  if (!src) return file.type === 'video'
+    ? <Film size={16} className="text-zinc-400" />
+    : <Image size={16} className="text-zinc-400" />;
+  return <img src={src} alt={file.name} className="w-full h-full object-cover" />;
+}
+
+// ─── Selector de media FSA ─────────────────────────────────────────────────────
 function MediaPickerModal({ onSelect, onClose }) {
-  const [folders,  setFolders]  = useState([]);
-  const [selFolder, setSelFolder] = useState(null);
-  const [files,    setFiles]    = useState([]);
-  const [loading,  setLoading]  = useState(false);
+  const [fsaFolders,  setFsaFolders]  = useState([]);
+  const [selFolder,   setSelFolder]   = useState(null);
+  const [files,       setFiles]       = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [selecting,   setSelecting]   = useState(null);
+  const [permError,   setPermError]   = useState(false);
 
   useEffect(() => {
-    api.get('/media/folders').then(r => {
-      setFolders(r.data);
-      if (r.data.length > 0) setSelFolder(r.data[0]);
+    if (!FSA_SUPPORTED) return;
+    fsaListFolders().then(folders => {
+      setFsaFolders(folders);
+      if (folders.length > 0) setSelFolder(folders[0]);
     }).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (!selFolder) return;
     setLoading(true);
-    api.get(`/media/files?folder=${encodeURIComponent(selFolder.path)}`)
-      .then(r => setFiles(r.data))
-      .catch(() => setFiles([]))
-      .finally(() => setLoading(false));
+    setPermError(false);
+    (async () => {
+      try {
+        const perm = await selFolder.handle.queryPermission({ mode: 'read' });
+        if (perm !== 'granted') {
+          const granted = await verifyPermission(selFolder.handle);
+          if (granted !== 'granted') { setPermError(true); setLoading(false); return; }
+        }
+        setFiles(await listMediaFiles(selFolder.handle));
+      } catch { setFiles([]); }
+      finally { setLoading(false); }
+    })();
   }, [selFolder]);
+
+  const handleSelect = async (file) => {
+    if (selecting) return;
+    setSelecting(file.name);
+    try {
+      const cacheUrl = await cacheMediaFile(file.handle);
+      onSelect({ mediaType: file.type, fileName: file.name, url: cacheUrl });
+      onClose();
+    } catch { /* ignore */ } finally { setSelecting(null); }
+  };
+
+  if (!FSA_SUPPORTED) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div className="bg-surface-800 border border-surface-600 rounded-xl shadow-2xl p-6 max-w-sm text-center" onClick={e => e.stopPropagation()}>
+        <Film size={32} className="text-zinc-500 mx-auto mb-3" />
+        <p className="text-sm text-zinc-300 mb-1">Tu navegador no soporta acceso directo a archivos.</p>
+        <p className="text-xs text-zinc-500">Usa Chrome o Edge.</p>
+        <button onClick={onClose} className="mt-4 px-4 py-2 bg-surface-600 text-zinc-300 rounded-lg text-sm hover:bg-surface-500">Cerrar</button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div
-        className="bg-surface-800 border border-surface-600 rounded-xl shadow-2xl w-[520px] max-h-[70vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="bg-surface-800 border border-surface-600 rounded-xl shadow-2xl w-[520px] max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700 shrink-0">
           <span className="text-sm font-semibold text-zinc-200">Seleccionar fondo multimedia</span>
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200"><X size={15} /></button>
         </div>
-        {/* Carpetas */}
-        <div className="flex gap-1 px-3 pt-2 flex-wrap shrink-0">
-          {folders.map(f => (
-            <button key={f.path}
-              onClick={() => setSelFolder(f)}
-              className={`text-[11px] px-2 py-1 rounded border transition-colors ${
-                selFolder?.path === f.path
-                  ? 'bg-accent/20 text-accent border-accent/40'
-                  : 'bg-surface-700 text-zinc-400 border-surface-600 hover:text-zinc-200'
-              }`}
-            >{f.name}</button>
-          ))}
-        </div>
-        {/* Grid de archivos */}
+        {fsaFolders.length === 0 ? (
+          <div className="p-6 text-center text-xs text-zinc-500">
+            No hay carpetas configuradas.<br/>Agrega carpetas en el panel <strong>Multimedia</strong> primero.
+          </div>
+        ) : (
+          <div className="flex gap-1 px-3 pt-2 flex-wrap shrink-0">
+            {fsaFolders.map(f => (
+              <button key={f.key} onClick={() => setSelFolder(f)}
+                className={`text-[11px] px-2 py-1 rounded border transition-colors ${selFolder?.key === f.key ? 'bg-accent/20 text-accent border-accent/40' : 'bg-surface-700 text-zinc-400 border-surface-600 hover:text-zinc-200'}`}
+              >{f.name}</button>
+            ))}
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto p-3">
-          {loading ? (
+          {permError ? (
+            <p className="text-xs text-amber-400 text-center py-6">Sin permiso para leer esta carpeta.<br/>Cierra y vuelve a abrir el selector.</p>
+          ) : loading ? (
             <p className="text-xs text-zinc-500 text-center py-6">Cargando...</p>
           ) : files.length === 0 ? (
             <p className="text-xs text-zinc-500 text-center py-6">Sin archivos en esta carpeta</p>
           ) : (
             <div className="grid grid-cols-4 gap-2">
               {files.map(file => (
-                <button
-                  key={file.path}
-                  onClick={() => onSelect({
-                    mediaType: file.type,
-                    filePath:  file.path,
-                    fileName:  file.name,
-                    url: `${SERVER_BASE}/api/media/serve?filePath=${encodeURIComponent(file.path)}`,
-                  })}
-                  className="relative aspect-video rounded-lg overflow-hidden border-2 border-surface-600 hover:border-accent bg-surface-700 flex items-center justify-center group"
+                <button key={file.name} onClick={() => handleSelect(file)} disabled={!!selecting}
+                  className="relative aspect-video rounded-lg overflow-hidden border-2 border-surface-600 hover:border-accent bg-surface-700 flex items-center justify-center group disabled:opacity-50"
                   title={file.name}
                 >
-                  <img
-                    src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(file.path)}`}
-                    alt={file.name}
-                    className="w-full h-full object-cover"
-                    onError={e => { e.currentTarget.style.display='none'; }}
-                  />
+                  <FsaThumbMini file={file} />
+                  {selecting === file.name && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><span className="text-xs text-white">...</span></div>}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center pointer-events-none">
                     {file.type === 'video' ? <Film size={16} className="text-white opacity-0 group-hover:opacity-100" /> : <Image size={16} className="text-white opacity-0 group-hover:opacity-100" />}
                   </div>
@@ -631,7 +668,7 @@ export default function OutputControls({ defaultOpen = false }) {
                         {outputConfig.titleBackground.mediaType === 'video'
                           ? <Film size={12} className="text-zinc-400" />
                           : <img
-                              src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(outputConfig.titleBackground.filePath)}`}
+                              src={outputConfig.titleBackground.url}
                               alt="" className="w-full h-full object-cover"
                               onError={e => { e.currentTarget.style.display='none'; }}
                             />
@@ -677,7 +714,7 @@ export default function OutputControls({ defaultOpen = false }) {
                         {outputConfig.bibleBackground.mediaType === 'video'
                           ? <Film size={12} className="text-zinc-400" />
                           : <img
-                              src={`${SERVER_BASE}/api/media/thumbnail?filePath=${encodeURIComponent(outputConfig.bibleBackground.filePath)}`}
+                              src={outputConfig.bibleBackground.url}
                               alt="" className="w-full h-full object-cover"
                               onError={e => { e.currentTarget.style.display='none'; }}
                             />

@@ -85,6 +85,14 @@ export default function StagePage() {
     ensureMediaCached(name).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
   }, [backgroundMedia?.url]);
 
+  // Pre-cachear fondo del título al recibir la config
+  useEffect(() => {
+    const media = stageConfig?.titleBackground ?? outputCfg?.titleBackground;
+    const name  = media?.fileName || media?.name;
+    if (name && media?.url?.startsWith('/local-media/'))
+      ensureMediaCached(name).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+  }, [stageConfig?.titleBackground?.url, outputCfg?.titleBackground?.url]);
+
   const {
     background,
     showClock        = true,
