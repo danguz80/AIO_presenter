@@ -267,6 +267,47 @@ export async function clearMediaCache() {
   await caches.delete(MEDIA_CACHE_NAME);
 }
 
+/**
+ * Asegura que un archivo de media esté en la caché del SW buscándolo por nombre
+ * en las carpetas FSA configuradas localmente.
+ *
+ * Caso de uso principal: varios PCs comparten una carpeta en OneDrive/Dropbox.
+ * Cada uno tiene configurada su propia ruta local a esa carpeta.
+ * Cuando un slide tiene un fondo de video, la URL '/local-media/archivo.mp4'
+ * puede no estar cacheada en el browser del otro PC → busca el archivo por nombre
+ * en las carpetas FSA locales, lo cachea y lo sirve.
+ *
+ * @param {string} fileName - nombre del archivo (ej: "014_BG.mp4")
+ * @returns {Promise<boolean>} true si quedó disponible en caché
+ */
+export async function ensureMediaCached(fileName) {
+  if (!fileName || !FSA_SUPPORTED) return false;
+  const cacheKey = MEDIA_CACHE_PREFIX + encodeURIComponent(fileName);
+  // 1. ¿Ya está en caché? → OK sin hacer nada
+  try {
+    const cache = await caches.open(MEDIA_CACHE_NAME);
+    const hit   = await cache.match(cacheKey);
+    if (hit) return true;
+  } catch { return false; }
+  // 2. Buscar el archivo por nombre en las carpetas FSA configuradas en este PC
+  try {
+    const folders = await listFolders();
+    for (const folder of folders) {
+      try {
+        const perm = await folder.handle.queryPermission({ mode: 'read' });
+        if (perm !== 'granted') continue;
+        // getFileHandle lanza si no existe → capturamos con .catch
+        const fileHandle = await folder.handle.getFileHandle(fileName).catch(() => null);
+        if (fileHandle) {
+          await cacheMediaFile(fileHandle);
+          return true;
+        }
+      } catch { continue; }
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Sync con backend DB — carpetas compartidas entre dispositivos
 // ─────────────────────────────────────────────────────────────────────────────

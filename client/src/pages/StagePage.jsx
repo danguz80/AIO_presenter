@@ -5,6 +5,7 @@ import { stripChords, parseChordLines, isCommentLine, extractInlineComment } fro
 import { getLabelColor } from '../utils/labelColors';
 import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
 import { Maximize2 } from 'lucide-react';
+import { ensureMediaCached } from '../utils/fsaUtils';
 
 const FONT_PRESETS = {
   sans:      'system-ui, -apple-system, sans-serif',
@@ -74,6 +75,15 @@ export default function StagePage() {
     slideData, nextSlideData, isBlank,
     slideIndex, totalSlides, backgroundMedia,
   } = liveState;
+
+  // Auto-cachear fondos de video locales (soporte multi-PC con OneDrive/Dropbox)
+  const [bgCacheKey, setBgCacheKey] = useState(0);
+  useEffect(() => {
+    const url  = backgroundMedia?.url;
+    const name = backgroundMedia?.fileName || backgroundMedia?.name;
+    if (!url?.startsWith('/local-media/') || !name) return;
+    ensureMediaCached(name).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+  }, [backgroundMedia?.url]);
 
   const {
     background,
@@ -217,10 +227,10 @@ export default function StagePage() {
       {hasBgMedia && (
         backgroundMedia.mediaType === 'video'
           ? showVideo
-            ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop muted playsInline data-bg-video="1"
+            ? <video key={backgroundMedia.url + bgCacheKey} src={backgroundMedia.url} autoPlay loop muted playsInline data-bg-video="1"
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
             : null
-          : <img key={backgroundMedia.url} src={backgroundMedia.url} alt=""
+          : <img key={backgroundMedia.url + bgCacheKey} src={backgroundMedia.url} alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
       )}
       {/* ── BARRA SUPERIOR ─────────────────────────────────────────────── */}

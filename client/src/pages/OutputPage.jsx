@@ -6,6 +6,7 @@ import { injectGoogleFont } from '../utils/fontUtils';
 import OutputRenderer from '../components/shared/OutputRenderer';
 import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
 import { Smartphone, Maximize2 } from 'lucide-react';
+import { ensureMediaCached } from '../utils/fsaUtils';
 
 /**
  * Ventana de salida — se abre en una pestaña/ventana separada
@@ -57,6 +58,18 @@ export default function OutputPage() {
   }, [cfg.fontFamily, cfg.commentFontFamily, cfg.titleFontFamily, cfg.artistFontFamily, cfg.bibleFontFamily, cfg.bibleRefFontFamily]);
 
   const { slideData, isBlank, background, slideIndex, totalSlides, backgroundMedia } = liveState;
+
+  // Auto-cachear fondos de video locales cuando cambian (soporte multi-PC con OneDrive/Dropbox)
+  // Si el archivo no está en la cache del SW de este browser, lo busca por nombre en las
+  // carpetas FSA configuradas localmente y lo cachea para que el <video> pueda cargarlo.
+  const [bgCacheKey, setBgCacheKey] = useState(0);
+  useEffect(() => {
+    const url  = backgroundMedia?.url;
+    const name = backgroundMedia?.fileName || backgroundMedia?.name;
+    if (!url?.startsWith('/local-media/') || !name) return;
+    const fileName = name || decodeURIComponent(url.replace('/local-media/', ''));
+    ensureMediaCached(fileName).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+  }, [backgroundMedia?.url]);
   const timerSeconds = useTimerDisplay(state.timerState);
   const smStrobe = useStrobe(!!(state.screenMessage?.visible && state.screenMessage?.strobe &&
     (state.screenMessage.target === 'output' || state.screenMessage.target === 'both')));
@@ -88,6 +101,7 @@ export default function OutputPage() {
         slideIndex={slideIndex}
         totalSlides={totalSlides}
         backgroundMedia={backgroundMedia}
+        bgCacheKey={bgCacheKey}
       />
       {/* Overlay: mensaje a pantalla */}
       {(() => {

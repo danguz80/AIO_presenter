@@ -13,7 +13,7 @@ import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
  *  - background: { type, color, url }
  *  - slideIndex, totalSlides: para indicador de progreso
  */
-export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia, containerWidth = null, containerHeight = null }) {
+export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia, containerWidth = null, containerHeight = null, bgCacheKey = 0 }) {
   // Inyectar Google Fonts
   useEffect(() => {
     injectGoogleFont(cfg.fontFamily);
@@ -115,9 +115,9 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
       {/* Capa de fondo multimedia */}
       {hasBg && (
         effectiveBgMedia.mediaType === 'video'
-          ? <video key={effectiveBgMedia.url} src={effectiveBgMedia.url} autoPlay loop playsInline data-bg-video="1"
+          ? <video key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} autoPlay loop playsInline data-bg-video="1"
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />
-          : <img key={effectiveBgMedia.url} src={effectiveBgMedia.url} alt=""
+          : <img key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />
       )}
       {/* Contenido del slide (texto sobre el fondo) */}

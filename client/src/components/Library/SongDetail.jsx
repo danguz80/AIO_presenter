@@ -6,19 +6,34 @@ import { stripChords, stripComments, isCommentLine, extractInlineComment } from 
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 import { getLabelColor } from '../../utils/labelColors';
 import OutputRenderer from '../shared/OutputRenderer';
+import { ensureMediaCached } from '../../utils/fsaUtils';
 
-/** Muestra el primer frame de un video como imagen estática en thumbnails */
-function VideoFrameThumb({ url }) {
+/** Muestra el primer frame de un video como imagen estática en thumbnails.
+ *  Si la URL está en /local-media/ pero no está en caché, busca el archivo
+ *  por nombre en las carpetas FSA locales (OneDrive/Dropbox compartido). */
+function VideoFrameThumb({ url, fileName }) {
   const ref = useRef(null);
+  const [cacheKey, setCacheKey] = useState(0);
+
+  // Auto-cachear: si la URL no está en caché, buscarla en carpetas FSA locales
+  useEffect(() => {
+    if (!url?.startsWith('/local-media/') || !fileName) return;
+    ensureMediaCached(fileName)
+      .then(ok => { if (ok) setCacheKey(k => k + 1); })
+      .catch(() => {});
+  }, [url, fileName]);
+
   useEffect(() => {
     const v = ref.current;
     if (!v || !url) return;
     const onMeta = () => { v.currentTime = 0.5; };
     v.addEventListener('loadedmetadata', onMeta);
     return () => v.removeEventListener('loadedmetadata', onMeta);
-  }, [url]);
+  }, [url, cacheKey]);
+
   return (
     <video
+      key={url + cacheKey}
       ref={ref}
       src={url}
       muted
@@ -757,7 +772,7 @@ export default function SongDetail() {
                   {/* Fondo del slide: frame estático para videos, imagen para imágenes */}
                   {slideBg ? (
                     slideBg.mediaType === 'video'
-                      ? <VideoFrameThumb url={slideBg.url} />
+                      ? <VideoFrameThumb url={slideBg.url} fileName={slideBg.name || slideBg.fileName} />
                       : <img src={slideBg.url} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
                   ) : (
                     <div className="absolute inset-0 bg-zinc-900" />
