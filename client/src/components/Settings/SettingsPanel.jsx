@@ -112,6 +112,17 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
                     <p className="text-zinc-500 text-xs leading-relaxed">
                       Conecta tu móvil a la misma red WiFi<br />y escanea el código QR
                     </p>
+                    {/* PIN de este presentador */}
+                    {(() => {
+                      const pin = localStorage.getItem('aio_presenter_pin');
+                      return pin ? (
+                        <div className="mt-3 px-3 py-2 bg-surface-800 rounded-lg border border-surface-600">
+                          <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">PIN de este presentador</p>
+                          <p className="text-xl font-mono font-bold text-accent tracking-widest">{pin}</p>
+                          <p className="text-[10px] text-zinc-500 mt-1">Ingrésalo en el móvil → panel Salidas</p>
+                        </div>
+                      ) : null;
+                    })()}
                   </>
                 ) : (
                   <p className="text-zinc-400 text-sm py-4">Obteniendo IP…</p>
