@@ -360,6 +360,7 @@ export function PresenterProvider({ children }) {
     });
     socket.on('disconnect',   () => dispatch({ type: 'SET_CONNECTED', payload: false }));
     socket.on('live:state', (data) => {
+      console.debug('[Virtual] live:state recibido', { orgId, presenterPin, data });
       dispatch({ type: 'SET_LIVE_STATE', payload: data });
       // Si el slide activo cambió desde otro cliente (móvil o navegación server-side),
       // sincronizar selectedSong y selectedSlide para actualizar la grilla del controlador
