@@ -330,7 +330,7 @@ export function PresenterProvider({ children }) {
     }
     const token = localStorage.getItem('aio_sync_token');
     const urlOrgId = new URLSearchParams(window.location.search).get('orgId');
-    const orgId = localStorage.getItem('aio_org_id') || urlOrgId;
+    const orgId = urlOrgId || localStorage.getItem('aio_org_id');
     // aio_presenter_pin: generado únicamente por el ControllerPage (el PC presentador).
     // aio_target_pin: configurado por el usuario en el móvil para apuntar a un presentador.
     // Los móviles que no hayan configurado nada conectan sin PIN (modo org-wide fallback).
