@@ -90,8 +90,8 @@ const ALIGN_Y = [
 
 const _obsOrgId = localStorage.getItem('aio_org_id');
 const VIRTUAL_URL = _obsOrgId
-  ? `${window.location.origin}/virtual?orgId=${_obsOrgId}`
-  : `${window.location.origin}/virtual`;
+  ? `${window.location.origin}/virtual?orgId=${_obsOrgId}&obs=1`
+  : `${window.location.origin}/virtual?obs=1`;
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function VirtualControls({ defaultOpen = false }) {

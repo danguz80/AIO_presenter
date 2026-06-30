@@ -178,12 +178,13 @@ function VirtualSlideContent({ slideData, vc, textAlign }) {
  *  - isBlank   : boolean
  */
 export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroundMedia }) {
+  const isObsMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('obs') === '1';
   const bgStyle = (() => {
     if (vc.background?.type === 'chromakey') return { backgroundColor: vc.chromaColor ?? '#00b140' };
     if (vc.background?.type === 'color')     return { backgroundColor: vc.background.color ?? '#000000' };
     return { backgroundColor: 'transparent' };
   })();
-  console.log('[VirtualRenderer] render', { slideData, vc, isBlank, backgroundMedia, bgStyle });
+  console.log('[VirtualRenderer] render', { slideData, vc, isBlank, backgroundMedia, bgStyle, isObsMode });
 
   const alignXMap    = { left: 'flex-start', center: 'center', right: 'flex-end' };
   const alignYMap    = { top: 'flex-start',  center: 'center', bottom: 'flex-end' };
@@ -221,6 +222,35 @@ export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroun
             vc={vc}
             textAlign={textAlignMap[alignX] ?? 'center'}
           />
+        </div>
+      )}
+      {isObsMode && !isBlank && slideData && (
+        <div style={{
+          position: 'absolute', inset: 'auto 1rem 1rem 1rem',
+          zIndex: 9999,
+          padding: '0.75rem 1rem',
+          background: 'rgba(0, 0, 0, 0.65)',
+          borderRadius: '16px',
+          color: '#ffffff',
+          fontSize: 'clamp(16px, 2vw, 28px)',
+          lineHeight: 1.3,
+          maxHeight: '30%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'pre-wrap',
+        }}>
+          {slideData.type === 'title' ? (
+            <>
+              {slideData.songTitle}
+              {slideData.songAuthor ? `\n${slideData.songAuthor}` : ''}
+            </>
+          ) : slideData.type === 'song' ? (
+            stripComments(stripChords(slideData.content ?? ''))
+          ) : slideData.type === 'bible' ? (
+            slideData.text
+          ) : (
+            JSON.stringify(slideData)
+          )}
         </div>
       )}
     </div>
