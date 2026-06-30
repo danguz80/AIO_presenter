@@ -150,7 +150,7 @@ function VirtualSlideContent({ slideData, vc, textAlign }) {
           loop
           muted={false}
           playsInline
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'transparent' }}
         />
       );
     }
@@ -159,7 +159,7 @@ function VirtualSlideContent({ slideData, vc, textAlign }) {
         key={url}
         src={url}
         alt=""
-        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'transparent' }}
       />
     );
   }
@@ -209,9 +209,9 @@ export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroun
       {hasBgMedia && (
         backgroundMedia.mediaType === 'video'
           ? <video key={backgroundMedia.url} src={backgroundMedia.url} autoPlay loop playsInline data-bg-video="1"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'transparent', zIndex: 0 }} />
           : <img key={backgroundMedia.url} src={backgroundMedia.url} alt=""
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'transparent', zIndex: 0 }} />
       )}
       {isBlank || !slideData || (hasBgMedia && slideData.type === 'media') ? null : (
         <div style={{ ...containerStyle, position: 'relative', zIndex: 1 }}>

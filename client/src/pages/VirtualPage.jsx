@@ -26,7 +26,7 @@ export default function VirtualPage() {
   }, []);
 
   return (
-    <div className="w-screen h-screen select-none overflow-hidden bg-black">
+    <div className="w-screen h-screen select-none overflow-hidden bg-transparent" style={{ backgroundColor: 'transparent' }}>
       <VirtualRenderer
         vc={virtualConfig}
         slideData={liveState.slideData}
