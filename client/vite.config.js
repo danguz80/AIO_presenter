@@ -10,7 +10,7 @@ export default defineConfig({
       devOptions: {
         enabled: false, // Evita blob workers de workbox en desarrollo
       },
-      includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'apple-touch-icon.png'],
+      includeAssets: ['logo-icon.png', 'icon-192.png', 'icon-512.png', 'icon-512-maskable.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'AIO Presenter',
         short_name: 'AIO Presenter',
@@ -24,6 +24,12 @@ export default defineConfig({
         start_url: '/app',
         scope: '/',
         icons: [
+          {
+            src: '/logo-icon.png',
+            sizes: 'any',
+            type: 'image/png',
+            purpose: 'any',
+          },
           {
             src: '/icon-192.png',
             sizes: '192x192',
@@ -41,12 +47,6 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
-          },
-          {
-            src: '/icon.svg',
-            sizes: 'any',
-            type: 'image/svg+xml',
-            purpose: 'any',
           },
         ],
         // Shortcuts: acceso rápido desde el ícono instalado
