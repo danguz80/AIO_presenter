@@ -88,11 +88,15 @@ const ALIGN_Y = [
   { value: 'bottom', label: '⬇ Inf' },
 ];
 
-const _obsOrgId = localStorage.getItem('aio_org_id');
 const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
-const VIRTUAL_URL = _obsOrgId
-  ? `${window.location.origin}/virtual?orgId=${_obsOrgId}&obs=1&v=${BUILD_ID}`
-  : `${window.location.origin}/virtual?obs=1&v=${BUILD_ID}`;
+function getVirtualUrl() {
+  const orgId = localStorage.getItem('aio_org_id');
+  const params = new URLSearchParams();
+  if (orgId) params.set('orgId', orgId);
+  params.set('obs', '1');
+  params.set('v', BUILD_ID);
+  return `${window.location.origin}/virtual?${params.toString()}`;
+}
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function VirtualControls({ defaultOpen = false }) {
@@ -160,11 +164,13 @@ export default function VirtualControls({ defaultOpen = false }) {
   };
 
   const copyUrl = () => {
-    navigator.clipboard.writeText(VIRTUAL_URL).then(() => {
+    const url = getVirtualUrl();
+    navigator.clipboard.writeText(url).then(() => {
       setCopied(true); setTimeout(() => setCopied(false), 2000);
     });
   };
 
+  const VIRTUAL_URL = getVirtualUrl();
   const vc            = virtualConfig;
   const fontSizePx    = vc?.fontSizePx     ?? 48;
   const fontBold      = vc?.fontBold       ?? false;

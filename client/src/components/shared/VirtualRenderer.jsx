@@ -253,6 +253,28 @@ export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroun
           )}
         </div>
       )}
+      {isObsMode && (
+        <div style={{
+          position: 'absolute',
+          top: '1rem',
+          left: '1rem',
+          zIndex: 10000,
+          padding: '0.75rem 1rem',
+          background: 'rgba(0,0,0,0.65)',
+          borderRadius: '14px',
+          color: '#ffffff',
+          fontSize: '12px',
+          lineHeight: 1.35,
+          maxWidth: '280px',
+          pointerEvents: 'none',
+        }}>
+          <div style={{ fontWeight: '700', marginBottom: '0.35rem' }}>OBS Debug</div>
+          <div>orgId: {new URLSearchParams(window.location.search).get('orgId') || 'ninguna'}</div>
+          <div>slide: {slideData?.type ?? 'ninguna'}</div>
+          <div>blank: {String(isBlank)}</div>
+          <div>Status: {slideData ? 'texto activo' : 'esperando estado vivo'}</div>
+        </div>
+      )}
     </div>
   );
 }

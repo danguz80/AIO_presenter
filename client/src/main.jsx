@@ -25,13 +25,19 @@ import './index.css';
 // Service Worker para servir archivos locales FSA en ventanas separadas
 // No registrar el SW en la página virtual para evitar que OBS cargue una versión cacheada antigua.
 if ('serviceWorker' in navigator) {
-  if (window.location.pathname === '/virtual') {
+  if (window.location.pathname.startsWith('/virtual')) {
+    const reloadedKey = 'aio_virtual_sw_reload_done';
     navigator.serviceWorker.getRegistrations()
-      .then(regs => {
-        regs.forEach(reg => {
-          console.log('[SW] Desregistrando worker en /virtual:', reg.scope);
-          reg.unregister();
-        });
+      .then(regs => Promise.all(regs.map(reg => {
+        console.log('[SW] Desregistrando worker en /virtual:', reg.scope);
+        return reg.unregister();
+      })))
+      .then(() => {
+        if (navigator.serviceWorker.controller && !sessionStorage.getItem(reloadedKey)) {
+          sessionStorage.setItem(reloadedKey, '1');
+          console.log('[SW] Recargando /virtual tras desregistrar worker existente');
+          window.location.reload();
+        }
       })
       .catch(err => console.warn('[SW] Error al desregistrar:', err));
   } else {
