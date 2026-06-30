@@ -6,7 +6,7 @@ import { Maximize2 } from 'lucide-react';
 
 export default function VirtualPage() {
   const { state } = usePresenter();
-  const { liveState, virtualConfig } = state;
+  const { liveState, virtualConfig, connected } = state;
   const [showFsHint, setShowFsHint] = useState(() =>
     new URLSearchParams(window.location.search).get('fs') === '1' && !document.fullscreenElement
   );
@@ -32,6 +32,7 @@ export default function VirtualPage() {
         slideData={liveState.slideData}
         isBlank={liveState.isBlank}
         backgroundMedia={liveState.backgroundMedia}
+        connected={connected}
       />
       {showFsHint && (
         <div

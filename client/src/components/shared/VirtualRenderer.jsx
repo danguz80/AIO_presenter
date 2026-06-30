@@ -177,8 +177,9 @@ function VirtualSlideContent({ slideData, vc, textAlign }) {
  *  - slideData : slide activo (puede ser null)
  *  - isBlank   : boolean
  */
-export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroundMedia }) {
+export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroundMedia, connected }) {
   const isObsMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('obs') === '1';
+  const showDebug = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1';
   const bgStyle = (() => {
     if (vc.background?.type === 'chromakey') return { backgroundColor: vc.chromaColor ?? '#00b140' };
     if (vc.background?.type === 'color')     return { backgroundColor: vc.background.color ?? '#000000' };
@@ -224,36 +225,7 @@ export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroun
           />
         </div>
       )}
-      {isObsMode && !isBlank && slideData && (
-        <div style={{
-          position: 'absolute', inset: 'auto 1rem 1rem 1rem',
-          zIndex: 9999,
-          padding: '0.75rem 1rem',
-          background: 'rgba(0, 0, 0, 0.65)',
-          borderRadius: '16px',
-          color: '#ffffff',
-          fontSize: 'clamp(16px, 2vw, 28px)',
-          lineHeight: 1.3,
-          maxHeight: '30%',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'pre-wrap',
-        }}>
-          {slideData.type === 'title' ? (
-            <>
-              {slideData.songTitle}
-              {slideData.songAuthor ? `\n${slideData.songAuthor}` : ''}
-            </>
-          ) : slideData.type === 'song' ? (
-            stripComments(stripChords(slideData.content ?? ''))
-          ) : slideData.type === 'bible' ? (
-            slideData.text
-          ) : (
-            JSON.stringify(slideData)
-          )}
-        </div>
-      )}
-      {isObsMode && (
+      {showDebug && (
         <div style={{
           position: 'absolute',
           top: '1rem',
@@ -272,6 +244,7 @@ export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroun
           <div>orgId: {new URLSearchParams(window.location.search).get('orgId') || 'ninguna'}</div>
           <div>slide: {slideData?.type ?? 'ninguna'}</div>
           <div>blank: {String(isBlank)}</div>
+          <div>connected: {connected ? 'sí' : 'no'}</div>
           <div>Status: {slideData ? 'texto activo' : 'esperando estado vivo'}</div>
         </div>
       )}
