@@ -183,6 +183,7 @@ export default function VirtualRenderer({ vc = {}, slideData, isBlank, backgroun
     if (vc.background?.type === 'color')     return { backgroundColor: vc.background.color ?? '#000000' };
     return { backgroundColor: 'transparent' };
   })();
+  console.log('[VirtualRenderer] render', { slideData, vc, isBlank, backgroundMedia, bgStyle });
 
   const alignXMap    = { left: 'flex-start', center: 'center', right: 'flex-end' };
   const alignYMap    = { top: 'flex-start',  center: 'center', bottom: 'flex-end' };
