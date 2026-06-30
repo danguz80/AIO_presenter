@@ -89,9 +89,10 @@ const ALIGN_Y = [
 ];
 
 const _obsOrgId = localStorage.getItem('aio_org_id');
+const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
 const VIRTUAL_URL = _obsOrgId
-  ? `${window.location.origin}/virtual?orgId=${_obsOrgId}&obs=1`
-  : `${window.location.origin}/virtual?obs=1`;
+  ? `${window.location.origin}/virtual?orgId=${_obsOrgId}&obs=1&v=${BUILD_ID}`
+  : `${window.location.origin}/virtual?obs=1&v=${BUILD_ID}`;
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function VirtualControls({ defaultOpen = false }) {

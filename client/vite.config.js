@@ -111,6 +111,9 @@ export default defineConfig({
       // Socket.io se conecta directamente al backend via window.location.hostname:3001
     },
   },
+  define: {
+    __BUILD_ID__: JSON.stringify(new Date().toISOString().replace(/[:.]/g, '-')),
+  },
   build: {
     target: 'es2015',
     chunkSizeWarningLimit: 600,
