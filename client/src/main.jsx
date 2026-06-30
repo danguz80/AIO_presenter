@@ -24,12 +24,23 @@ import './index.css';
 
 // Service Worker para servir archivos locales FSA en ventanas separadas
 // No registrar el SW en la página virtual para evitar que OBS cargue una versión cacheada antigua.
-if ('serviceWorker' in navigator && window.location.pathname !== '/virtual') {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(err =>
-      console.warn('[SW] Registro fallido:', err)
-    );
-  });
+if ('serviceWorker' in navigator) {
+  if (window.location.pathname === '/virtual') {
+    navigator.serviceWorker.getRegistrations()
+      .then(regs => {
+        regs.forEach(reg => {
+          console.log('[SW] Desregistrando worker en /virtual:', reg.scope);
+          reg.unregister();
+        });
+      })
+      .catch(err => console.warn('[SW] Error al desregistrar:', err));
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch(err =>
+        console.warn('[SW] Registro fallido:', err)
+      );
+    });
+  }
 }
 
 // Aplicar tema guardado antes de que React renderice (evita flash)
