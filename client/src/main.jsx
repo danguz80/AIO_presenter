@@ -23,7 +23,8 @@ import './index.css';
 })();
 
 // Service Worker para servir archivos locales FSA en ventanas separadas
-if ('serviceWorker' in navigator) {
+// No registrar el SW en la página virtual para evitar que OBS cargue una versión cacheada antigua.
+if ('serviceWorker' in navigator && window.location.pathname !== '/virtual') {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(err =>
       console.warn('[SW] Registro fallido:', err)
