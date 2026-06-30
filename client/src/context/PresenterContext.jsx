@@ -329,14 +329,16 @@ export function PresenterProvider({ children }) {
       backendUrl = `http://${host}:${savedPort}`;
     }
     const token = localStorage.getItem('aio_sync_token');
-    const urlOrgId = new URLSearchParams(window.location.search).get('orgId');
+    const params = new URLSearchParams(window.location.search);
+    const urlOrgId = params.get('orgId');
+    const urlPin   = params.get('pin');
     const orgId = urlOrgId || localStorage.getItem('aio_org_id');
     // aio_presenter_pin: generado únicamente por el ControllerPage (el PC presentador).
     // aio_target_pin: configurado por el usuario en el móvil para apuntar a un presentador.
-    // Los móviles que no hayan configurado nada conectan sin PIN (modo org-wide fallback).
+    // Si el cliente es OBS, usamos el pin pasado por URL para unirse al presentador correcto.
     const targetPin    = localStorage.getItem('aio_target_pin') || null;
     const ownPin       = localStorage.getItem('aio_presenter_pin') || null;
-    const presenterPin = targetPin || ownPin || null;
+    const presenterPin = urlPin || targetPin || ownPin || null;
     const socket = io(backendUrl, {
       autoConnect: true,
       auth: { token: token || undefined, orgId: orgId || undefined, presenterPin: presenterPin || undefined },

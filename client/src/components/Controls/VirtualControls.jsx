@@ -91,8 +91,10 @@ const ALIGN_Y = [
 const BUILD_ID = typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev';
 function getVirtualUrl() {
   const orgId = localStorage.getItem('aio_org_id');
+  const presenterPin = localStorage.getItem('aio_presenter_pin') || localStorage.getItem('aio_target_pin');
   const params = new URLSearchParams();
   if (orgId) params.set('orgId', orgId);
+  if (presenterPin) params.set('pin', presenterPin);
   params.set('obs', '1');
   params.set('v', BUILD_ID);
   return `${window.location.origin}/virtual?${params.toString()}`;
