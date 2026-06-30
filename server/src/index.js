@@ -503,6 +503,14 @@ io.on('connection', async (socket) => {
   const emitToOrg  = (event, data) => io.to(`org:${orgId}`).emit(event, data);
   // emitToLive: envía solo al grupo del presentador (PIN) o a toda la org si no hay PIN
   const emitToLive = (event, data) => io.to(pin ? `pres:${orgId}:${pin}` : `org:${orgId}`).emit(event, data);
+  // emitToLiveState: cuando hay PIN, también enviar live:state a toda la org
+  const emitToLiveState = (event, data) => {
+    const target = pin ? `pres:${orgId}:${pin}` : `org:${orgId}`;
+    io.to(target).emit(event, data);
+    if (pin) {
+      io.to(`org:${orgId}`).emit(event, data);
+    }
+  };
 
   // Configuraciones (compartidas por org) → solo al cliente que conecta
   socket.emit('display:config',    s.displayConfig);
@@ -537,14 +545,14 @@ io.on('connection', async (socket) => {
       }
       const bgMedia = data.slideData?.slideBackground ?? s.outputConfig.titleBackground ?? null;
       live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
-      emitToLive('live:state', live.liveState);
+      emitToLiveState('live:state', live.liveState);
       return;
     }
 
     // Media de fondo (primerPlano=false)
     if (data.type === 'media' && data.slideData?.primerPlano === false) {
       live.liveState = { ...live.liveState, backgroundMedia: data.slideData, isBlank: false };
-      emitToLive('live:state', live.liveState);
+      emitToLiveState('live:state', live.liveState);
       return;
     }
     if (data.type === 'media') {
@@ -577,7 +585,7 @@ io.on('connection', async (socket) => {
         const bgMedia = s.outputConfig.titleBackground || null;
         const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null;
         live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
-        emitToLive('live:state', live.liveState);
+        emitToLiveState('live:state', live.liveState);
         return;
       }
     } else if (data.type !== 'song') {
@@ -589,20 +597,20 @@ io.on('connection', async (socket) => {
     }
     const { slides, ...rest } = data;
     live.liveState = { ...live.liveState, ...rest, totalSlides: slides?.length ?? null, isBlank: false };
-    emitToLive('live:state', live.liveState);
+    emitToLiveState('live:state', live.liveState);
   });
 
   // Pantalla en negro / en blanco
   socket.on('live:blank', (isBlank) => {
     live.liveState.isBlank = isBlank;
     if (isBlank) live.liveState.backgroundMedia = null;
-    emitToLive('live:state', live.liveState);
+    emitToLiveState('live:state', live.liveState);
   });
 
   // Cambiar fondo (pantalla principal)
   socket.on('live:background', (bg) => {
     live.liveState.background = bg;
-    emitToLive('live:state', live.liveState);
+    emitToLiveState('live:state', live.liveState);
   });
 
   // Actualizar plantillas de escenario
