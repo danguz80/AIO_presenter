@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      injectRegister: false,
       registerType: 'autoUpdate',
       devOptions: {
         enabled: false, // Evita blob workers de workbox en desarrollo
