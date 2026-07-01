@@ -339,6 +339,16 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ`);
     // ─── Configuración de banda por evento ────────────────────────────────
     await pool.query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS band_config_id INTEGER REFERENCES band_configs(id) ON DELETE SET NULL`);
+    // ─── Configuración de banda por ocurrencia (eventos recurrentes) ───────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS event_occurrence_band_configs (
+        id              SERIAL PRIMARY KEY,
+        event_id        INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+        occurrence_date DATE    NOT NULL,
+        band_config_id  INTEGER REFERENCES band_configs(id) ON DELETE SET NULL,
+        UNIQUE (event_id, occurrence_date)
+      )
+    `);
     // ─── Estructuras múltiples por canción ────────────────────────────────
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS structures JSONB DEFAULT '[]'`);
     // ─── Auditoría: quién editó por última vez la canción ─────────────────

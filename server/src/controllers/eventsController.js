@@ -89,6 +89,7 @@ async function getEvents(req, res) {
 
     // Canciones de recurrentes agrupadas por (event_id, occurrence_date)
     let recurSongMap = {};
+    let recurBandMap = {}; // band_config_id por ocurrencia
     if (recurring.length > 0) {
       const { rows: rs } = await pool.query(
         `SELECT es.event_id, es.occurrence_date::text AS occ_date,
@@ -120,6 +121,17 @@ async function getEvents(req, res) {
           song_count: Number(row.song_count),
         };
       }
+      // Cargar band_config_id por ocurrencia
+      const { rows: rb } = await pool.query(
+        `SELECT event_id, occurrence_date::text AS occ_date, band_config_id
+           FROM event_occurrence_band_configs
+          WHERE event_id = ANY($1::int[])`,
+        [recurring.map(e => e.id)]
+      );
+      for (const row of rb) {
+        if (!recurBandMap[row.event_id]) recurBandMap[row.event_id] = {};
+        recurBandMap[row.event_id][row.occ_date] = row.band_config_id;
+      }
     }
 
     // Expandir recurrentes: cada fecha obtiene sus canciones propias o las base
@@ -133,9 +145,14 @@ async function getEvents(req, res) {
         : null;
       const dates = expandRecurring(baseDateStr, ev.recurrence, recurEndStr, start, end);
       const evMap = recurSongMap[ev.id] || {};
+      const evBandMap = recurBandMap[ev.id] || {};
       for (const d of dates) {
         const entry = evMap[d] || { songs: [], song_count: 0 };
-        expanded.push({ ...ev, date: d, occurrence_date: d, base_date: baseDateStr, songs: entry.songs, song_count: entry.song_count });
+        // Si hay un band_config_id específico para esta ocurrencia, usarlo; si no, el del evento base
+        const occBandConfigId = Object.prototype.hasOwnProperty.call(evBandMap, d)
+          ? evBandMap[d]
+          : ev.band_config_id;
+        expanded.push({ ...ev, date: d, occurrence_date: d, base_date: baseDateStr, songs: entry.songs, song_count: entry.song_count, band_config_id: occBandConfigId });
       }
     }
 

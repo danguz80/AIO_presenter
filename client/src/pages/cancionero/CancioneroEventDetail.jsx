@@ -735,10 +735,15 @@ export default function CancioneroEventDetail() {
   const saveBandConfig = async (configId) => {
     setSavingBand(true);
     try {
+      const body = { band_config_id: configId || null };
+      // Para eventos recurrentes enviar la occurrence_date para guardar por ocurrencia
+      if (event?.is_recurring && occurrenceDate) {
+        body.occurrence_date = occurrenceDate;
+      }
       const res = await fetch(`${API}/api/events/${id}/band-config`, {
         method: 'PATCH',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ band_config_id: configId || null }),
+        body: JSON.stringify(body),
       });
       if (res.ok) setEvent(prev => ({ ...prev, band_config_id: configId || null }));
     } finally { setSavingBand(false); }
