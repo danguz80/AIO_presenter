@@ -469,6 +469,8 @@ function EventsPanel() {
   const [templateSaveSuccess, setTemplateSaveSuccess] = useState(false);
   const [altTemplateName,     setAltTemplateName]     = useState('');
   const [showAltNameInput,    setShowAltNameInput]    = useState(false);
+  // Eventos pasados colapsable
+  const [pastOpen,     setPastOpen]     = useState(false);
   // Editar evento
   const [editingEv,    setEditingEv]    = useState(false);
   const [editEvData,   setEditEvData]   = useState({});
@@ -1197,41 +1199,79 @@ function EventsPanel() {
                 <span className="text-xs">Sin eventos este mes</span>
               </div>
             )}
-            {!loading && events.length > 0 && (
-              <div className="flex flex-col gap-px p-2">
-                {events.map(ev => {
-                  const dateStr = String(ev.date).split('T')[0];
-                  const day = parseInt(dateStr.split('-')[2]);
-                  return (
-                    <button
-                      key={ev.id + dateStr}
-                      onClick={() => setSelectedEv({ ...ev, date: dateStr })}
-                      className="w-full text-left px-2.5 py-2 rounded-lg transition-colors flex items-start gap-2 group hover:bg-surface-700 text-zinc-300"
-                    >
-                      <span className="shrink-0 w-6 h-6 rounded-md bg-surface-700 flex items-center justify-center text-[11px] font-bold mt-px text-zinc-400">
-                        {day}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium truncate leading-tight">{ev.title}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          {ev.time && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-zinc-500">
-                              <Clock size={9} />{String(ev.time).slice(0, 5)}
-                            </span>
-                          )}
-                          {ev.is_recurring && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-purple-400">
-                              <RefreshCw size={9} />{RECURRENCE_LABEL[ev.recurrence] || ''}
-                            </span>
-                          )}
-                        </div>
+            {!loading && events.length > 0 && (() => {
+              const todayDateStr = new Date().toISOString().split('T')[0];
+              const upcoming = events
+                .filter(ev => String(ev.date).split('T')[0] >= todayDateStr)
+                .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+              const past = events
+                .filter(ev => String(ev.date).split('T')[0] < todayDateStr)
+                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+              const renderEvItem = (ev) => {
+                const dateStr = String(ev.date).split('T')[0];
+                const day = parseInt(dateStr.split('-')[2]);
+                return (
+                  <button
+                    key={ev.id + dateStr}
+                    onClick={() => setSelectedEv({ ...ev, date: dateStr })}
+                    className="w-full text-left px-2.5 py-2 rounded-lg transition-colors flex items-start gap-2 group hover:bg-surface-700 text-zinc-300"
+                  >
+                    <span className="shrink-0 w-6 h-6 rounded-md bg-surface-700 flex items-center justify-center text-[11px] font-bold mt-px text-zinc-400">
+                      {day}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate leading-tight">{ev.title}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {ev.time && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-zinc-500">
+                            <Clock size={9} />{String(ev.time).slice(0, 5)}
+                          </span>
+                        )}
+                        {ev.is_recurring && (
+                          <span className="flex items-center gap-0.5 text-[10px] text-purple-400">
+                            <RefreshCw size={9} />{RECURRENCE_LABEL[ev.recurrence] || ''}
+                          </span>
+                        )}
                       </div>
-                      <ChevronRight size={12} className="shrink-0 mt-1 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                    </div>
+                    <ChevronRight size={12} className="shrink-0 mt-1 text-zinc-600 group-hover:text-zinc-300 transition-colors" />
+                  </button>
+                );
+              };
+
+              return (
+                <div className="flex flex-col gap-px p-2">
+                  {upcoming.length === 0 && past.length === 0 && (
+                    <div className="flex flex-col items-center gap-1 py-8 text-zinc-600">
+                      <CalendarDays size={22} />
+                      <span className="text-xs">Sin eventos este mes</span>
+                    </div>
+                  )}
+                  {upcoming.map(renderEvItem)}
+                  {past.length > 0 && (
+                    <div className="mt-1">
+                      <button
+                        onClick={() => setPastOpen(v => !v)}
+                        className="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-surface-700 transition-colors"
+                      >
+                        {pastOpen
+                          ? <ChevronDown size={12} />
+                          : <ChevronRight size={12} />}
+                        <span className="text-[10px] font-semibold uppercase tracking-wider flex-1 text-left">
+                          Eventos Pasados ({past.length})
+                        </span>
+                      </button>
+                      {pastOpen && (
+                        <div className="flex flex-col gap-px mt-0.5 opacity-60">
+                          {past.map(renderEvItem)}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </>
       ) : (
