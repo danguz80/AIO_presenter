@@ -1,6 +1,7 @@
 # Dependencias
 node_modules/
 **/node_modules/
+package-lock.json
 
 # Variables de entorno — NUNCA subir al repo
 .env

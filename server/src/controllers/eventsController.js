@@ -91,44 +91,46 @@ async function getEvents(req, res) {
     let recurSongMap = {};
     let recurBandMap = {}; // band_config_id por ocurrencia
     if (recurring.length > 0) {
-      const { rows: rs } = await pool.query(
-        `SELECT es.event_id, es.occurrence_date::text AS occ_date,
-           COALESCE(
-             json_agg(
-               json_build_object('id', es.id, 'song_id', es.song_id, 'position', es.position,
-                                 'notes', es.notes, 'item_type', es.item_type,
-                                 'separator_label', es.separator_label,
-                                 'separator_color', es.separator_color,
-                                 'media_name', es.media_name, 'media_type', es.media_type,
-                                 'title', s.title, 'author', s.author,
-                                 'song_key', s.song_key, 'tags', s.tags,
-                                 'link', s.link)
-               ORDER BY es.position
-             ) FILTER (WHERE es.id IS NOT NULL),
-             '[]'
-           ) AS songs,
-           COUNT(es.id) FILTER (WHERE es.item_type = 'song' AND es.song_id IS NOT NULL) AS song_count
-         FROM event_songs es
-         LEFT JOIN songs s ON s.id = es.song_id
-         WHERE es.event_id = ANY($1::int[])
-         GROUP BY es.event_id, es.occurrence_date`,
-        [recurring.map(e => e.id)]
-      );
-      for (const row of rs) {
+      const recurIds = recurring.map(e => e.id);
+      const [songsResult, bandResult] = await Promise.all([
+        pool.query(
+          `SELECT es.event_id, es.occurrence_date::text AS occ_date,
+             COALESCE(
+               json_agg(
+                 json_build_object('id', es.id, 'song_id', es.song_id, 'position', es.position,
+                                   'notes', es.notes, 'item_type', es.item_type,
+                                   'separator_label', es.separator_label,
+                                   'separator_color', es.separator_color,
+                                   'media_name', es.media_name, 'media_type', es.media_type,
+                                   'title', s.title, 'author', s.author,
+                                   'song_key', s.song_key, 'tags', s.tags,
+                                   'link', s.link)
+                 ORDER BY es.position
+               ) FILTER (WHERE es.id IS NOT NULL),
+               '[]'
+             ) AS songs,
+             COUNT(es.id) FILTER (WHERE es.item_type = 'song' AND es.song_id IS NOT NULL) AS song_count
+           FROM event_songs es
+           LEFT JOIN songs s ON s.id = es.song_id
+           WHERE es.event_id = ANY($1::int[])
+           GROUP BY es.event_id, es.occurrence_date`,
+          [recurIds]
+        ),
+        pool.query(
+          `SELECT event_id, occurrence_date::text AS occ_date, band_config_id
+             FROM event_occurrence_band_configs
+            WHERE event_id = ANY($1::int[])`,
+          [recurIds]
+        ),
+      ]);
+      for (const row of songsResult.rows) {
         if (!recurSongMap[row.event_id]) recurSongMap[row.event_id] = {};
         recurSongMap[row.event_id][row.occ_date || '__base__'] = {
           songs: row.songs,
           song_count: Number(row.song_count),
         };
       }
-      // Cargar band_config_id por ocurrencia
-      const { rows: rb } = await pool.query(
-        `SELECT event_id, occurrence_date::text AS occ_date, band_config_id
-           FROM event_occurrence_band_configs
-          WHERE event_id = ANY($1::int[])`,
-        [recurring.map(e => e.id)]
-      );
-      for (const row of rb) {
+      for (const row of bandResult.rows) {
         if (!recurBandMap[row.event_id]) recurBandMap[row.event_id] = {};
         recurBandMap[row.event_id][row.occ_date] = row.band_config_id;
       }
