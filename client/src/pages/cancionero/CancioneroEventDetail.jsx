@@ -76,7 +76,9 @@ async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlayli
   y += 2;
   doc.setDrawColor(200, 200, 220);
   doc.setLineWidth(0.4);
-  doc.line(marginL, y + 3, pageW - marginR, y + 3);
+  // Si hay QR de Spotify, la línea se detiene antes para no atravesarlo
+  const lineEndX = spotifyPlaylistUrl ? pageW - marginR - qrSize - 4 : pageW - marginR;
+  doc.line(marginL, y + 3, lineEndX, y + 3);
   y += 9;
 
   // ─── Configuración de banda ───────────────────────────────────────────────
