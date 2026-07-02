@@ -170,7 +170,6 @@ export default function SongDetail() {
       tags:     selectedSong.tags ?? [],
       slides:   newSlides,
     });
-    await actions.loadSongDetail(selectedSong.id);
   }, [selectedSong, actions]);
 
   const handleUndo = useCallback(async () => {

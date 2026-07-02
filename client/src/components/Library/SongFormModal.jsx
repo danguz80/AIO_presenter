@@ -265,10 +265,6 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
       const lbl = m[1].trim();
       if (lbl && !seen.has(lbl)) { seen.add(lbl); result.push(lbl); }
     }
-
-    console.log('[SongFormModal] uniqueLabels:', result);
-    console.log('[SongFormModal] slide labels raw:', song?.slides?.map(s => s.label));
-    console.log('[SongFormModal] body first 300:', body.substring(0, 300));
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [body, song?.slides]);
@@ -363,12 +359,12 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden flex-1">
+        <form onSubmit={handleSubmit} className="flex flex-col overflow-hidden flex-1 min-h-0">
           {/* ── 3 columnas en desktop, 1 columna en móvil ── */}
-          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row">
+          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row min-h-0">
 
           {/* ── Col 1: Acordes ── */}
-          <div className="lg:w-52 shrink-0 overflow-y-auto border-b lg:border-b-0 lg:border-r border-surface-700">
+          <div className="hidden lg:block lg:w-52 shrink-0 overflow-y-auto border-b lg:border-b-0 lg:border-r border-surface-700">
             {(() => {
               const groups = buildScaleChords(activeKey);
               if (!groups && !songKey) return (
@@ -411,7 +407,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
           </div>
 
           {/* ── Col 2: Metadatos + Etiquetas + Letra ── */}
-          <div className="flex-1 overflow-y-auto min-w-0">
+          <div className="flex-1 overflow-y-auto min-w-0 min-h-0">
           {/* Campos básicos */}
           <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-surface-700">
             <div>
@@ -548,8 +544,8 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
               </div>
               <textarea
                 ref={textareaRef}
-                rows={25}
-                className="input resize-none font-mono text-sm leading-relaxed"
+                rows={18}
+                className="input resize-none font-mono text-sm leading-relaxed min-h-[42vh] sm:min-h-[46vh] lg:min-h-[unset]"
                 value={body}
                 onChange={e => setBody(e.target.value)}
                 onBlur={() => { savedCursorPos.current = textareaRef.current?.selectionStart ?? null; }}
@@ -627,7 +623,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
           </div>{/* end scroll */}
 
             {/* ── Col 3: Labels + Borrar + Cambio de clave ── */}
-            <div className="lg:w-44 shrink-0 flex flex-col gap-2 py-4 border-t lg:border-t-0 lg:border-l border-surface-700 px-3 overflow-y-auto">
+            <div className="hidden lg:flex lg:w-44 shrink-0 flex-col gap-2 py-4 border-t lg:border-t-0 lg:border-l border-surface-700 px-3 overflow-y-auto">
               {/* Botón borrar (solo en edición) */}
               {isEdit && (
                 <button
