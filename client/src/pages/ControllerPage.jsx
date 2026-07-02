@@ -1201,15 +1201,16 @@ function EventsPanel() {
             )}
             {!loading && events.length > 0 && (() => {
               const todayDateStr = new Date().toISOString().split('T')[0];
+              const evKey = ev => (ev.occurrence_date ? String(ev.occurrence_date) : String(ev.date)).slice(0, 10);
               const upcoming = events
-                .filter(ev => String(ev.date).split('T')[0] >= todayDateStr)
-                .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                .filter(ev => evKey(ev) >= todayDateStr)
+                .sort((a, b) => evKey(a).localeCompare(evKey(b)));
               const past = events
-                .filter(ev => String(ev.date).split('T')[0] < todayDateStr)
-                .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+                .filter(ev => evKey(ev) < todayDateStr)
+                .sort((a, b) => evKey(b).localeCompare(evKey(a)));
 
               const renderEvItem = (ev) => {
-                const dateStr = String(ev.date).split('T')[0];
+                const dateStr = evKey(ev);
                 const day = parseInt(dateStr.split('-')[2]);
                 return (
                   <button
