@@ -47,7 +47,7 @@ export default function CancioneroEvents() {
   const [pastEvents,  setPastEvents]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [expanded,    setExpanded]    = useState({});
-  const [pastOpen,    setPastOpen]    = useState(false);
+  const [futureOpen,  setFutureOpen]  = useState(true);
   const [bandConfigs,     setBandConfigs]     = useState([]);
   const [myBlockedDates,  setMyBlockedDates]  = useState([]); // YYYY-MM-DD[]
 
@@ -79,7 +79,7 @@ export default function CancioneroEvents() {
       const upList   = Array.isArray(upcoming) ? upcoming : [];
       const pastList = Array.isArray(past)     ? past     : [];
       upList.sort((a, b) => a.date.localeCompare(b.date));
-      pastList.sort((a, b) => b.date.localeCompare(a.date));
+      pastList.sort((a, b) => a.date.localeCompare(b.date));
       // No-admins solo ven eventos publicados
       const visibleUp   = isAdmin ? upList   : upList.filter(e => e.is_published);
       const visiblePast = isAdmin ? pastList : pastList.filter(e => e.is_published);
@@ -293,39 +293,39 @@ export default function CancioneroEvents() {
           </div>
         ) : (
           <>
-            {/* ── Próximos eventos ─────────────────────────────────── */}
-            {events.length === 0 ? (
+            {/* ── Eventos pasados ──────────────────────────────────── */}
+            {pastEvents.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-12 text-white/30">
                 <CalendarDays size={40} />
                 <p className="text-sm">No hay eventos programados</p>
               </div>
             ) : (
               <div className="space-y-3">
-                {events.map(ev => renderEvent(ev, false))}
+                {pastEvents.map(ev => renderEvent(ev, true))}
               </div>
             )}
 
-            {/* ── Eventos pasados ──────────────────────────────────── */}
-            {pastEvents.length > 0 && (
+            {/* ── Eventos futuros ──────────────────────────────────── */}
+            {events.length > 0 && (
               <div className="mt-8">
                 <button
-                  onClick={() => setPastOpen(v => !v)}
+                  onClick={() => setFutureOpen(v => !v)}
                   className="w-full flex items-center gap-2 py-2 text-left group"
                 >
-                  <History size={15} className="text-white/30 group-hover:text-white/50 transition-colors" />
+                  <History size={15} className="text-white/30 group-hover:text-white/50 transition-colors rotate-180" />
                   <span className="text-xs font-semibold text-white/30 group-hover:text-white/50 transition-colors uppercase tracking-wider">
-                    Eventos pasados
+                    Eventos futuros
                   </span>
-                  <span className="text-xs text-white/20 ml-1">({pastEvents.length})</span>
+                  <span className="text-xs text-white/20 ml-1">({events.length})</span>
                   <div className="flex-1" />
-                  {pastOpen
+                  {futureOpen
                     ? <ChevronUp size={15} className="text-white/30" />
                     : <ChevronDown size={15} className="text-white/30" />}
                 </button>
 
-                {pastOpen && (
+                {futureOpen && (
                   <div className="space-y-3 mt-3">
-                    {pastEvents.map(ev => renderEvent(ev, true))}
+                    {events.map(ev => renderEvent(ev, false))}
                   </div>
                 )}
               </div>
