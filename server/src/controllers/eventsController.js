@@ -158,9 +158,10 @@ async function getEvents(req, res) {
       }
     }
 
+    const toDateStr = d => d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
     const all = [...single, ...expanded].sort((a, b) => {
-      const da = String(a.date).split('T')[0];
-      const db = String(b.date).split('T')[0];
+      const da = toDateStr(a.date);
+      const db = toDateStr(b.date);
       return da.localeCompare(db) || (a.time || '').localeCompare(b.time || '');
     });
 
