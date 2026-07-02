@@ -78,8 +78,9 @@ export default function CancioneroEvents() {
     ]).then(([upcoming, past, configs, blocked]) => {
       const upList   = Array.isArray(upcoming) ? upcoming : [];
       const pastList = Array.isArray(past)     ? past     : [];
-      upList.sort((a, b) => a.date.localeCompare(b.date));
-      pastList.sort((a, b) => a.date.localeCompare(b.date));
+      const evSortKey = ev => (ev.occurrence_date ? String(ev.occurrence_date) : String(ev.date)).slice(0, 10);
+      upList.sort((a, b) => evSortKey(a).localeCompare(evSortKey(b)));
+      pastList.sort((a, b) => evSortKey(a).localeCompare(evSortKey(b)));
       // No-admins solo ven eventos publicados
       const visibleUp   = isAdmin ? upList   : upList.filter(e => e.is_published);
       const visiblePast = isAdmin ? pastList : pastList.filter(e => e.is_published);
