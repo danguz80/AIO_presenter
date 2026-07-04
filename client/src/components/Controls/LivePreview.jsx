@@ -161,7 +161,6 @@ export default function LivePreview() {
       openOneOutput(stageWinRef,  '/stage',  null, 'aio-stage',  displayCfg.escenarioResolution);
     }
   };
-  };
 
   const deactivateOutputs = () => {
     if (outputWinRef.current && !outputWinRef.current.closed) outputWinRef.current.close();
