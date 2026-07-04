@@ -138,22 +138,37 @@ export default function LivePreview() {
     }
   };
 
-  const escenarioWillOpen = !!displayCfg.escenarioScreenId;
+  const hasPrincipal = !!displayCfg.principalScreenId;
+  const hasEscenario  = !!displayCfg.escenarioScreenId;
+  // Principal abre si está configurado, o si nada está configurado (fallback popup)
+  const principalWillOpen = hasPrincipal || (!hasPrincipal && !hasEscenario);
+  const escenarioWillOpen = hasEscenario;
 
   const activateOutputs = () => {
-    console.log('[AIO] activateOutputs — principalScreenId:', displayCfg.principalScreenId, '| escenarioScreenId:', displayCfg.escenarioScreenId);
-    // Principal: siempre se abre
-    // Escenario: solo si tiene pantalla asignada en el panel Salidas
+    // Leer config directamente del state en el momento del click (evita cualquier closure stale)
+    const cfg = state.displayConfig ?? {};
+    const principal = cfg.principalScreenId || null;
+    const escenario = cfg.escenarioScreenId || null;
+    console.log('[AIO] activateOutputs — principal:', principal, '| escenario:', escenario);
+
     setOutputsActive(true);
     setShowReopenBanner(false);
     localStorage.setItem('aio_outputs_active', '1');
 
-    openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
-
-    if (displayCfg.escenarioScreenId) {
+    if (!principal && !escenario) {
+      // Ninguna configurada → popup por defecto solo principal
+      openOneOutput(outputWinRef, '/output', null, 'aio-output', cfg.principalResolution);
+    } else if (principal && escenario) {
+      // Ambas → secuencial
+      openOneOutput(outputWinRef, '/output', principal, 'aio-output', cfg.principalResolution);
       setTimeout(() => {
-        openOneOutput(stageWinRef, '/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution);
+        openOneOutput(stageWinRef, '/stage', escenario, 'aio-stage', cfg.escenarioResolution);
       }, 2800);
+    } else if (principal) {
+      openOneOutput(outputWinRef, '/output', principal, 'aio-output', cfg.principalResolution);
+    } else {
+      // Solo escenario
+      openOneOutput(stageWinRef, '/stage', escenario, 'aio-stage', cfg.escenarioResolution);
     }
   };
 
@@ -253,13 +268,23 @@ export default function LivePreview() {
       </button>
       {/* Indicador de qué salidas se abrirán */}
       {!outputsActive && (
-        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
-          <span className="font-semibold text-zinc-400">Abrirá:</span>
-          <span className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">Principal</span>
-          {escenarioWillOpen
-            ? <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">Escenario</span>
-            : <span className="px-1.5 py-0.5 rounded bg-surface-700 text-zinc-600 border border-surface-600 line-through">Escenario</span>
-          }
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+            <span className="font-semibold text-zinc-400">Abrirá:</span>
+            {principalWillOpen
+              ? <span className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">Principal</span>
+              : <span className="px-1.5 py-0.5 rounded bg-surface-700 text-zinc-600 border border-surface-600 line-through">Principal</span>
+            }
+            {escenarioWillOpen
+              ? <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">Escenario</span>
+              : <span className="px-1.5 py-0.5 rounded bg-surface-700 text-zinc-600 border border-surface-600 line-through">Escenario</span>
+            }
+          </div>
+          {!hasPrincipal && hasEscenario && (
+            <p className="text-[10px] text-amber-400 leading-snug">
+              ⚠️ Solo Escenario configurado. Ve a Ajustes → Salidas y pulsa “Principal” en tu pantalla.
+            </p>
+          )}
         </div>
       )}
 
