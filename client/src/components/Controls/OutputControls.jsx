@@ -857,16 +857,16 @@ export default function OutputControls({ defaultOpen = false }) {
                       ))}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs text-zinc-300 shrink-0">Máx. líneas por diap.</span>
-                    <div className="flex items-center gap-2 flex-1">
-                      <input type="range" min={0} max={8} step={1} value={bibleMaxLines}
-                        onChange={e => update({ bibleMaxLines: Number(e.target.value) })}
-                        className="flex-1 accent-accent" />
-                      <span className="text-xs text-zinc-400 w-14 text-right">
-                        {bibleMaxLines === 0 ? 'Auto' : `${bibleMaxLines} líneas`}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-300">Máx. líneas por diap.</span>
+                      <span className="text-xs text-zinc-400">
+                        {bibleMaxLines === 0 ? 'Auto (sin límite)' : `${bibleMaxLines} líneas`}
                       </span>
                     </div>
+                    <input type="range" min={0} max={8} step={1} value={bibleMaxLines}
+                      onChange={e => update({ bibleMaxLines: Number(e.target.value) })}
+                      className="w-full accent-accent" />
                   </div>
                 </div>
               </div>

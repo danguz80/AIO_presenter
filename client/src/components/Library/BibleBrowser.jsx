@@ -160,11 +160,13 @@ export default function BibleBrowser() {
   };
 
   // ─── Cola de páginas para versículos largos ───────────────────────────────
-  const pageQueueRef = useRef([]); // { text, reference, version, nextSlideData }[]
+  const pageQueueRef  = useRef([]); // { text, reference, version, nextSlideData }[]
+  const maxLinesRef   = useRef(0);  // siempre tiene el valor actual sin recrear sendVerse
+  maxLinesRef.current = state.outputConfig?.bibleMaxLines ?? 0;
 
   // ─── Proyectar versículo con soporte de split por máx. líneas ─────────────
   const sendVerse = useCallback((v, nextV = null) => {
-    const maxLines = state.outputConfig?.bibleMaxLines ?? 0;
+    const maxLines     = maxLinesRef.current;
     const charsPerLine = 46;
 
     const splitText = (text) => {
@@ -214,7 +216,7 @@ export default function BibleBrowser() {
         ? { type: 'bible', text: pages[i + 2], reference: pageRef(i + 2) }
         : nextVSD,
     }));
-  }, [actions, state.outputConfig?.bibleMaxLines]);
+  }, [actions]); // maxLinesRef siempre fresco, no necesita dep
 
   // ─── Navegación desde móvil (via socket) ─────────────────────────────────
   const { navigateRequest } = state;
@@ -302,6 +304,8 @@ export default function BibleBrowser() {
     const sd = state.liveState?.slideData;
     if (sd?.type !== 'bible' || !sd?.reference) return;
     if (!books.length) return;
+    // Ignorar referencias de páginas internas (ej: "Juan 3:16 (2/3)")
+    if (/\(\d+\/\d+\)$/.test(sd.reference.trim())) return;
     if (lastNavigatedRef.current === sd.reference) return; // ya navegado
 
     const match = sd.reference.trim().match(/^(.+?)\s+(\d+):(\d+)$/);
