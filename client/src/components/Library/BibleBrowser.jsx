@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Send, BookOpen, X, Upload, Loader2 } from 'lucide-react';
+import { Search, Send, BookOpen, X, Upload, Loader2, Trash2 } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
@@ -43,7 +43,9 @@ export default function BibleBrowser() {
   const [impError,      setImpError]      = useState('');
   const [impResult,     setImpResult]     = useState(null);
   const fileInputRef = useRef(null);
-
+  // ── Borrar versión ─────────────────────────────────────────────────
+  const [deleting,      setDeleting]      = useState(false);
+  const [delConfirm,    setDelConfirm]    = useState(false);
   // ── Carga ─────────────────────────────────────────────────────────────────
   const [loadingBooks,   setLoadingBooks]   = useState(false);
   const [loadingChapters,setLoadingChapters]= useState(false);
@@ -119,6 +121,28 @@ export default function BibleBrowser() {
       }
     }).catch(console.error).finally(() => setLoadingVerses(false));
   }, [chapter, book]);
+
+  // ─── Borrar versión bíblica ─────────────────────────────────────
+  const handleDelete = async () => {
+    if (!versionId) return;
+    setDeleting(true);
+    try {
+      const base  = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api` : '/api';
+      const token = localStorage.getItem('aio_sync_token');
+      const res   = await fetch(`${base}/bible/versions/${versionId}`, {
+        method: 'DELETE',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (res.ok) {
+        api.get('/bible/versions').then(r => {
+          setVersions(r.data);
+          if (r.data.length > 0) setVersionId(String(r.data[0].id));
+        }).catch(() => {});
+      }
+    } catch (_) {}
+    setDeleting(false);
+    setDelConfirm(false);
+  };
 
   // ─── Importar versión bíblica ─────────────────────────────────────────────
   const handleImport = async () => {
@@ -468,24 +492,43 @@ export default function BibleBrowser() {
 
       {/* ── Barra superior: versión + búsqueda ───────────────────────────── */}
       <div className="shrink-0 flex gap-2 p-2 border-b border-surface-700">
-        <select
-          value={versionId}
-          onChange={e => {
-            if (e.target.value === '__import__') {
-              setShowImport(true);
-              setImpError(''); setImpResult(null);
-            } else {
-              setVersionId(e.target.value);
-            }
-          }}
-          className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-24 shrink-0"
-        >
-          {versions.map(v => (
-            <option key={v.id} value={v.id}>{v.abbreviation}</option>
-          ))}
-          <option disabled>─────</option>
-          <option value="__import__">+ Agregar…</option>
-        </select>
+        <div className="flex items-center gap-1 shrink-0">
+          <select
+            value={versionId}
+            onChange={e => {
+              if (e.target.value === '__import__') {
+                setShowImport(true);
+                setImpError(''); setImpResult(null);
+              } else {
+                setVersionId(e.target.value);
+              }
+            }}
+            className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-24"
+          >
+            {versions.map(v => (
+              <option key={v.id} value={v.id}>{v.abbreviation}</option>
+            ))}
+            <option disabled>─────</option>
+            <option value="__import__">+ Agregar…</option>
+          </select>
+          {/* Botón borrar versión actual */}
+          {versions.length > 1 && (
+            delConfirm ? (
+              <div className="flex items-center gap-1">
+                <button onClick={handleDelete} disabled={deleting}
+                  className="px-2 py-1 text-[10px] bg-red-600 hover:bg-red-700 text-white rounded transition-colors disabled:opacity-50">
+                  {deleting ? '…' : 'Confirmar'}
+                </button>
+                <button onClick={() => setDelConfirm(false)} className="px-2 py-1 text-[10px] bg-surface-700 text-zinc-400 hover:text-white rounded transition-colors">✕</button>
+              </div>
+            ) : (
+              <button onClick={() => setDelConfirm(true)} title="Eliminar versión actual"
+                className="p-1.5 rounded bg-surface-700 border border-surface-600 text-zinc-500 hover:text-red-400 hover:border-red-500 transition-colors">
+                <Trash2 size={12} />
+              </button>
+            )
+          )}
+        </div>
 
         <div className="relative flex-1">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
@@ -647,7 +690,7 @@ function BookGrid({ books, selectedBook, onSelect }) {
         style={{ backgroundColor: isHov || isSelected ? hover : bg }}
         className={`flex flex-col items-center justify-center rounded text-white transition-all py-2.5 px-1 ${isSelected ? 'ring-2 ring-white ring-inset' : ''}`}
       >
-        <span className="font-bold text-base leading-tight">{b.abbrev}</span>
+        <span className="font-bold text-base leading-tight">{b.abbrev || b.name.slice(0,3).toUpperCase()}</span>
         <span className="text-[10px] leading-tight opacity-80 truncate w-full text-center mt-0.5">{b.name}</span>
       </button>
     );

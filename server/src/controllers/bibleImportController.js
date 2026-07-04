@@ -127,6 +127,12 @@ function xmlBlocks(text, tag) {
 }
 function xmlResolveCdata(t) { return t.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1'); }
 
+// Helper: get canonical abbreviation by book number
+function canonAbbrev(num) {
+  const cb = CANONICAL_BOOKS.find(c => c.n === num);
+  return cb?.abbrev || '';
+}
+
 function parseZefania(text) {
   const books = [];
   for (const b of xmlBlocks(text, 'BIBLEBOOK')) {
@@ -141,7 +147,7 @@ function parseZefania(text) {
       }
       if (verses.length) chapters.push(verses);
     }
-    if (chapters.length) books.push({ meta: { n: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT' }, chapters });
+    if (chapters.length) books.push({ meta: { n: num, name, abbrev: canonAbbrev(num), testament: num <= 39 ? 'OT' : 'NT' }, chapters });
   }
   return { books: books.sort((a, b) => a.meta.n - b.meta.n) };
 }
@@ -164,7 +170,7 @@ function parseOSIS(text) {
       }
       if (verses.length) chapters.push(verses);
     }
-    if (chapters.length) books.push({ meta: { n: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT' }, chapters });
+    if (chapters.length) books.push({ meta: { n: num, name, abbrev: canonAbbrev(num), testament: num <= 39 ? 'OT' : 'NT' }, chapters });
   }
   return { books: books.sort((a, b) => a.meta.n - b.meta.n) };
 }
@@ -186,7 +192,7 @@ function parseGenericXML(text) {
       }
       if (verses.length) chapters.push(verses);
     }
-    if (chapters.length) books.push({ meta: { n: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT' }, chapters });
+    if (chapters.length) books.push({ meta: { n: num, name, abbrev: canonAbbrev(num), testament: num <= 39 ? 'OT' : 'NT' }, chapters });
   }
   return { books: books.sort((a, b) => a.meta.n - b.meta.n) };
 }
