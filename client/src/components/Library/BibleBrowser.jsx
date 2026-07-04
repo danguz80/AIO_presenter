@@ -382,8 +382,11 @@ export default function BibleBrowser() {
 
       {/* ── Modal de importar versión ─────────────────────────────────────── */}
       {showImport && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm shadow-2xl flex flex-col gap-3 p-4">
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 p-4"
+          onClick={e => { if (e.target === e.currentTarget) { setShowImport(false); setImpError(''); setImpResult(null); } }}
+        >
+          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm shadow-2xl flex flex-col gap-3 p-4" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-white flex items-center gap-1.5"><BookOpen size={14} className="text-accent" /> Importar versión bíblica</span>
               <button onClick={() => { setShowImport(false); setImpError(''); setImpResult(null); }} className="text-zinc-500 hover:text-white"><X size={15} /></button>
@@ -399,49 +402,57 @@ export default function BibleBrowser() {
             ) : (
               <>
                 <div className="space-y-2">
-                  <label className="block">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Archivo JSON *</span>
-                    <div
+                  {/* Archivo — input fuera del label para evitar doble disparo del picker */}
+                  <div>
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide block mb-1">Archivo JSON o XML *</span>
+                    <button
+                      type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="mt-1 flex items-center gap-2 px-3 py-2 bg-surface-700 border border-surface-600 rounded-lg cursor-pointer hover:border-accent transition-colors"
+                      className="w-full flex items-center gap-2 px-3 py-2 bg-surface-700 border border-surface-600 rounded-lg hover:border-accent transition-colors text-left"
                     >
                       <Upload size={13} className="text-zinc-400 shrink-0" />
                       <span className="text-xs text-zinc-400 truncate">
                         {impFile ? impFile.name : 'Seleccionar archivo .json o .xml…'}
                       </span>
-                    </div>
-                    <input ref={fileInputRef} type="file" accept=".json,.xml" className="hidden"
-                      onChange={e => { setImpFile(e.target.files[0] || null); setImpError(''); setImpResult(null); }} />
-                  </label>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".json,.xml"
+                      className="hidden"
+                      onChange={e => { setImpFile(e.target.files[0] || null); setImpError(''); setImpResult(null); }}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="block">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Abreviatura *</span>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wide block mb-1">Abreviatura *</span>
                       <input value={impAbbrev} onChange={e => setImpAbbrev(e.target.value)} placeholder="Ej: NVI"
-                        className="mt-1 w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent" />
-                    </label>
-                    <label className="block">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Idioma</span>
+                        className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wide block mb-1">Idioma</span>
                       <select value={impLang} onChange={e => setImpLang(e.target.value)}
-                        className="mt-1 w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-accent">
+                        className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-accent">
                         <option value="es">Español</option>
                         <option value="en">Inglés</option>
                         <option value="pt">Portugués</option>
                         <option value="fr">Francés</option>
                       </select>
-                    </label>
+                    </div>
                   </div>
-                  <label className="block">
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Nombre completo *</span>
+                  <div>
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide block mb-1">Nombre completo *</span>
                     <input value={impName} onChange={e => setImpName(e.target.value)} placeholder="Ej: Nueva Versión Internacional"
-                      className="mt-1 w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent" />
-                  </label>
+                      className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent" />
+                  </div>
                   <p className="text-[10px] text-zinc-600 leading-snug">
-                    <span className="text-zinc-400 font-semibold">JSON:</span> formato thiagobodruk/bible (array 66 libros) o unificado con <code className="text-accent">version/books</code>.<br/>
-                    <span className="text-zinc-400 font-semibold">XML:</span> Zefania XML (<code className="text-accent">BIBLEBOOK/CHAPTER/VERS</code>), OSIS, o XML genérico (<code className="text-accent">book/chapter/verse</code>).
+                    <span className="text-zinc-400 font-semibold">JSON:</span> thiagobodruk/bible o formato unificado.<br/>
+                    <span className="text-zinc-400 font-semibold">XML:</span> Zefania, OSIS, o XML genérico.
                   </p>
                 </div>
                 {impError && <p className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1.5">{impError}</p>}
                 <button
+                  type="button"
                   onClick={handleImport}
                   disabled={impLoading || !impFile || !impAbbrev.trim() || !impName.trim()}
                   className="flex items-center justify-center gap-2 py-2 bg-accent text-white text-xs font-semibold rounded-lg hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
