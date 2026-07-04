@@ -109,56 +109,49 @@ export default function LivePreview() {
         win.document.dispatchEvent(new win.KeyboardEvent('keydown', eventInit));
       } catch(_) {}
     };
-    const openAndFocus = (features) => {
-      const win = window.open(url, windowName, features);
-      ref.current = win;
-      // Focus inmediato → la ventana recibe teclado sin que el usuario tenga que hacer click
-      try { win?.focus(); } catch(e) {}
-      // Disparar atajo OS-específico de pantalla completa cuando la ventana cargue
-      if (win) {
-        try { win.addEventListener('load', () => triggerFullscreenKey(win)); } catch(_) {}
-        setTimeout(() => triggerFullscreenKey(win), 1200);
-      }
-    };
+
+    // CRÍTICO: abrir la ventana SÍNCRONAMENTE para preservar la activación de usuario
+    // (necesaria para que requestFullscreen() funcione dentro del popup).
+    // Luego reposicionarla en la pantalla correcta de forma asíncrona.
+    const win = window.open(url, windowName,
+      `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+    ref.current = win;
+    try { win?.focus(); } catch(e) {}
+
+    // Reposicionar en la pantalla correcta (async, no afecta la activación de usuario)
     if (screenId && 'getScreenDetails' in window) {
       window.getScreenDetails().then(sd => {
         const [, sLeft, sTop] = (screenId ?? '').split(':');
         const target = Array.from(sd.screens).find(
           s => String(s.left ?? 0) === sLeft && String(s.top ?? 0) === sTop
         );
-        openAndFocus(target
-          ? `left=${target.left},top=${target.top},width=${target.width},height=${target.height},menubar=no,toolbar=no,location=no`
-          : `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
-      }).catch(() => {
-        openAndFocus(`width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
-      });
-    } else {
-      openAndFocus(`width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
+        if (target && win && !win.closed) {
+          try { win.moveTo(target.left, target.top); win.resizeTo(target.width, target.height); } catch(_) {}
+        }
+      }).catch(() => {});
+    }
+
+    // Disparar atajo OS-específico de pantalla completa cuando la ventana cargue
+    if (win) {
+      try { win.addEventListener('load', () => triggerFullscreenKey(win)); } catch(_) {}
+      setTimeout(() => triggerFullscreenKey(win), 1200);
     }
   };
 
   const activateOutputs = () => {
-    const hasPrincipal = !!displayCfg.principalScreenId;
-    const hasEscenario = !!displayCfg.escenarioScreenId;
-
+    // Principal: siempre se abre (es la salida principal)
+    // Escenario: solo si tiene una pantalla asignada explícitamente
     setOutputsActive(true);
     setShowReopenBanner(false);
     localStorage.setItem('aio_outputs_active', '1');
 
-    if (hasPrincipal && hasEscenario) {
-      // Secuencial: principal primero → esperar FS → luego escenario
-      openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
+    openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
+
+    if (displayCfg.escenarioScreenId) {
+      // Secuencial: abrir escenario después de que principal haya cargado y entrado a FS
       setTimeout(() => {
         openOneOutput(stageWinRef, '/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution);
       }, 2800);
-    } else if (hasPrincipal) {
-      openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
-    } else if (hasEscenario) {
-      openOneOutput(stageWinRef, '/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution);
-    } else {
-      // Sin pantallas configuradas: abrir ambas como popups (comportamiento anterior)
-      openOneOutput(outputWinRef, '/output', null, 'aio-output', displayCfg.principalResolution);
-      openOneOutput(stageWinRef,  '/stage',  null, 'aio-stage',  displayCfg.escenarioResolution);
     }
   };
 
