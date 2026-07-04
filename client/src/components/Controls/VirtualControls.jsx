@@ -8,9 +8,9 @@ import {
 // ─── Helpers UI reutilizables ─────────────────────────────────────────────────
 function SubSection({ title, children }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{title}</p>
-      {children}
+    <div className="rounded-xl border border-surface-600/50 bg-surface-800/40 px-3 pt-2.5 pb-3">
+      <p className="text-[10px] text-zinc-400 uppercase tracking-wider font-semibold mb-2.5">{title}</p>
+      <div className="space-y-1.5">{children}</div>
     </div>
   );
 }

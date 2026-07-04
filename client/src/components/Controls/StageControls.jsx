@@ -461,8 +461,8 @@ export default function StageControls({ defaultOpen = false }) {
 
 function SubSection({ title, children }) {
   return (
-    <div>
-      <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">{title}</p>
+    <div className="rounded-xl border border-surface-600/50 bg-surface-800/40 px-3 pt-2.5 pb-3">
+      <p className="text-[10px] uppercase tracking-wider text-zinc-400 font-semibold mb-2.5">{title}</p>
       <div className="space-y-1.5">{children}</div>
     </div>
   );

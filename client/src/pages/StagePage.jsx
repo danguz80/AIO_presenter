@@ -1,4 +1,4 @@
-import { useEffect, useState, Fragment } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, Fragment } from 'react';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
@@ -481,6 +481,61 @@ export default function StagePage() {
 }
 
 // ─── Contenido del slide actual ───────────────────────────────────────────────
+// Diapositiva de título con auto-fit vertical del texto
+function StageTitleSlide({ titleFF, artistFF, titleColor, artistColor, titleSizeMax, artistSize, showArtist, fontStyles, stroke, slideData }) {
+  const containerRef = useRef(null);
+  const titleRef     = useRef(null);
+  const [fittedSize, setFittedSize] = useState(titleSizeMax);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const titleEl   = titleRef.current;
+    if (!container || !titleEl) return;
+    const hasArtist = showArtist && slideData.songAuthor;
+    const maxH = container.clientHeight * (hasArtist ? 0.58 : 0.80);
+    let size = titleSizeMax;
+    titleEl.style.fontSize = size + 'px';
+    while (size > 16 && titleEl.scrollHeight > maxH) {
+      size -= 4;
+      titleEl.style.fontSize = size + 'px';
+    }
+    setFittedSize(size);
+  }, [slideData.songTitle, slideData.songAuthor, titleSizeMax, showArtist]);
+
+  return (
+    <div ref={containerRef} className="w-full h-full flex flex-col items-center justify-center px-14 text-center gap-6">
+      <div
+        ref={titleRef}
+        style={{
+          fontFamily: titleFF,
+          fontWeight: fontStyles.fontWeight,
+          fontStyle:  fontStyles.fontStyle,
+          color:      titleColor,
+          fontSize:   fittedSize + 'px',
+          textShadow: stroke,
+          lineHeight: 1.2,
+          wordBreak:  'break-word',
+        }}
+      >
+        {slideData.songTitle}
+      </div>
+      {showArtist && slideData.songAuthor && (
+        <div style={{
+          fontFamily: artistFF,
+          fontWeight: fontStyles.fontWeight,
+          fontStyle:  fontStyles.fontStyle,
+          color:      artistColor,
+          fontSize:   artistSize,
+          textShadow: stroke,
+          lineHeight: 1.3,
+        }}>
+          {slideData.songAuthor}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true }) {
   const stroke = strokeWidth > 0
     ? `${Array.from({ length: 4 }, (_, i) => {
@@ -686,36 +741,22 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
       : titleFF;
     const titleColor  = outputCfg.titleColor  ?? lyricsColor;
     const artistColor = outputCfg.artistColor ?? `${lyricsColor}aa`;
-    const titleSize   = outputCfg.titleFontSize  ? `${outputCfg.titleFontSize}px`  : `${Math.max(fontSize, 48)}pt`;
+    const titleSizeMax = outputCfg.titleFontSize ?? Math.max(fontSize, 48);
     const artistSize  = outputCfg.artistFontSize ? `${outputCfg.artistFontSize}px` : `${Math.max(Math.round(fontSize * 0.55), 26)}pt`;
     const showArtist  = outputCfg.titleShowArtist ?? true;
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center px-14 text-center gap-6">
-        <div style={{
-          fontFamily: titleFF,
-          fontWeight: fontStyles.fontWeight,
-          fontStyle:  fontStyles.fontStyle,
-          color:      titleColor,
-          fontSize:   titleSize,
-          textShadow: stroke,
-          lineHeight: 1.2,
-        }}>
-          {slideData.songTitle}
-        </div>
-        {showArtist && slideData.songAuthor && (
-          <div style={{
-            fontFamily: artistFF,
-            fontWeight: fontStyles.fontWeight,
-            fontStyle:  fontStyles.fontStyle,
-            color:      artistColor,
-            fontSize:   artistSize,
-            textShadow: stroke,
-            lineHeight: 1.3,
-          }}>
-            {slideData.songAuthor}
-          </div>
-        )}
-      </div>
+      <StageTitleSlide
+        titleFF={titleFF}
+        artistFF={artistFF}
+        titleColor={titleColor}
+        artistColor={artistColor}
+        titleSizeMax={titleSizeMax}
+        artistSize={artistSize}
+        showArtist={showArtist}
+        fontStyles={fontStyles}
+        stroke={stroke}
+        slideData={slideData}
+      />
     );
   }
 
