@@ -423,12 +423,20 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
           </div>
           {/* Texto alineado en Y en el espacio restante */}
           <div style={{ flex: 1, display: 'flex', alignItems: alignY, justifyContent: alignItems, padding: '1rem 4rem' }}>
-            <p style={{ color: bibleColor, fontSize, fontFamily: bibleFontFamily, textShadow, lineHeight: 1.3, whiteSpace: 'pre-line', width: '100%' }}>: texto alineado en Y en el espacio restante, cita pegada al fondo
+            <p style={{ color: bibleColor, fontSize, fontFamily: bibleFontFamily, textShadow, lineHeight: 1.3, whiteSpace: 'pre-line', width: '100%' }}>
+              {slideData.text}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // Cita abajo: texto alineado en Y en el espacio restante, cita pegada al fondo
     return (
       <div className="w-full h-full flex flex-col" style={{ textAlign }}>
         {/* Texto alineado en Y en el espacio restante */}
         <div style={{ flex: 1, display: 'flex', alignItems: alignY, justifyContent: alignItems, padding: '1rem 4rem' }}>
-          <p style={{ color: bibleColor, fontSize, fontFamily: bibleFontFamily, textShadow, lineHeight: 1.65, whiteSpace: 'pre-line', width: '100%' }}>
+          <p style={{ color: bibleColor, fontSize, fontFamily: bibleFontFamily, textShadow, lineHeight: 1.3, whiteSpace: 'pre-line', width: '100%' }}>
             {slideData.text}
           </p>
         </div>
