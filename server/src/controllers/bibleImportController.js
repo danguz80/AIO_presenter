@@ -141,9 +141,9 @@ function parseZefania(text) {
       }
       if (verses.length) chapters.push(verses);
     }
-    if (chapters.length) books.push({ number: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT', chapters });
+    if (chapters.length) books.push({ meta: { n: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT' }, chapters });
   }
-  return { books: books.sort((a, b) => a.number - b.number) };
+  return { books: books.sort((a, b) => a.meta.n - b.meta.n) };
 }
 
 function parseOSIS(text) {
@@ -164,9 +164,9 @@ function parseOSIS(text) {
       }
       if (verses.length) chapters.push(verses);
     }
-    if (chapters.length) books.push({ number: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT', chapters });
+    if (chapters.length) books.push({ meta: { n: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT' }, chapters });
   }
-  return { books: books.sort((a, b) => a.number - b.number) };
+  return { books: books.sort((a, b) => a.meta.n - b.meta.n) };
 }
 
 function parseGenericXML(text) {
@@ -186,9 +186,9 @@ function parseGenericXML(text) {
       }
       if (verses.length) chapters.push(verses);
     }
-    if (chapters.length) books.push({ number: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT', chapters });
+    if (chapters.length) books.push({ meta: { n: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT' }, chapters });
   }
-  return { books: books.sort((a, b) => a.number - b.number) };
+  return { books: books.sort((a, b) => a.meta.n - b.meta.n) };
 }
 
 function parseXML(xmlText) {
