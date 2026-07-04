@@ -93,16 +93,109 @@ const CANONICAL_BOOKS = [
   { n: 66, name:'Apocalipsis',       abbrev:'Ap',  testament:'NT' },
 ];
 
-// ─── Multer — JSON only, max 50 MB ──────────────────────────────────────────
+// ─── Multer — JSON + XML, max 50 MB ─────────────────────────────────────────
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (_req, file, cb) => {
-    // Validate by extension; actual JSON validity is checked after parsing
-    const ok = /\.json$/i.test(file.originalname);
-    cb(ok ? null : new Error('Solo se aceptan archivos .json'), ok);
+    const ok = /\.(json|xml)$/i.test(file.originalname);
+    cb(ok ? null : new Error('Solo se aceptan archivos .json o .xml'), ok);
   },
   limits: { fileSize: 50 * 1024 * 1024 },
 }).single('file');
+
+// ─── XML Bible Parser (sin dependencias externas) ────────────────────────────
+function xmlClean(s) {
+  return s
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .trim();
+}
+function xmlAttr(tag, ...names) {
+  for (const n of names) {
+    const m = tag.match(new RegExp(`${n}\\s*=\\s*["']([^"']+)["']`, 'i'));
+    if (m) return m[1];
+  }
+  return '';
+}
+function xmlBlocks(text, tag) {
+  const out = []; const re = new RegExp(`<${tag}(\\s[^>]*)?>(([\\s\\S])*?)</${tag}>`, 'gi');
+  let m;
+  while ((m = re.exec(text))) out.push({ attrs: m[1] || '', content: m[2] || '' });
+  return out;
+}
+function xmlResolveCdata(t) { return t.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1'); }
+
+function parseZefania(text) {
+  const books = [];
+  for (const b of xmlBlocks(text, 'BIBLEBOOK')) {
+    const num  = parseInt(xmlAttr(b.attrs, 'bnumber')) || 0;
+    const name = xmlAttr(b.attrs, 'bname') || `Libro ${num}`;
+    const chapters = [];
+    for (const c of xmlBlocks(b.content, 'CHAPTER')) {
+      const verses = [];
+      for (const v of xmlBlocks(c.content, 'VERS')) {
+        const t = xmlClean(xmlResolveCdata(v.content));
+        if (t) verses.push(t);
+      }
+      if (verses.length) chapters.push(verses);
+    }
+    if (chapters.length) books.push({ number: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT', chapters });
+  }
+  return { books: books.sort((a, b) => a.number - b.number) };
+}
+
+function parseOSIS(text) {
+  const osisOrder = ['Gen','Exod','Lev','Num','Deut','Josh','Judg','Ruth','1Sam','2Sam','1Kgs','2Kgs','1Chr','2Chr','Ezra','Neh','Esth','Job','Ps','Prov','Eccl','Song','Isa','Jer','Lam','Ezek','Dan','Hos','Joel','Amos','Obad','Jonah','Mic','Nah','Hab','Zeph','Hag','Zech','Mal','Matt','Mark','Luke','John','Acts','Rom','1Cor','2Cor','Gal','Eph','Phil','Col','1Thess','2Thess','1Tim','2Tim','Titus','Phlm','Heb','Jas','1Pet','2Pet','1John','2John','3John','Jude','Rev'];
+  const books = []; let autoNum = 0;
+  for (const b of xmlBlocks(text, 'div')) {
+    if (!/type\s*=\s*["']book["']/i.test(b.attrs)) continue;
+    const osisId = xmlAttr(b.attrs, 'osisID');
+    autoNum++;
+    const num  = (osisOrder.indexOf(osisId) + 1) || autoNum;
+    const name = osisId || `Libro ${num}`;
+    const chapters = [];
+    for (const c of xmlBlocks(b.content, 'chapter')) {
+      const verses = [];
+      for (const v of xmlBlocks(c.content, 'verse')) {
+        const t = xmlClean(xmlResolveCdata(v.content));
+        if (t) verses.push(t);
+      }
+      if (verses.length) chapters.push(verses);
+    }
+    if (chapters.length) books.push({ number: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT', chapters });
+  }
+  return { books: books.sort((a, b) => a.number - b.number) };
+}
+
+function parseGenericXML(text) {
+  const books = [];
+  const bookTag = /(<book[\s>])/i.test(text) ? 'book' : 'BOOK';
+  for (const b of xmlBlocks(text, bookTag)) {
+    const num  = parseInt(xmlAttr(b.attrs, 'number', 'num', 'n', 'id')) || 0;
+    const name = xmlAttr(b.attrs, 'name', 'Name', 'title') || `Libro ${num}`;
+    const chapTag  = /(<chapter[\s>])/i.test(b.content) ? 'chapter' : 'CHAPTER';
+    const chapters = [];
+    for (const c of xmlBlocks(b.content, chapTag)) {
+      const verseTag = /(<verse[\s>])/i.test(c.content) ? 'verse' : /(<v[\s>])/i.test(c.content) ? 'v' : 'VERSE';
+      const verses = [];
+      for (const v of xmlBlocks(c.content, verseTag)) {
+        const t = xmlClean(xmlResolveCdata(v.content));
+        if (t) verses.push(t);
+      }
+      if (verses.length) chapters.push(verses);
+    }
+    if (chapters.length) books.push({ number: num, name, abbrev: '', testament: num <= 39 ? 'OT' : 'NT', chapters });
+  }
+  return { books: books.sort((a, b) => a.number - b.number) };
+}
+
+function parseXML(xmlText) {
+  if (/<ZEFANIA-BIBLE|<XMLBIBLE/i.test(xmlText)) return parseZefania(xmlText);
+  if (/<osis[\s>]/i.test(xmlText)) return parseOSIS(xmlText);
+  return parseGenericXML(xmlText);
+}
 
 // ─── Batch-insert helper ─────────────────────────────────────────────────────
 async function batchInsertVerses(client, rows) {
@@ -218,22 +311,22 @@ const importBible = (req, res) => {
     if (!abbreviation) return res.status(400).json({ error: 'El campo "abbreviation" es obligatorio' });
     if (!name)         return res.status(400).json({ error: 'El campo "name" es obligatorio' });
 
-    // Parse JSON file
-    let raw;
+    // Detectar formato por extensión y parsear
+    const isXML = /\.xml$/i.test(req.file.originalname);
+    let parsed;
     try {
       const text = req.file.buffer.toString('utf8').replace(/^\uFEFF/, '');
-      raw = JSON.parse(text);
-    } catch {
-      return res.status(422).json({ error: 'El archivo no es un JSON válido' });
+      if (isXML) {
+        parsed = parseXML(text);
+      } else {
+        const raw = JSON.parse(text);
+        parsed = parseJSON(raw);
+      }
+    } catch (e) {
+      return res.status(422).json({ error: isXML ? `Error al parsear XML: ${e.message}` : 'El archivo no es un JSON válido' });
     }
 
     let parsed;
-    try {
-      parsed = parseJSON(raw);
-    } catch (parseErr) {
-      return res.status(422).json({ error: parseErr.message });
-    }
-
     if (!parsed.books || parsed.books.length === 0) {
       return res.status(422).json({ error: 'No se encontraron libros en el archivo' });
     }

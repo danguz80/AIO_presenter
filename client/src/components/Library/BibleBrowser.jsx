@@ -407,10 +407,10 @@ export default function BibleBrowser() {
                     >
                       <Upload size={13} className="text-zinc-400 shrink-0" />
                       <span className="text-xs text-zinc-400 truncate">
-                        {impFile ? impFile.name : 'Seleccionar archivo .json…'}
+                        {impFile ? impFile.name : 'Seleccionar archivo .json o .xml…'}
                       </span>
                     </div>
-                    <input ref={fileInputRef} type="file" accept=".json" className="hidden"
+                    <input ref={fileInputRef} type="file" accept=".json,.xml" className="hidden"
                       onChange={e => { setImpFile(e.target.files[0] || null); setImpError(''); setImpResult(null); }} />
                   </label>
                   <div className="grid grid-cols-2 gap-2">
@@ -436,7 +436,8 @@ export default function BibleBrowser() {
                       className="mt-1 w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent" />
                   </label>
                   <p className="text-[10px] text-zinc-600 leading-snug">
-                    Formatos soportados: <span className="text-zinc-400">thiagobodruk/bible</span> (array de 66 libros) o formato unificado con <code className="text-accent">version/books</code>.
+                    <span className="text-zinc-400 font-semibold">JSON:</span> formato thiagobodruk/bible (array 66 libros) o unificado con <code className="text-accent">version/books</code>.<br/>
+                    <span className="text-zinc-400 font-semibold">XML:</span> Zefania XML (<code className="text-accent">BIBLEBOOK/CHAPTER/VERS</code>), OSIS, o XML genérico (<code className="text-accent">book/chapter/verse</code>).
                   </p>
                 </div>
                 {impError && <p className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1.5">{impError}</p>}
