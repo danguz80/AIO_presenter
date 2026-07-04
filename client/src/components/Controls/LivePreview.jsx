@@ -138,9 +138,12 @@ export default function LivePreview() {
     }
   };
 
+  const escenarioWillOpen = !!displayCfg.escenarioScreenId;
+
   const activateOutputs = () => {
-    // Principal: siempre se abre (es la salida principal)
-    // Escenario: solo si tiene una pantalla asignada explícitamente
+    console.log('[AIO] activateOutputs — principalScreenId:', displayCfg.principalScreenId, '| escenarioScreenId:', displayCfg.escenarioScreenId);
+    // Principal: siempre se abre
+    // Escenario: solo si tiene pantalla asignada en el panel Salidas
     setOutputsActive(true);
     setShowReopenBanner(false);
     localStorage.setItem('aio_outputs_active', '1');
@@ -148,7 +151,6 @@ export default function LivePreview() {
     openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
 
     if (displayCfg.escenarioScreenId) {
-      // Secuencial: abrir escenario después de que principal haya cargado y entrado a FS
       setTimeout(() => {
         openOneOutput(stageWinRef, '/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution);
       }, 2800);
@@ -249,6 +251,17 @@ export default function LivePreview() {
         {outputsActive ? 'Desactivar salidas' : 'Activar salidas'}
         {outputsActive && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />}
       </button>
+      {/* Indicador de qué salidas se abrirán */}
+      {!outputsActive && (
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500">
+          <span className="font-semibold text-zinc-400">Abrirá:</span>
+          <span className="px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">Principal</span>
+          {escenarioWillOpen
+            ? <span className="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">Escenario</span>
+            : <span className="px-1.5 py-0.5 rounded bg-surface-700 text-zinc-600 border border-surface-600 line-through">Escenario</span>
+          }
+        </div>
+      )}
 
       {/* ── Principal ───────────────────────────────────────────────── */}
       <PreviewBox

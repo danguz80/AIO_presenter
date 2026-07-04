@@ -151,12 +151,13 @@ export default function OutputPage() {
       {showFsHint && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center cursor-pointer select-none"
-          style={{ background: 'rgba(0,0,0,0.02)' }}
+          style={{ background: 'rgba(0,0,0,0.92)' }}
           onClick={() => { document.documentElement.requestFullscreen?.().catch(() => {}); setShowFsHint(false); }}
         >
-          <div className="flex flex-col items-center gap-3 px-8 py-5 bg-black/90 rounded-2xl border border-white/20 pointer-events-none">
-            <Maximize2 size={28} className="text-white/70" />
-            <p className="text-white/90 text-sm font-medium">Clic para activar pantalla completa</p>
+          <div className="flex flex-col items-center gap-4 px-12 py-8 bg-black rounded-2xl border-2 border-white/30">
+            <Maximize2 size={40} className="text-white" />
+            <p className="text-white text-xl font-bold">Clic para pantalla completa</p>
+            <p className="text-white/60 text-sm">La salida Principal está lista — haz clic para activar</p>
           </div>
         </div>
       )}
