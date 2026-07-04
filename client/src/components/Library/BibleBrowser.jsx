@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Send, BookOpen, X } from 'lucide-react';
+import { Search, Send, BookOpen, X, Plus, Upload, Loader2 } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
@@ -32,6 +32,17 @@ export default function BibleBrowser() {
   const [searchQuery,   setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching,     setSearching]     = useState(false);
+
+  // ── Importar nueva versión ────────────────────────────────────────────────
+  const [showImport,    setShowImport]    = useState(false);
+  const [impFile,       setImpFile]       = useState(null);
+  const [impAbbrev,     setImpAbbrev]     = useState('');
+  const [impName,       setImpName]       = useState('');
+  const [impLang,       setImpLang]       = useState('es');
+  const [impLoading,    setImpLoading]    = useState(false);
+  const [impError,      setImpError]      = useState('');
+  const [impResult,     setImpResult]     = useState(null);
+  const fileInputRef = useRef(null);
 
   // ── Carga ─────────────────────────────────────────────────────────────────
   const [loadingBooks,   setLoadingBooks]   = useState(false);
@@ -108,6 +119,38 @@ export default function BibleBrowser() {
       }
     }).catch(console.error).finally(() => setLoadingVerses(false));
   }, [chapter, book]);
+
+  // ─── Importar versión bíblica ─────────────────────────────────────────────
+  const handleImport = async () => {
+    if (!impFile || !impAbbrev.trim() || !impName.trim()) return;
+    setImpLoading(true); setImpError(''); setImpResult(null);
+    try {
+      const fd = new FormData();
+      fd.append('file', impFile);
+      fd.append('abbreviation', impAbbrev.trim().toUpperCase());
+      fd.append('name', impName.trim());
+      fd.append('language', impLang);
+      const token = localStorage.getItem('aio_sync_token');
+      const res = await fetch('/api/bible/import', {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      const data = await res.json();
+      if (!res.ok) { setImpError(data.error || 'Error al importar'); }
+      else {
+        setImpResult(data);
+        setImpFile(null); setImpAbbrev(''); setImpName(''); setImpLang('es');
+        // Recargar lista de versiones
+        api.get('/bible/versions').then(r => {
+          setVersions(r.data);
+          const newV = r.data.find(v => v.abbreviation === data.abbreviation);
+          if (newV) setVersionId(String(newV.id));
+        }).catch(() => {});
+      }
+    } catch (e) { setImpError('No se pudo conectar al servidor'); }
+    setImpLoading(false);
+  };
 
   // ─── Búsqueda ─────────────────────────────────────────────────────────────
   // Intenta interpretar la query como referencia: "Juan 3" / "Gn 1:5" / "Génesis 1"
@@ -335,19 +378,101 @@ export default function BibleBrowser() {
   const currentVersionName = versions.find(v => String(v.id) === versionId)?.abbreviation || '';
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden relative">
+
+      {/* ── Modal de importar versión ─────────────────────────────────────── */}
+      {showImport && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="bg-surface-800 border border-surface-600 rounded-2xl w-full max-w-sm shadow-2xl flex flex-col gap-3 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-white flex items-center gap-1.5"><BookOpen size={14} className="text-accent" /> Importar versión bíblica</span>
+              <button onClick={() => { setShowImport(false); setImpError(''); setImpResult(null); }} className="text-zinc-500 hover:text-white"><X size={15} /></button>
+            </div>
+
+            {impResult ? (
+              <div className="text-center py-4 space-y-2">
+                <p className="text-green-400 text-sm font-semibold">✓ Importado correctamente</p>
+                <p className="text-zinc-400 text-xs">{impResult.name} ({impResult.abbreviation})</p>
+                <p className="text-zinc-500 text-xs">{impResult.versesImported?.toLocaleString()} versículos en {impResult.booksImported} libros</p>
+                <button onClick={() => { setShowImport(false); setImpResult(null); }} className="mt-2 px-4 py-1.5 bg-accent text-white text-xs rounded-lg">Cerrar</button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <label className="block">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Archivo JSON *</span>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-1 flex items-center gap-2 px-3 py-2 bg-surface-700 border border-surface-600 rounded-lg cursor-pointer hover:border-accent transition-colors"
+                    >
+                      <Upload size={13} className="text-zinc-400 shrink-0" />
+                      <span className="text-xs text-zinc-400 truncate">
+                        {impFile ? impFile.name : 'Seleccionar archivo .json…'}
+                      </span>
+                    </div>
+                    <input ref={fileInputRef} type="file" accept=".json" className="hidden"
+                      onChange={e => { setImpFile(e.target.files[0] || null); setImpError(''); setImpResult(null); }} />
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Abreviatura *</span>
+                      <input value={impAbbrev} onChange={e => setImpAbbrev(e.target.value)} placeholder="Ej: NVI"
+                        className="mt-1 w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent" />
+                    </label>
+                    <label className="block">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Idioma</span>
+                      <select value={impLang} onChange={e => setImpLang(e.target.value)}
+                        className="mt-1 w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-accent">
+                        <option value="es">Español</option>
+                        <option value="en">Inglés</option>
+                        <option value="pt">Portugués</option>
+                        <option value="fr">Francés</option>
+                      </select>
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Nombre completo *</span>
+                    <input value={impName} onChange={e => setImpName(e.target.value)} placeholder="Ej: Nueva Versión Internacional"
+                      className="mt-1 w-full bg-surface-700 border border-surface-600 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-accent" />
+                  </label>
+                  <p className="text-[10px] text-zinc-600 leading-snug">
+                    Formatos soportados: <span className="text-zinc-400">thiagobodruk/bible</span> (array de 66 libros) o formato unificado con <code className="text-accent">version/books</code>.
+                  </p>
+                </div>
+                {impError && <p className="text-xs text-red-400 bg-red-900/20 rounded px-2 py-1.5">{impError}</p>}
+                <button
+                  onClick={handleImport}
+                  disabled={impLoading || !impFile || !impAbbrev.trim() || !impName.trim()}
+                  className="flex items-center justify-center gap-2 py-2 bg-accent text-white text-xs font-semibold rounded-lg hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {impLoading ? <><Loader2 size={13} className="animate-spin" /> Importando…</> : <><Upload size={13} /> Importar versión</>}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Barra superior: versión + búsqueda ───────────────────────────── */}
       <div className="shrink-0 flex gap-2 p-2 border-b border-surface-700">
-        <select
-          value={versionId}
-          onChange={e => setVersionId(e.target.value)}
-          className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-20 shrink-0"
-        >
-          {versions.map(v => (
-            <option key={v.id} value={v.id}>{v.abbreviation}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1 shrink-0">
+          <select
+            value={versionId}
+            onChange={e => setVersionId(e.target.value)}
+            className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-20"
+          >
+            {versions.map(v => (
+              <option key={v.id} value={v.id}>{v.abbreviation}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { setShowImport(true); setImpError(''); setImpResult(null); }}
+            title="Agregar nueva versión bíblica"
+            className="p-1.5 rounded bg-surface-700 border border-surface-600 text-zinc-400 hover:text-accent hover:border-accent transition-colors"
+          >
+            <Plus size={12} />
+          </button>
+        </div>
 
         <div className="relative flex-1">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
