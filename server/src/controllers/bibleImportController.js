@@ -326,7 +326,6 @@ const importBible = (req, res) => {
       return res.status(422).json({ error: isXML ? `Error al parsear XML: ${e.message}` : 'El archivo no es un JSON válido' });
     }
 
-    let parsed;
     if (!parsed.books || parsed.books.length === 0) {
       return res.status(422).json({ error: 'No se encontraron libros en el archivo' });
     }
