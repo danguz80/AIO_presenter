@@ -460,12 +460,10 @@ export default function SongDetail() {
     if (total === 0) return;
     const alreadyPlayed = eventPlays?.has(selectedSong.id);
     if (alreadyPlayed) return;
-    // Verificar condición de tiempo: estamos en o después del evento
-    const evItem = schedule?.find(s => s.song_id === selectedSong.id);
-    if (!evItem) return; // la canción no está en el schedule activo
+    // La canción debe estar en el setlist del evento activo
+    const inSchedule = schedule?.some(s => s.song_id === selectedSong.id);
+    if (!inSchedule) return;
     const { eventId, occurrenceDate } = eventPlaysContext;
-    // Necesitamos la fecha/hora del evento: está en eventPlaysContext o en el schedule
-    // La chequeamos contra el tiempo actual usando el campo del contexto
     const pct = seen / total;
     if (pct >= 0.8) {
       actions.markPlayed(eventId, occurrenceDate, selectedSong.id, seen, total, false);

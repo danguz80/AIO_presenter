@@ -149,7 +149,8 @@ async function getEvents(req, res) {
       const evMap = recurSongMap[ev.id] || {};
       const evBandMap = recurBandMap[ev.id] || {};
       for (const d of dates) {
-        const entry = evMap[d] || { songs: [], song_count: 0 };
+        // Canciones propias de esta ocurrencia; si no hay, usar las base del evento (occurrence_date IS NULL)
+        const entry = evMap[d] || evMap['__base__'] || { songs: [], song_count: 0 };
         // Si hay un band_config_id específico para esta ocurrencia, usarlo; si no, el del evento base
         const occBandConfigId = Object.prototype.hasOwnProperty.call(evBandMap, d)
           ? evBandMap[d]
