@@ -98,43 +98,32 @@ export default function LivePreview() {
     if (ref.current && !ref.current.closed) { ref.current.focus(); return; }
     const res = resolution ?? { width: 1920, height: 1080 };
     const url = `${path}?fs=1`;
-    // Detectar SO para el atajo de pantalla completa
-    const isMac = /Mac/i.test(navigator.platform) || /Mac OS X/i.test(navigator.userAgent);
-    const triggerFullscreenKey = (win) => {
-      try {
-        if (!win || win.closed) return;
-        const eventInit = isMac
-          ? { key: 'f', ctrlKey: true, metaKey: true, bubbles: true, cancelable: true }
-          : { key: 'F11', keyCode: 122, code: 'F11', bubbles: true, cancelable: true };
-        win.document.dispatchEvent(new win.KeyboardEvent('keydown', eventInit));
-      } catch(_) {}
+
+    // Si hay una pantalla específica configurada, obtener sus coordenadas async
+    // y abrir la ventana maximizada en esa pantalla.
+    // Si no, abrir maximizada en la pantalla actual.
+    const openMaximized = (left, top, w, h) => {
+      const win = window.open(url, windowName,
+        `left=${left},top=${top},width=${w},height=${h},menubar=no,toolbar=no,location=no`);
+      ref.current = win;
+      try { win?.focus(); } catch(_) {}
     };
 
-    // CRÍTICO: abrir la ventana SÍNCRONAMENTE para preservar la activación de usuario
-    // (necesaria para que requestFullscreen() funcione dentro del popup).
-    // Luego reposicionarla en la pantalla correcta de forma asíncrona.
-    const win = window.open(url, windowName,
-      `width=${res.width},height=${res.height},menubar=no,toolbar=no,location=no`);
-    ref.current = win;
-    try { win?.focus(); } catch(e) {}
-
-    // Reposicionar en la pantalla correcta (async, no afecta la activación de usuario)
     if (screenId && 'getScreenDetails' in window) {
       window.getScreenDetails().then(sd => {
         const [, sLeft, sTop] = (screenId ?? '').split(':');
         const target = Array.from(sd.screens).find(
           s => String(s.left ?? 0) === sLeft && String(s.top ?? 0) === sTop
         );
-        if (target && win && !win.closed) {
-          try { win.moveTo(target.left, target.top); win.resizeTo(target.width, target.height); } catch(_) {}
+        if (target) {
+          openMaximized(target.left, target.top, target.width, target.height);
+        } else {
+          openMaximized(0, 0, screen.availWidth, screen.availHeight);
         }
-      }).catch(() => {});
-    }
-
-    // Disparar atajo OS-específico de pantalla completa cuando la ventana cargue
-    if (win) {
-      try { win.addEventListener('load', () => triggerFullscreenKey(win)); } catch(_) {}
-      setTimeout(() => triggerFullscreenKey(win), 1200);
+      }).catch(() => openMaximized(0, 0, screen.availWidth, screen.availHeight));
+    } else {
+      // Sin detección de pantallas: maximizar en la pantalla actual
+      openMaximized(0, 0, screen.availWidth, screen.availHeight);
     }
   };
 

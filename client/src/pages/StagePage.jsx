@@ -473,7 +473,9 @@ export default function StagePage() {
           <div className="flex flex-col items-center gap-4 px-12 py-8 bg-black rounded-2xl border-2 border-white/30">
             <Maximize2 size={40} className="text-white" />
             <p className="text-white text-xl font-bold">Clic para pantalla completa</p>
-            <p className="text-white/60 text-sm">La salida Escenario está lista — haz clic para activar</p>
+            <p className="text-white/50 text-sm">
+              {/Mac/i.test(navigator.platform) ? 'o presiona Ctrl + Cmd + F' : 'o presiona F11'}
+            </p>
           </div>
         </div>
       )}
