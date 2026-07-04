@@ -138,11 +138,29 @@ export default function LivePreview() {
   };
 
   const activateOutputs = () => {
-    openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
-    openOneOutput(stageWinRef,  '/stage',  displayCfg.escenarioScreenId, 'aio-stage',  displayCfg.escenarioResolution);
+    const hasPrincipal = !!displayCfg.principalScreenId;
+    const hasEscenario = !!displayCfg.escenarioScreenId;
+
     setOutputsActive(true);
     setShowReopenBanner(false);
     localStorage.setItem('aio_outputs_active', '1');
+
+    if (hasPrincipal && hasEscenario) {
+      // Secuencial: principal primero → esperar FS → luego escenario
+      openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
+      setTimeout(() => {
+        openOneOutput(stageWinRef, '/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution);
+      }, 2800);
+    } else if (hasPrincipal) {
+      openOneOutput(outputWinRef, '/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution);
+    } else if (hasEscenario) {
+      openOneOutput(stageWinRef, '/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution);
+    } else {
+      // Sin pantallas configuradas: abrir ambas como popups (comportamiento anterior)
+      openOneOutput(outputWinRef, '/output', null, 'aio-output', displayCfg.principalResolution);
+      openOneOutput(stageWinRef,  '/stage',  null, 'aio-stage',  displayCfg.escenarioResolution);
+    }
+  };
   };
 
   const deactivateOutputs = () => {
@@ -228,7 +246,7 @@ export default function LivePreview() {
       {/* ── Botón toggle Activar / Desactivar salidas ─────────────────── */}
       <button
         onClick={toggleOutputs}
-        title={outputsActive ? 'Cerrar salidas (Principal + Escenario)' : 'Activar salidas en pantalla completa (Principal + Escenario)'}
+        title={outputsActive ? 'Cerrar salidas' : 'Activar salidas configuradas en pantalla completa'}
         className={`shrink-0 flex items-center justify-center gap-2 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
           outputsActive
             ? 'bg-orange-500/20 border-orange-400 text-orange-300 hover:bg-orange-500/30'
