@@ -773,7 +773,22 @@ io.on('connection', async (socket) => {
   });
 
   // ── Registro de usuario conectado ─────────────────────────────────────────
-  socket.on('user:register', ({ name, avatar }) => {
+  socket.on('user:register', async ({ name, avatar }) => {
+    // Usar display_name y avatar_url reales de la BD si el socket tiene userId
+    if (socket.userId) {
+      try {
+        const { rows } = await pool.query(
+          'SELECT display_name, avatar_url FROM sync_users WHERE id = $1',
+          [socket.userId]
+        );
+        if (rows[0]) {
+          socket.userName   = rows[0].display_name || name || 'Usuario';
+          socket.userAvatar = rows[0].avatar_url   || null;
+          emitToOrg('users:connected', getConnectedUsers(orgId));
+          return;
+        }
+      } catch(_) { /* fall through */ }
+    }
     socket.userName   = name   || 'Usuario';
     socket.userAvatar = avatar || null;
     emitToOrg('users:connected', getConnectedUsers(orgId));

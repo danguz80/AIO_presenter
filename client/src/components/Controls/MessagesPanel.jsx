@@ -105,9 +105,13 @@ function InternalMessages() {
             <span className="text-xs text-zinc-600">Solo tú</span>
           )}
           {connectedUsers.map(u => (
-            <span key={u.socketId} className="flex items-center gap-1 text-[11px] bg-surface-700 text-zinc-300 px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
-              {u.name}
+            <span key={u.socketId} className="flex items-center gap-1.5 text-[11px] bg-surface-700 text-zinc-300 px-2 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+              {u.avatar
+                ? <img src={u.avatar} alt="" className="w-4 h-4 rounded-full object-cover shrink-0" onError={e => { e.target.style.display='none'; }} />
+                : <span className="w-4 h-4 rounded-full bg-zinc-600 flex items-center justify-center text-[8px] font-bold shrink-0 uppercase">{(u.name||'?')[0]}</span>
+              }
+              <span className="max-w-[90px] truncate">{u.name}</span>
             </span>
           ))}
         </div>

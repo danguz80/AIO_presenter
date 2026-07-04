@@ -98,11 +98,27 @@ export default function LivePreview() {
     if (ref.current && !ref.current.closed) { ref.current.focus(); return; }
     const res = resolution ?? { width: 1920, height: 1080 };
     const url = `${path}?fs=1`;
+    // Detectar SO para el atajo de pantalla completa
+    const isMac = /Mac/i.test(navigator.platform) || /Mac OS X/i.test(navigator.userAgent);
+    const triggerFullscreenKey = (win) => {
+      try {
+        if (!win || win.closed) return;
+        const eventInit = isMac
+          ? { key: 'f', ctrlKey: true, metaKey: true, bubbles: true, cancelable: true }
+          : { key: 'F11', keyCode: 122, code: 'F11', bubbles: true, cancelable: true };
+        win.document.dispatchEvent(new win.KeyboardEvent('keydown', eventInit));
+      } catch(_) {}
+    };
     const openAndFocus = (features) => {
       const win = window.open(url, windowName, features);
       ref.current = win;
       // Focus inmediato → la ventana recibe teclado sin que el usuario tenga que hacer click
       try { win?.focus(); } catch(e) {}
+      // Disparar atajo OS-específico de pantalla completa cuando la ventana cargue
+      if (win) {
+        try { win.addEventListener('load', () => triggerFullscreenKey(win)); } catch(_) {}
+        setTimeout(() => triggerFullscreenKey(win), 1200);
+      }
     };
     if (screenId && 'getScreenDetails' in window) {
       window.getScreenDetails().then(sd => {
