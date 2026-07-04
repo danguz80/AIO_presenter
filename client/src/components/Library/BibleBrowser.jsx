@@ -159,32 +159,83 @@ export default function BibleBrowser() {
     if (e.key === 'Enter') doSearch();
   };
 
-  // ─── Proyectar versículo ───────────────────────────────────────────────────
+  // ─── Cola de páginas para versículos largos ───────────────────────────────
+  const pageQueueRef = useRef([]); // { text, reference, version, nextSlideData }[]
+
+  // ─── Proyectar versículo con soporte de split por máx. líneas ─────────────
   const sendVerse = useCallback((v, nextV = null) => {
+    const maxLines = state.outputConfig?.bibleMaxLines ?? 0;
+    const charsPerLine = 46;
+
+    const splitText = (text) => {
+      if (!maxLines) return [text];
+      const estLines = Math.max(
+        text.split('\n').filter(l => l.trim()).length,
+        Math.ceil(text.length / charsPerLine)
+      );
+      if (estLines <= maxLines) return [text];
+      const words = text.split(/\s+/);
+      const pages = []; let cur = '';
+      for (const w of words) {
+        const t = cur ? `${cur} ${w}` : w;
+        if (Math.ceil(t.length / charsPerLine) > maxLines && cur) {
+          pages.push(cur.trim()); cur = w;
+        } else { cur = t; }
+      }
+      if (cur.trim()) pages.push(cur.trim());
+      return pages.length ? pages : [text];
+    };
+
+    const baseRef = `${v.book_name} ${v.chapter}:${v.verse}`;
+    const pages   = splitText(v.text);
+    const total   = pages.length;
+    const pageRef = (i) => total > 1 ? `${baseRef} (${i + 1}/${total})` : baseRef;
+    const nextVSD = nextV ? { type: 'bible', text: nextV.text, reference: `${nextV.book_name} ${nextV.chapter}:${nextV.verse}` } : null;
+
     actions.showSlide({
       type:      'bible',
       slideData: {
         type:      'bible',
-        text:      v.text,
-        reference: `${v.book_name} ${v.chapter}:${v.verse}`,
+        text:      pages[0],
+        reference: pageRef(0),
         version:   v.version,
       },
-      nextSlideData: nextV ? {
-        type:      'bible',
-        text:      nextV.text,
-        reference: `${nextV.book_name} ${nextV.chapter}:${nextV.verse}`,
-      } : null,
+      nextSlideData: total > 1
+        ? { type: 'bible', text: pages[1], reference: pageRef(1) }
+        : nextVSD,
     });
-  }, [actions]);
+
+    // Guardar páginas 2..N en la cola
+    pageQueueRef.current = pages.slice(1).map((text, i) => ({
+      text,
+      reference: pageRef(i + 1),
+      version: v.version,
+      nextSlideData: i + 2 < total
+        ? { type: 'bible', text: pages[i + 2], reference: pageRef(i + 2) }
+        : nextVSD,
+    }));
+  }, [actions, state.outputConfig?.bibleMaxLines]);
 
   // ─── Navegación desde móvil (via socket) ─────────────────────────────────
   const { navigateRequest } = state;
   useEffect(() => {
     if (!navigateRequest) return;
-    const fakeKey = navigateRequest.dir === 'next' ? 'ArrowRight' : 'ArrowLeft';
+    const isNext = navigateRequest.dir === 'next';
     if (verses.length === 0) return;
+    // Páginas pendientes (solo en avance)
+    if (isNext && pageQueueRef.current.length > 0) {
+      const [page, ...rest] = pageQueueRef.current;
+      pageQueueRef.current = rest;
+      actions.showSlide({
+        type: 'bible',
+        slideData: { type: 'bible', text: page.text, reference: page.reference, version: page.version },
+        nextSlideData: page.nextSlideData || null,
+      });
+      return;
+    }
+    pageQueueRef.current = [];
     setActiveVerseIdx(prev => {
-      const next = fakeKey === 'ArrowLeft'
+      const next = !isNext
         ? (prev === null ? 0 : Math.max(0, prev - 1))
         : (prev === null ? 0 : Math.min(verses.length - 1, prev + 1));
       sendVerse(verses[next], verses[next + 1] || null);
@@ -205,6 +256,19 @@ export default function BibleBrowser() {
       e.preventDefault?.();
 
       setActiveVerseIdx(prev => {
+        const isNext = e.key !== 'ArrowUp' && e.key !== 'ArrowLeft';
+        // Páginas pendientes del versículo actual (solo en avance)
+        if (isNext && pageQueueRef.current.length > 0) {
+          const [page, ...rest] = pageQueueRef.current;
+          pageQueueRef.current = rest;
+          actions.showSlide({
+            type: 'bible',
+            slideData: { type: 'bible', text: page.text, reference: page.reference, version: page.version },
+            nextSlideData: page.nextSlideData || null,
+          });
+          return prev; // no avanzar el índice
+        }
+        pageQueueRef.current = [];
         let next;
         if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
           next = prev === null ? 0 : Math.max(0, prev - 1);

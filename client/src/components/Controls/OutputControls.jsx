@@ -371,6 +371,7 @@ export default function OutputControls({ defaultOpen = false }) {
   const bibleRefFontFamily   = outputConfig?.bibleRefFontFamily   ?? 'sans';
   const bibleRefFontSize     = outputConfig?.bibleRefFontSize     ?? 24;
   const bibleVersionPosition = outputConfig?.bibleVersionPosition ?? 'inline-right';
+  const bibleMaxLines        = outputConfig?.bibleMaxLines        ?? 0;
 
   // fontSize: 'auto' o número
   const fontSizeIsAuto = !outputConfig?.fontSize || outputConfig.fontSize === 'auto';
@@ -854,6 +855,17 @@ export default function OutputControls({ defaultOpen = false }) {
                           }`}
                         >{lbl}</button>
                       ))}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-zinc-300 shrink-0">Máx. líneas por diap.</span>
+                    <div className="flex items-center gap-2 flex-1">
+                      <input type="range" min={0} max={8} step={1} value={bibleMaxLines}
+                        onChange={e => update({ bibleMaxLines: Number(e.target.value) })}
+                        className="flex-1 accent-accent" />
+                      <span className="text-xs text-zinc-400 w-14 text-right">
+                        {bibleMaxLines === 0 ? 'Auto' : `${bibleMaxLines} líneas`}
+                      </span>
                     </div>
                   </div>
                 </div>
