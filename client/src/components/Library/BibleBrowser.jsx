@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Send, BookOpen, X, Plus, Upload, Loader2 } from 'lucide-react';
+import { Search, Send, BookOpen, X, Upload, Loader2 } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
@@ -456,24 +456,24 @@ export default function BibleBrowser() {
 
       {/* ── Barra superior: versión + búsqueda ───────────────────────────── */}
       <div className="shrink-0 flex gap-2 p-2 border-b border-surface-700">
-        <div className="flex items-center gap-1 shrink-0">
-          <select
-            value={versionId}
-            onChange={e => setVersionId(e.target.value)}
-            className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-20"
-          >
-            {versions.map(v => (
-              <option key={v.id} value={v.id}>{v.abbreviation}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => { setShowImport(true); setImpError(''); setImpResult(null); }}
-            title="Agregar nueva versión bíblica"
-            className="p-1.5 rounded bg-surface-700 border border-surface-600 text-zinc-400 hover:text-accent hover:border-accent transition-colors"
-          >
-            <Plus size={12} />
-          </button>
-        </div>
+        <select
+          value={versionId}
+          onChange={e => {
+            if (e.target.value === '__import__') {
+              setShowImport(true);
+              setImpError(''); setImpResult(null);
+            } else {
+              setVersionId(e.target.value);
+            }
+          }}
+          className="bg-surface-700 text-zinc-200 text-xs px-2 py-1.5 rounded border border-surface-600 focus:outline-none focus:border-accent w-24 shrink-0"
+        >
+          {versions.map(v => (
+            <option key={v.id} value={v.id}>{v.abbreviation}</option>
+          ))}
+          <option disabled>─────</option>
+          <option value="__import__">+ Agregar…</option>
+        </select>
 
         <div className="relative flex-1">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
