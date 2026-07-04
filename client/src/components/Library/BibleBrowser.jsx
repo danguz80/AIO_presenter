@@ -130,25 +130,19 @@ export default function BibleBrowser() {
       fd.append('abbreviation', impAbbrev.trim().toUpperCase());
       fd.append('name', impName.trim());
       fd.append('language', impLang);
-      const token = localStorage.getItem('aio_sync_token');
-      const res = await fetch('/api/bible/import', {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: fd,
-      });
-      const data = await res.json();
-      if (!res.ok) { setImpError(data.error || 'Error al importar'); }
-      else {
-        setImpResult(data);
-        setImpFile(null); setImpAbbrev(''); setImpName(''); setImpLang('es');
-        // Recargar lista de versiones
-        api.get('/bible/versions').then(r => {
-          setVersions(r.data);
-          const newV = r.data.find(v => v.abbreviation === data.abbreviation);
-          if (newV) setVersionId(String(newV.id));
-        }).catch(() => {});
-      }
-    } catch (e) { setImpError('No se pudo conectar al servidor'); }
+      // Usar api (axios) que ya tiene el baseURL y token configurados
+      const res = await api.post('/bible/import', fd);
+      const data = res.data;
+      setImpResult(data);
+      setImpFile(null); setImpAbbrev(''); setImpName(''); setImpLang('es');
+      api.get('/bible/versions').then(r => {
+        setVersions(r.data);
+        const newV = r.data.find(v => v.abbreviation === data.abbreviation);
+        if (newV) setVersionId(String(newV.id));
+      }).catch(() => {});
+    } catch (e) {
+      setImpError(e.response?.data?.error || e.message || 'Error al importar');
+    }
     setImpLoading(false);
   };
 
