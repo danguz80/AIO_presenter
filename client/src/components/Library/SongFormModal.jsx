@@ -197,12 +197,36 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
     return current || songKey;
   }, [body, cursorPos, songKey]);
 
+  // Botón Tab móvil: avanza al siguiente punto de inserción de acorde (siguiente sílaba)
+  const handleTabBtn = () => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const pos = savedCursorPos.current ?? ta.selectionStart ?? 0;
+    const next = findNextSyllablePos(body, pos);
+    savedCursorPos.current = next;
+    setCursorPos(next);
+    ta.focus();
+    requestAnimationFrame(() => { ta.setSelectionRange(next, next); });
+  };
+
   const insertChord = (chord) => {
     const ta  = textareaRef.current;
     const scrollTop = ta?.scrollTop ?? 0;
     const pos = (ta && document.activeElement === ta)
       ? ta.selectionStart
       : (savedCursorPos.current ?? (body || '').length);
+
+  // Botón Tab móvil: avanza al siguiente punto de inserción de acorde (siguiente sílaba)
+  const handleTabBtn = () => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const pos = savedCursorPos.current ?? ta.selectionStart ?? 0;
+    const next = findNextSyllablePos(body, pos);
+    savedCursorPos.current = next;
+    setCursorPos(next);
+    ta.focus();
+    requestAnimationFrame(() => { ta.setSelectionRange(next, next); });
+  };
     const ins     = `[${chord}]`;
     const newBody = body.slice(0, pos) + ins + body.slice(pos);
     const newPos  = pos + ins.length;
@@ -534,6 +558,15 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                   >
                     <Music2 size={10} />
                     {chordMode ? 'Acordes ON' : 'Modo acordes'}
+                  </button>
+                  {/* Botón Tab — útil en móvil para navegar sílabas sin teclado físico */}
+                  <button
+                    type="button"
+                    onClick={handleTabBtn}
+                    title="Mover cursor a la siguiente sílaba (equivalente a presionar Tab)"
+                    className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded border bg-surface-700 border-surface-600 text-zinc-400 hover:text-white hover:border-zinc-400 transition-colors font-mono"
+                  >
+                    ↹ Tab
                   </button>
                 </label>
                 <span className="text-xs text-zinc-600 hidden sm:inline">
