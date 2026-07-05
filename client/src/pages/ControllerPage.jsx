@@ -1750,6 +1750,11 @@ function EventsPanel() {
                             )}
                           </div>
                           {s.author && <p className="text-[11px] text-zinc-500 truncate">{s.author}</p>}
+                          {(s.bpm || s.time_sig) && (
+                            <p className="text-[10px] font-mono text-zinc-500 truncate">
+                              {[s.bpm && `${s.bpm} BPM`, s.time_sig].filter(Boolean).join(' • ')}
+                            </p>
+                          )}
                           {s.tags && s.tags.length > 0 && (
                             <div className="flex flex-wrap gap-0.5 mt-0.5">
                               {s.tags.map(t => (
@@ -1812,7 +1817,16 @@ function EventsPanel() {
             setSelectedEv(ev => ({
               ...ev,
               songs: (ev.songs || []).map(p =>
-                p.song_id === updated.id ? { ...p, title: updated.title, author: updated.author } : p
+                p.song_id === updated.id
+                  ? {
+                      ...p,
+                      title: updated.title,
+                      author: updated.author,
+                      song_key: updated.song_key,
+                      bpm: updated.bpm,
+                      time_sig: updated.time_sig,
+                    }
+                  : p
               ),
             }));
           } catch (_) {}

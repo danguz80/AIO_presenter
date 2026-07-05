@@ -256,6 +256,14 @@ export default function DisplaysPanel() {
           })}
         </div>
 
+        {/* Advertencia: Escenario configurado pero Principal no */}
+        {escenarioScreenId && !principalScreenId && (
+          <div className="mt-2 px-2.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 leading-snug">
+            ⚠️ Tu pantalla está asignada como <strong>Escenario</strong>, pero no hay ninguna pantalla asignada como <strong>Principal</strong>.<br />
+            Para proyectar el contenido principal haz clic en el botón <strong>Principal</strong> de la pantalla detectada.
+          </div>
+        )}
+
         {/* Resoluciones por salida */}
         <ResolutionPicker label="Resolución Principal" configKey="principalResolution" current={principalResolution} />
         <ResolutionPicker label="Resolución Escenario" configKey="escenarioResolution" current={escenarioResolution} />
