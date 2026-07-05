@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useMemo, useCallback } fr
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Play, Pause, Plus, Minus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Loader2, Pencil,
-  LayoutList, X, Trash2, Save, NotebookPen, SlidersHorizontal,
+  LayoutList, X, Trash2, Save, NotebookPen, SlidersHorizontal, ExternalLink,
 } from 'lucide-react';
 import { io } from 'socket.io-client';
 import { stripChords, parseChordLine, isCommentLine, extractInlineComment, transposeContent, transposeKey } from '../../utils/chordUtils';
@@ -70,17 +70,32 @@ function EstructuraModal({ song, slides, allStructures: propStructures, activeSt
       ? propStructures
       : (Array.isArray(song?.structure) && song.structure.length > 0
           ? [{ name: 'Estructura 1', items: song.structure }]
-          : [{ name: 'Estructura 1', items: [] }]);
-    return source.map(s => ({
-      name: s.name,
-      rows: (s.items ?? []).reduce((acc, lbl) => {
-        const last = acc[acc.length - 1];
-        if (last && last.label === lbl) { last.count += 1; return acc; }
-        acc.push({ label: lbl, count: 1 });
-        return acc;
-      }, []),
-    }));
+          : null);
+    if (source) {
+      return source.map(s => ({
+        name: s.name,
+        rows: (s.items ?? []).reduce((acc, lbl) => {
+          const last = acc[acc.length - 1];
+          if (last && last.label === lbl) { last.count += 1; return acc; }
+          acc.push({ label: lbl, count: 1 });
+          return acc;
+        }, []),
+      }));
+    }
+    // Auto-detectar estructura a partir de las secciones de los slides
+    const rows = slides.reduce((acc, slide) => {
+      const lbl = slide.label?.trim();
+      if (!lbl) return acc;
+      const last = acc[acc.length - 1];
+      if (last && last.label === lbl) { last.count += 1; return acc; }
+      acc.push({ label: lbl, count: 1 });
+      return acc;
+    }, []);
+    return [{ name: 'Estructura 1', rows }];
   });
+
+  // If no structures were passed and no song.structure, try legacy
+  // NOOP: already handled above — this comment just marks the boundary
   const [localActiveIdx, setLocalActiveIdx] = useState(
     () => Math.min(propActiveIdx, Math.max(0, propStructures.length - 1))
   );
@@ -526,6 +541,16 @@ export default function CancioneroSongDetail() {
     return result.length > 0 ? result : slides;
   }, [slides, activeStructItems]);
 
+  // Badges de secciones: usa estructura activa, o auto-deriva de slides si no hay estructura
+  const displayStructItems = useMemo(() => {
+    if (activeStructItems.length > 0) return activeStructItems;
+    const items = [];
+    for (const slide of slides) {
+      const lbl = slide.label?.trim();
+      if (lbl) items.push(lbl);
+    }
+    return items;
+  }, [activeStructItems, slides]);
 
   // Conectar socket y pedir offset actual al montar
   useEffect(() => {
@@ -1002,6 +1027,14 @@ export default function CancioneroSongDetail() {
             >
               <LayoutList size={13} /> Estructura
             </button>
+            {/* Link Spotify/YouTube */}
+            {song?.link && (
+              <a href={song.link} target="_blank" rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 bg-green-500/10 border border-green-400/25 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-green-300 col-span-1"
+              >
+                <ExternalLink size={13} /> Escuchar
+              </a>
+            )}
             {/* Anotar */}
             <button
               onClick={() => { setAnnotating(v => !v); setToolbarOpen(false); }}
@@ -1090,6 +1123,16 @@ export default function CancioneroSongDetail() {
             <LayoutList size={13} className="shrink-0" />
             Estructura
           </button>
+          {/* Link Spotify / YouTube */}
+          {song?.link && (
+            <a href={song.link} target="_blank" rel="noopener noreferrer"
+              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-green-500/10 border-green-400/25 text-green-300 hover:bg-green-500/20"
+              title="Abrir link de la canción"
+            >
+              <ExternalLink size={13} className="shrink-0" />
+              Escuchar
+            </a>
+          )}
           {/* Anotar */}
           <button
             onClick={() => setAnnotating(v => !v)}
@@ -1124,12 +1167,12 @@ export default function CancioneroSongDetail() {
                 ))}
               </div>
             )}
-            {/* Badges de secciones de la estructura activa */}
-            {activeStructItems.length > 0 && (() => {
+            {/* Badges de secciones de la estructura activa o auto-detectadas */}
+            {displayStructItems.length > 0 && (() => {
               const seen = {};
               return (
                 <div className="flex flex-wrap gap-1">
-                  {activeStructItems.map((lbl, i) => {
+                  {displayStructItems.map((lbl, i) => {
                     if (seen[lbl] === undefined) seen[lbl] = 0;
                     const occ = seen[lbl]++;
                     const badgeKey = `${lbl}:${occ}`;

@@ -1144,6 +1144,11 @@ export default function CancioneroEventDetail() {
                     {s.song_key && (
                       <span className="text-xs font-mono text-yellow-400/60 shrink-0">{s.song_key}</span>
                     )}
+                    {(s.bpm || s.time_sig) && (
+                      <span className="text-[10px] text-white/30 shrink-0">
+                        {[s.bpm && `${s.bpm} BPM`, s.time_sig].filter(Boolean).join(' • ')}
+                      </span>
+                    )}
                   </button>
                 );
               })}
