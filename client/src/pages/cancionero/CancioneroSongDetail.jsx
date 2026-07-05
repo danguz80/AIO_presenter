@@ -1199,7 +1199,6 @@ export default function CancioneroSongDetail() {
             </div>
           );
         })()}
-        )}
       </header>
 
       {/* ── Content ─────────────────────────────────────────────────── */}
