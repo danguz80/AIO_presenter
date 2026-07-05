@@ -542,12 +542,17 @@ export default function CancioneroSongDetail() {
   }, [slides, activeStructItems]);
 
   // Badges de secciones: usa estructura activa, o auto-deriva de slides si no hay estructura
+  // Solo agrega una etiqueta cuando CAMBIA respecto a la anterior (colapsa slides consecutivos)
   const displayStructItems = useMemo(() => {
     if (activeStructItems.length > 0) return activeStructItems;
     const items = [];
+    let prevLbl = null;
     for (const slide of slides) {
       const lbl = slide.label?.trim();
-      if (lbl) items.push(lbl);
+      if (lbl && lbl !== prevLbl) {
+        items.push(lbl);
+        prevLbl = lbl;
+      }
     }
     return items;
   }, [activeStructItems, slides]);
