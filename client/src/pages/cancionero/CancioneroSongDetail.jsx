@@ -723,7 +723,7 @@ export default function CancioneroSongDetail() {
           ? s.structures
           : (Array.isArray(s.structure) && s.structure.length > 0
               ? [{ name: 'Estructura 1', items: s.structure }]
-              : []);
+              : [{ name: 'Estructura 1', items: [] }]);
         setAllStructures(structs);
         setLoading(false);
       })
@@ -1146,58 +1146,54 @@ export default function CancioneroSongDetail() {
           </button>
         </div>
 
-        {/* ── Selector de estructura activa + badges de secciones ── */}
-        {allStructures.length > 0 && (
-          <div className="pt-0.5 flex flex-col gap-1">
-            {/* Pestañas de estructura (solo si hay más de una) */}
-            {allStructures.length > 1 && (
-              <div className="flex gap-1 flex-wrap">
-                {allStructures.map((s, i) => (
+        {/* ── Selector de estructura activa (solo si hay >1) ── */}
+        {allStructures.length > 1 && (
+          <div className="pt-0.5 flex gap-1 flex-wrap">
+            {allStructures.map((s, i) => (
+              <button
+                key={i}
+                onClick={() => setActiveStructIdx(i)}
+                className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors font-semibold ${
+                  i === activeStructIdx
+                    ? 'bg-purple-500/30 border-purple-400/50 text-purple-200'
+                    : 'bg-white/5 border-white/10 text-white/30 hover:text-white/60'
+                }`}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {/* ── Badges de secciones — siempre visibles cuando hay slides con etiqueta ── */}
+        {displayStructItems.length > 0 && (() => {
+          const seen = {};
+          return (
+            <div className="pt-0.5 flex flex-wrap gap-1">
+              {displayStructItems.map((lbl, i) => {
+                if (seen[lbl] === undefined) seen[lbl] = 0;
+                const occ = seen[lbl]++;
+                const badgeKey = `${lbl}:${occ}`;
+                const isActive = scrolling && badgeKey === activeSectionKey;
+                return (
                   <button
                     key={i}
-                    onClick={() => setActiveStructIdx(i)}
-                    className={`text-[10px] px-2 py-0.5 rounded-md border transition-colors font-semibold ${
-                      i === activeStructIdx
-                        ? 'bg-purple-500/30 border-purple-400/50 text-purple-200'
-                        : 'bg-white/5 border-white/10 text-white/30 hover:text-white/60'
-                    }`}
+                    onClick={() => scrollToSection(lbl, occ)}
+                    className="text-xs font-bold font-mono px-2 py-0.5 rounded-lg transition-opacity hover:opacity-80 active:opacity-60"
+                    style={{
+                      color: labelColor(lbl),
+                      backgroundColor: labelColor(lbl) + (isActive ? '50' : '25'),
+                      border: `1px solid ${labelColor(lbl)}${isActive ? 'aa' : '35'}`,
+                      ...(isActive ? { animation: 'sectionPulse 0.8s ease-in-out infinite' } : {}),
+                    }}
+                    title={`Ir a ${lbl}`}
                   >
-                    {s.name}
+                    {labelAbbr(lbl)}
                   </button>
-                ))}
-              </div>
-            )}
-            {/* Badges de secciones de la estructura activa o auto-detectadas */}
-            {displayStructItems.length > 0 && (() => {
-              const seen = {};
-              return (
-                <div className="flex flex-wrap gap-1">
-                  {displayStructItems.map((lbl, i) => {
-                    if (seen[lbl] === undefined) seen[lbl] = 0;
-                    const occ = seen[lbl]++;
-                    const badgeKey = `${lbl}:${occ}`;
-                    const isActive = scrolling && badgeKey === activeSectionKey;
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => scrollToSection(lbl, occ)}
-                        className="text-xs font-bold font-mono px-2 py-0.5 rounded-lg transition-opacity hover:opacity-80 active:opacity-60"
-                        style={{
-                          color: labelColor(lbl),
-                          backgroundColor: labelColor(lbl) + (isActive ? '50' : '25'),
-                          border: `1px solid ${labelColor(lbl)}${isActive ? 'aa' : '35'}`,
-                          ...(isActive ? { animation: 'sectionPulse 0.8s ease-in-out infinite' } : {}),
-                        }}
-                        title={`Ir a ${lbl}`}
-                      >
-                        {labelAbbr(lbl)}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-          </div>
+                );
+              })}
+            </div>
+          );
+        })()}
         )}
       </header>
 
