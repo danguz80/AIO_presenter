@@ -1210,9 +1210,12 @@ export default function CancioneroSongDetail() {
           orderedSlides.map((slide, idx) => {
             const prevSlide = orderedSlides[idx - 1];
             const isNewSection = slide.label !== prevSlide?.label;
-            // Calcular cuántas veces ya apareció este label antes en orderedSlides
+            // Contar cuántos INICIOS DE SECCIÓN previos tienen la misma etiqueta (no slides individuales)
             const occurrenceIdx = isNewSection
-              ? orderedSlides.slice(0, idx).filter(s => s.label === slide.label).length
+              ? orderedSlides.slice(0, idx).filter((s, i) => {
+                  const prev = orderedSlides[i - 1];
+                  return s.label === slide.label && s.label !== prev?.label;
+                }).length
               : -1;
             const sectionKey = isNewSection ? `${slide.label}:${occurrenceIdx}` : null;
             const isScrollActive = scrollSlideIdx === idx;
