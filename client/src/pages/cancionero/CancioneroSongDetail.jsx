@@ -56,10 +56,8 @@ function detectStructureRowsFromSlides(slides = []) {
     const lbl = slide.label?.trim();
     if (!lbl) return acc;
     const last = acc[acc.length - 1];
-    if (last && last.label === lbl) {
-      last.count += 1;
-      return acc;
-    }
+    // Estructura = cambio de sección, no cantidad de slides del bloque.
+    if (last && last.label === lbl) return acc;
     acc.push({ label: lbl, count: 1 });
     return acc;
   }, []);
