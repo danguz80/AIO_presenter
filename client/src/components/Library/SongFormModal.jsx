@@ -154,12 +154,24 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const presenter = usePresenterOptional(); // null fuera del PresenterProvider
   const isEdit = Boolean(song?.id);
 
+  const initialLinks = useMemo(() => {
+    const fromLinks = Array.isArray(song?.links)
+      ? song.links
+      : (Array.isArray(song?.song_links) ? song.song_links : []);
+    const cleaned = fromLinks
+      .map((l, i) => ({ title: String(l?.title || '').trim() || `Link ${i + 1}`, url: String(l?.url || '').trim() }))
+      .filter(l => l.url);
+    if (cleaned.length > 0) return cleaned;
+    if (song?.link) return [{ title: 'Link', url: String(song.link) }];
+    return [];
+  }, [song?.links, song?.song_links, song?.link]);
+
   const [title,       setTitle]       = useState(song?.title    || '');
   const [author,      setAuthor]      = useState(song?.author   || '');
   const [songKey,     setSongKey]     = useState(song?.song_key || '');
   const [bpm,         setBpm]         = useState(song?.bpm      ?? '');
   const [timeSig,     setTimeSig]     = useState(song?.time_sig || '');
-  const [link,        setLink]        = useState(song?.link     || '');
+  const [links,       setLinks]       = useState(initialLinks);
   const [body,        setBody]        = useState(() => slidesToText(song?.slides));
   const [tags,        setTags]        = useState(song?.tags || []);
   const [allTags,     setAllTags]     = useState([]);
@@ -338,7 +350,20 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
     }));
     setSaving(true);
     setError('');
-    const payload = { title, author, song_key: songKey || null, bpm: bpm !== '' ? bpm : null, time_sig: timeSig || null, link: link || null, tags, slides };
+    const cleanedLinks = links
+      .map((l, i) => ({ title: String(l?.title || '').trim() || `Link ${i + 1}`, url: String(l?.url || '').trim() }))
+      .filter(l => l.url);
+    const payload = {
+      title,
+      author,
+      song_key: songKey || null,
+      bpm: bpm !== '' ? bpm : null,
+      time_sig: timeSig || null,
+      links: cleanedLinks,
+      link: cleanedLinks[0]?.url || null,
+      tags,
+      slides,
+    };
     try {
       let savedSong;
       if (presenter) {
@@ -456,7 +481,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
           </div>
 
           {/* Metadatos */}
-          <div className="px-4 sm:px-6 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 border-b border-surface-700">
+          <div className="px-4 sm:px-6 py-3 grid grid-cols-2 sm:grid-cols-3 gap-3 border-b border-surface-700">
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Clave</label>
               <input
@@ -486,16 +511,51 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 placeholder="4/4"
               />
             </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Link</label>
-              <input
-                className="input"
-                type="url"
-                value={link}
-                onChange={e => setLink(e.target.value)}
-                placeholder="https://open.spotify.com/..."
-              />
+          </div>
+
+          {/* Links múltiples */}
+          <div className="px-4 sm:px-6 py-3 border-b border-surface-700">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs text-zinc-400">Vínculos</label>
+              <button
+                type="button"
+                onClick={() => setLinks(prev => [...prev, { title: '', url: '' }])}
+                className="text-[11px] px-2 py-1 rounded border border-surface-500 text-zinc-300 hover:border-accent/60 hover:text-accent transition-colors"
+              >
+                + Agregar vínculo
+              </button>
             </div>
+            {links.length === 0 ? (
+              <p className="text-[11px] text-zinc-500">Sin vínculos. Ej: Spotify, YouTube, Google Drive.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {links.map((l, i) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-[160px_1fr_auto] gap-2 items-center">
+                    <input
+                      className="input"
+                      value={l.title}
+                      onChange={e => setLinks(prev => prev.map((x, idx) => idx === i ? { ...x, title: e.target.value } : x))}
+                      placeholder="Título (Spotify, YouTube...)"
+                    />
+                    <input
+                      className="input"
+                      type="url"
+                      value={l.url}
+                      onChange={e => setLinks(prev => prev.map((x, idx) => idx === i ? { ...x, url: e.target.value } : x))}
+                      placeholder="https://..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setLinks(prev => prev.filter((_, idx) => idx !== i))}
+                      className="px-2 py-2 rounded border border-surface-500 text-zinc-400 hover:text-red-400 hover:border-red-500/60 transition-colors"
+                      title="Eliminar vínculo"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Etiquetas de categoría */}

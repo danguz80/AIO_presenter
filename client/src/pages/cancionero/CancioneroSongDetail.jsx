@@ -520,6 +520,18 @@ export default function CancioneroSongDetail() {
   const [annotations, setAnnotations] = useState([]);
   const [annotationsSaved, setAnnotationsSaved] = useState(true);
   const [toolbarOpen, setToolbarOpen] = useState(false);
+  const songLinks = useMemo(() => {
+    const fromLinks = Array.isArray(song?.links)
+      ? song.links
+      : (Array.isArray(song?.song_links) ? song.song_links : []);
+    const cleaned = fromLinks
+      .map((l, i) => ({ title: String(l?.title || '').trim() || `Link ${i + 1}`, url: String(l?.url || '').trim() }))
+      .filter(l => l.url);
+    if (cleaned.length > 0) return cleaned;
+    if (song?.link) return [{ title: 'Link', url: String(song.link) }];
+    return [];
+  }, [song?.links, song?.song_links, song?.link]);
+  const [selectedLinkUrl, setSelectedLinkUrl] = useState('');
 
   // Múltiples estructuras
   const [allStructures, setAllStructures]     = useState([]);
@@ -528,6 +540,10 @@ export default function CancioneroSongDetail() {
     return s ? parseInt(s, 10) : 0;
   });
   const autoStructPersistedRef = useRef(false);
+
+  useEffect(() => {
+    setSelectedLinkUrl(songLinks[0]?.url || '');
+  }, [song?.id, songLinks]);
 
   // Transposición global (todos en la org) y capo personal
   const [keyOffset, setKeyOffset]   = useState(0);
@@ -1116,12 +1132,27 @@ export default function CancioneroSongDetail() {
               <LayoutList size={13} /> Estructura
             </button>
             {/* Link Spotify/YouTube */}
-            {song?.link && (
-              <a href={song.link} target="_blank" rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 bg-green-500/10 border border-green-400/25 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-green-300 col-span-1"
-              >
-                <ExternalLink size={13} /> Escuchar
-              </a>
+            {songLinks.length > 0 && (
+              <div className="col-span-2 grid grid-cols-[1fr_auto] gap-2">
+                <select
+                  className="bg-green-500/10 border border-green-400/25 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-green-300"
+                  value={selectedLinkUrl}
+                  onChange={e => setSelectedLinkUrl(e.target.value)}
+                  title="Selecciona vínculo"
+                >
+                  {songLinks.map((l, i) => (
+                    <option key={`${l.url}-${i}`} value={l.url} className="text-black">{l.title}</option>
+                  ))}
+                </select>
+                <a
+                  href={selectedLinkUrl || songLinks[0].url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 bg-green-500/10 border border-green-400/25 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-green-300"
+                >
+                  <ExternalLink size={13} /> Ir
+                </a>
+              </div>
             )}
             {/* Anotar */}
             <button
@@ -1212,14 +1243,29 @@ export default function CancioneroSongDetail() {
             Estructura
           </button>
           {/* Link Spotify / YouTube */}
-          {song?.link && (
-            <a href={song.link} target="_blank" rel="noopener noreferrer"
-              className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-green-500/10 border-green-400/25 text-green-300 hover:bg-green-500/20"
-              title="Abrir link de la canción"
-            >
-              <ExternalLink size={13} className="shrink-0" />
-              Escuchar
-            </a>
+          {songLinks.length > 0 && (
+            <div className="flex-shrink-0 flex items-center gap-1.5">
+              <select
+                className="bg-green-500/10 border border-green-400/25 rounded-lg px-2 py-1.5 text-xs font-semibold text-green-300 max-w-[170px]"
+                value={selectedLinkUrl}
+                onChange={e => setSelectedLinkUrl(e.target.value)}
+                title="Selecciona vínculo"
+              >
+                {songLinks.map((l, i) => (
+                  <option key={`${l.url}-${i}`} value={l.url} className="text-black">{l.title}</option>
+                ))}
+              </select>
+              <a
+                href={selectedLinkUrl || songLinks[0].url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors bg-green-500/10 border-green-400/25 text-green-300 hover:bg-green-500/20"
+                title="Abrir vínculo seleccionado"
+              >
+                <ExternalLink size={13} className="shrink-0" />
+                Ir
+              </a>
+            </div>
           )}
           {/* Anotar */}
           <button

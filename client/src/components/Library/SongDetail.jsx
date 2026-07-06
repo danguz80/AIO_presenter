@@ -49,6 +49,23 @@ export default function SongDetail() {
   const { state, actions } = usePresenter();
   const { selectedSong, selectedSlide, liveState, navigateRequest, schedule, eventPlays, eventPlaysContext } = state;
 
+  const songLinks = useMemo(() => {
+    const fromLinks = Array.isArray(selectedSong?.links)
+      ? selectedSong.links
+      : (Array.isArray(selectedSong?.song_links) ? selectedSong.song_links : []);
+    const cleaned = fromLinks
+      .map((l, i) => ({ title: String(l?.title || '').trim() || `Link ${i + 1}`, url: String(l?.url || '').trim() }))
+      .filter(l => l.url);
+    if (cleaned.length > 0) return cleaned;
+    if (selectedSong?.link) return [{ title: 'Link', url: String(selectedSong.link) }];
+    return [];
+  }, [selectedSong?.links, selectedSong?.song_links, selectedSong?.link]);
+  const [selectedLinkUrl, setSelectedLinkUrl] = useState('');
+
+  useEffect(() => {
+    setSelectedLinkUrl(songLinks[0]?.url || '');
+  }, [selectedSong?.id, songLinks]);
+
   // Config del proyector para reflejar en thumbnails
   const outputCfg      = state.outputConfig ?? {};
   const displayCfg     = state.displayConfig ?? {};
@@ -546,14 +563,29 @@ export default function SongDetail() {
             {selectedSong.time_sig && (
               <span className="text-xs font-medium text-zinc-300 bg-surface-700 px-1.5 py-0.5 rounded shrink-0">{selectedSong.time_sig}</span>
             )}
-            {selectedSong.link && (
-              <a href={selectedSong.link} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs font-medium text-green-400 bg-green-900/20 hover:bg-green-900/40 px-1.5 py-0.5 rounded shrink-0 transition-colors"
-                title="Abrir link de la canción"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                Link
-              </a>
+            {songLinks.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                <select
+                  className="bg-surface-700 border border-surface-600 rounded px-1.5 py-0.5 text-xs text-zinc-200 max-w-[180px]"
+                  value={selectedLinkUrl}
+                  onChange={e => setSelectedLinkUrl(e.target.value)}
+                  title="Selecciona vínculo"
+                >
+                  {songLinks.map((l, i) => (
+                    <option key={`${l.url}-${i}`} value={l.url}>{l.title}</option>
+                  ))}
+                </select>
+                <a
+                  href={selectedLinkUrl || songLinks[0].url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs font-medium text-green-400 bg-green-900/20 hover:bg-green-900/40 px-1.5 py-0.5 rounded transition-colors"
+                  title="Abrir vínculo seleccionado"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  Ir
+                </a>
+              </div>
             )}
           </div>
           {selectedSong.author && (

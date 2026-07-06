@@ -1,5 +1,30 @@
 const pool = require('../config/database');
 
+function normalizeLinksInput(input) {
+  const arr = Array.isArray(input) ? input : [];
+  const cleaned = arr
+    .map((it, idx) => {
+      const url = String(it?.url || '').trim();
+      const title = String(it?.title || '').trim() || `Link ${idx + 1}`;
+      return { title, url };
+    })
+    .filter(it => it.url.length > 0);
+  return cleaned;
+}
+
+function normalizeSongRow(row) {
+  const fromRow = normalizeLinksInput(row?.links ?? row?.song_links ?? []);
+  const links = fromRow.length > 0
+    ? fromRow
+    : (row?.link ? [{ title: 'Link', url: String(row.link) }] : []);
+  return {
+    ...row,
+    links,
+    song_links: links,
+    link: links[0]?.url || null,
+  };
+}
+
 /** Fallback: si no hay JWT, usa la primera org disponible */
 async function resolveOrgId(user) {
   if (user?.orgId) return user.orgId;
@@ -16,7 +41,9 @@ const getAllSongs = async (req, res) => {
 
     let query = `
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.language, s.tags,
-             s.song_key, s.bpm, s.time_sig, s.link, s.structure, s.created_at,
+              s.song_key, s.bpm, s.time_sig, s.link,
+              COALESCE(s.song_links, '[]'::jsonb) AS links,
+              s.structure, s.created_at,
              s.updated_at, su.email AS updated_by_email, su.display_name AS updated_by_name
       FROM songs s
       LEFT JOIN sync_users su ON su.id = s.updated_by
@@ -34,7 +61,7 @@ const getAllSongs = async (req, res) => {
 
     query += ' ORDER BY s.title ASC';
     const { rows } = await pool.query(query, params);
-    res.json(rows);
+    res.json(rows.map(normalizeSongRow));
   } catch (err) {
     console.error('[Songs] getAllSongs:', err.message);
     res.status(500).json({ error: 'Error al obtener canciones' });
@@ -59,7 +86,8 @@ const getSongById = async (req, res) => {
       [id]
     );
 
-    res.json({ ...songResult.rows[0], slides: slidesResult.rows });
+    const song = normalizeSongRow(songResult.rows[0]);
+    res.json({ ...song, slides: slidesResult.rows });
   } catch (err) {
     console.error('[Songs] getSongById:', err.message);
     res.status(500).json({ error: 'Error al obtener canción' });
@@ -70,18 +98,20 @@ const getSongById = async (req, res) => {
 const createSong = async (req, res) => {
   const client = await pool.connect();
   try {
-    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link } = req.body;
+    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link, links } = req.body;
     if (!title) return res.status(400).json({ error: 'El título es requerido' });
     const orgId = req.user.orgId;
+    const normalizedLinks = normalizeLinksInput(links);
+    const legacyLink = normalizedLinks[0]?.url || (link ? String(link).trim() : null) || null;
 
     await client.query('BEGIN');
 
     const songResult = await client.query(
-      `INSERT INTO songs (title, author, copyright, ccli, language, tags, song_key, bpm, time_sig, link, organization_id, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      `INSERT INTO songs (title, author, copyright, ccli, language, tags, song_key, bpm, time_sig, link, song_links, organization_id, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13) RETURNING *`,
       [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
-       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null, orgId,
-       req.user?.userId || null]
+       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, legacyLink,
+       JSON.stringify(normalizedLinks), orgId, req.user?.userId || null]
     );
     const song = songResult.rows[0];
 
@@ -100,7 +130,7 @@ const createSong = async (req, res) => {
       'SELECT * FROM song_slides WHERE song_id = $1 ORDER BY position ASC',
       [song.id]
     );
-    res.status(201).json({ ...song, slides: fullSong.rows });
+    res.status(201).json({ ...normalizeSongRow(song), slides: fullSong.rows });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[Songs] createSong:', err.message);
@@ -116,17 +146,19 @@ const updateSong = async (req, res) => {
   try {
     const { id } = req.params;
     const orgId = req.user.orgId;
-    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link } = req.body;
+    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link, links } = req.body;
+    const normalizedLinks = normalizeLinksInput(links);
+    const legacyLink = normalizedLinks[0]?.url || (link ? String(link).trim() : null) || null;
 
     await client.query('BEGIN');
 
     const result = await client.query(
       `UPDATE songs SET title=$1, author=$2, copyright=$3, ccli=$4, language=$5, tags=$6,
-       song_key=$7, bpm=$8, time_sig=$9, link=$10, updated_at=NOW(), updated_by=$11
-       WHERE id=$12 AND organization_id=$13 RETURNING *`,
+       song_key=$7, bpm=$8, time_sig=$9, link=$10, song_links=$11::jsonb, updated_at=NOW(), updated_by=$12
+       WHERE id=$13 AND organization_id=$14 RETURNING *`,
       [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
-       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, link || null,
-       req.user?.userId || null, id, orgId]
+       song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, legacyLink,
+       JSON.stringify(normalizedLinks), req.user?.userId || null, id, orgId]
     );
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -149,7 +181,7 @@ const updateSong = async (req, res) => {
       'SELECT * FROM song_slides WHERE song_id = $1 ORDER BY position ASC',
       [id]
     );
-    res.json({ ...result.rows[0], slides: updatedSlides.rows });
+    res.json({ ...normalizeSongRow(result.rows[0]), slides: updatedSlides.rows });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[Songs] updateSong:', err.message);
