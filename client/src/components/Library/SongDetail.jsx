@@ -451,24 +451,39 @@ export default function SongDetail() {
     });
   };
 
-  // Trackea el slide visto y auto-marca cuando ≥80% de slides han sido vistos
+  // Trackea el slide visto y auto-marca cuando ≥90% de slides han sido proyectados
   const trackSlide = (slideId) => {
     if (!selectedSong || !eventPlaysContext) return;
     seenSlideIds.current.add(slideId);
     const total = orderedSlides?.length || 0;
     const seen  = seenSlideIds.current.size;
     if (total === 0) return;
-    const alreadyPlayed = eventPlays?.has(selectedSong.id);
+    const songIdNum = Number(selectedSong.id);
+    const songIdStr = String(selectedSong.id);
+    const alreadyPlayed = eventPlays?.has(selectedSong.id) || eventPlays?.has(songIdNum) || eventPlays?.has(songIdStr);
     if (alreadyPlayed) return;
     // La canción debe estar en el setlist del evento activo
-    const inSchedule = schedule?.some(s => s.song_id === selectedSong.id);
+    const inSchedule = schedule?.some(s => Number(s.song_id) === songIdNum);
     if (!inSchedule) return;
     const { eventId, occurrenceDate } = eventPlaysContext;
     const pct = seen / total;
-    if (pct >= 0.8) {
-      actions.markPlayed(eventId, occurrenceDate, selectedSong.id, seen, total, false);
+    if (pct >= 0.9) {
+      actions.markPlayed(eventId, occurrenceDate, songIdNum, seen, total, false);
     }
   };
+
+  // Navegación remota (móvil/otros clientes): consume navigateRequest y usa
+  // la misma ruta de navegación local para que también cuente en auto-marcado.
+  const lastNavTsRef = useRef(0);
+  useEffect(() => {
+    if (!navigateRequest || !selectedSong) return;
+    const ts = Number(navigateRequest.ts || 0);
+    if (ts && ts === lastNavTsRef.current) return;
+    if (ts) lastNavTsRef.current = ts;
+    if (navigateRequest.dir === 'next' || navigateRequest.dir === 'prev') {
+      navigate(navigateRequest.dir);
+    }
+  }, [navigateRequest, selectedSong?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLive = (slide, index) =>
     liveState.slideData?.slideId === slide.id &&

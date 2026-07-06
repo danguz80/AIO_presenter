@@ -16,13 +16,21 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}` };
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+function toLocalDateStr(d = new Date()) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 function todayStr() {
-  return new Date().toISOString().split('T')[0];
+  return toLocalDateStr(new Date());
 }
 function futureStr(days = 60) {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  return toLocalDateStr(d);
 }
 function toDateStr(d) {
   if (!d) return '';
@@ -39,7 +47,7 @@ function formatTime(timeStr) {
 }
 function daysUntil(dateStr) {
   const today = new Date(); today.setHours(0,0,0,0);
-  const target = new Date(toDateStr(dateStr) + 'T12:00:00');
+  const target = new Date(toDateStr(dateStr) + 'T00:00:00');
   const diff = Math.round((target - today) / 86400000);
   if (diff === 0) return 'Hoy';
   if (diff === 1) return 'Mañana';
@@ -144,15 +152,13 @@ export default function CancioneroDashboard() {
       const today = todayStr();
       const visible = evList
         .filter(e => {
-          const d = e.date instanceof Date
-            ? e.date.toISOString().slice(0, 10)
-            : String(e.date).slice(0, 10);
+          const d = String(e.occurrence_date ?? e.date).slice(0, 10);
           const published = isAdmin ? true : Boolean(e.is_published);
           return published && d >= today;
         })
         .sort((a, b) => {
-          const da = a.date instanceof Date ? a.date.toISOString().slice(0, 10) : String(a.date).slice(0, 10);
-          const db = b.date instanceof Date ? b.date.toISOString().slice(0, 10) : String(b.date).slice(0, 10);
+          const da = String(a.occurrence_date ?? a.date).slice(0, 10);
+          const db = String(b.occurrence_date ?? b.date).slice(0, 10);
           return da.localeCompare(db);
         })
         .slice(0, 5);
@@ -407,7 +413,7 @@ export default function CancioneroDashboard() {
         ) : (
           <div className="flex flex-col gap-3">
             {events.map(ev => {
-              const badge = daysUntil(ev.date);
+              const badge = daysUntil(ev.occurrence_date ?? ev.date);
               const isToday = badge === 'Hoy';
               const isDraft = isAdmin && !ev.is_published;
 
