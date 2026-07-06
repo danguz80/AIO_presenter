@@ -51,6 +51,39 @@ function labelColor(label) {
   return baseKey ? SECTION_COLORS[baseKey] : '#6b7280';
 }
 
+function detectStructureRowsFromSlides(slides = []) {
+  return slides.reduce((acc, slide) => {
+    const lbl = slide.label?.trim();
+    if (!lbl) return acc;
+    const last = acc[acc.length - 1];
+    if (last && last.label === lbl) {
+      last.count += 1;
+      return acc;
+    }
+    acc.push({ label: lbl, count: 1 });
+    return acc;
+  }, []);
+}
+
+function hasAnyStructureItems(structures = []) {
+  return structures.some(s => Array.isArray(s?.items) && s.items.length > 0);
+}
+
+function structuresToRows(structures = []) {
+  return structures.map(s => ({
+    name: s.name,
+    rows: (s.items ?? []).reduce((acc, lbl) => {
+      const last = acc[acc.length - 1];
+      if (last && last.label === lbl) {
+        last.count += 1;
+        return acc;
+      }
+      acc.push({ label: lbl, count: 1 });
+      return acc;
+    }, []),
+  }));
+}
+
 // ─── Modal de Estructuras (múltiples) ────────────────────────────────────────
 function EstructuraModal({ song, slides, allStructures: propStructures, activeStructIdx: propActiveIdx, onClose, onSaved }) {
   // Etiquetas únicas presentes en los slides (en orden de aparición)
@@ -66,32 +99,19 @@ function EstructuraModal({ song, slides, allStructures: propStructures, activeSt
 
   // Estado local: [{name, rows: [{label, count}]}]
   const [localStructures, setLocalStructures] = useState(() => {
-    const source = propStructures.length > 0
-      ? propStructures
-      : (Array.isArray(song?.structure) && song.structure.length > 0
-          ? [{ name: 'Estructura 1', items: song.structure }]
-          : null);
-    if (source) {
-      return source.map(s => ({
-        name: s.name,
-        rows: (s.items ?? []).reduce((acc, lbl) => {
-          const last = acc[acc.length - 1];
-          if (last && last.label === lbl) { last.count += 1; return acc; }
-          acc.push({ label: lbl, count: 1 });
-          return acc;
-        }, []),
-      }));
+    const detectedRows = detectStructureRowsFromSlides(slides);
+    if (Array.isArray(propStructures) && propStructures.length > 0) {
+      const mapped = structuresToRows(propStructures);
+      const hasRows = mapped.some(s => (s.rows?.length ?? 0) > 0);
+      if (hasRows) return mapped;
+      return mapped.map((s, i) => (i === 0 ? { ...s, rows: detectedRows } : s));
     }
-    // Auto-detectar estructura a partir de las secciones de los slides
-    const rows = slides.reduce((acc, slide) => {
-      const lbl = slide.label?.trim();
-      if (!lbl) return acc;
-      const last = acc[acc.length - 1];
-      if (last && last.label === lbl) { last.count += 1; return acc; }
-      acc.push({ label: lbl, count: 1 });
-      return acc;
-    }, []);
-    return [{ name: 'Estructura 1', rows }];
+
+    if (Array.isArray(song?.structure) && song.structure.length > 0) {
+      return structuresToRows([{ name: 'Estructura 1', items: song.structure }]);
+    }
+
+    return [{ name: 'Estructura 1', rows: detectedRows }];
   });
 
   // If no structures were passed and no song.structure, try legacy
@@ -509,6 +529,7 @@ export default function CancioneroSongDetail() {
     const s = localStorage.getItem(`aio_active_struct_${id}`);
     return s ? parseInt(s, 10) : 0;
   });
+  const autoStructPersistedRef = useRef(false);
 
   // Transposición global (todos en la org) y capo personal
   const [keyOffset, setKeyOffset]   = useState(0);
@@ -724,16 +745,65 @@ export default function CancioneroSongDetail() {
         setSong(s);
         setSlides(Array.isArray(s.slides) ? s.slides : []);
         // Inicializar estructuras múltiples
-        const structs = Array.isArray(s.structures) && s.structures.length > 0
+        const detectedItems = detectStructureRowsFromSlides(Array.isArray(s.slides) ? s.slides : [])
+          .flatMap(({ label, count }) => Array(count).fill(label));
+
+        let structs = Array.isArray(s.structures) && s.structures.length > 0
           ? s.structures
           : (Array.isArray(s.structure) && s.structure.length > 0
               ? [{ name: 'Estructura 1', items: s.structure }]
               : [{ name: 'Estructura 1', items: [] }]);
+
+        if (!hasAnyStructureItems(structs) && detectedItems.length > 0) {
+          structs = structs.map((st, i) => (i === 0 ? { ...st, items: detectedItems } : st));
+        }
+
         setAllStructures(structs);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, [id]);
+
+  // Primera vez que se abre el modal de Estructura:
+  // si no hay estructura persistida, detectar desde slides y guardar en BD automáticamente.
+  useEffect(() => {
+    if (!estructuraOpen || !song?.id || autoStructPersistedRef.current) return;
+
+    const detectedItems = detectStructureRowsFromSlides(slides)
+      .flatMap(({ label, count }) => Array(count).fill(label));
+    if (detectedItems.length === 0) return;
+
+    if (hasAnyStructureItems(allStructures)) {
+      autoStructPersistedRef.current = true;
+      return;
+    }
+
+    const base = (Array.isArray(allStructures) && allStructures.length > 0)
+      ? allStructures
+      : [{ name: 'Estructura 1', items: [] }];
+    const structuresToSave = base.map((st, i) =>
+      i === 0 ? { ...st, items: detectedItems } : st
+    );
+
+    autoStructPersistedRef.current = true;
+    fetch(`${API}/api/songs/${song.id}/structure`, {
+      method: 'PATCH',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ structure: detectedItems, structures: structuresToSave }),
+    })
+      .then(r => {
+        if (!r.ok) throw new Error('No se pudo persistir estructura detectada');
+        return r.json();
+      })
+      .then(() => {
+        setSong(prev => ({ ...prev, structure: detectedItems, structures: structuresToSave }));
+        setAllStructures(structuresToSave);
+      })
+      .catch(() => {
+        // Permitir reintento en próxima apertura del modal
+        autoStructPersistedRef.current = false;
+      });
+  }, [estructuraOpen, song?.id, slides, allStructures]);
 
   // Persistir índice de estructura activa en localStorage
   useEffect(() => {
