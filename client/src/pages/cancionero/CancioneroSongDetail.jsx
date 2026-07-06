@@ -546,16 +546,31 @@ export default function CancioneroSongDetail() {
   // Slides reordenados según la estructura activa
   const orderedSlides = useMemo(() => {
     if (!activeStructItems.length || !slides.length) return slides;
-    const byLabel = {};
+
+    // Agrupar por bloques consecutivos de etiqueta para respetar ocurrencias reales
+    // (evita duplicar todo un label en cada repetición de la estructura).
+    const blocks = [];
     for (const s of slides) {
       const lbl = s.label?.trim() ?? '';
-      if (!byLabel[lbl]) byLabel[lbl] = [];
-      byLabel[lbl].push(s);
+      const last = blocks[blocks.length - 1];
+      if (!last || last.label !== lbl) blocks.push({ label: lbl, slides: [s] });
+      else last.slides.push(s);
     }
+
+    const blocksByLabel = {};
+    for (const b of blocks) {
+      if (!blocksByLabel[b.label]) blocksByLabel[b.label] = [];
+      blocksByLabel[b.label].push(b.slides);
+    }
+
+    const nextIdxByLabel = {};
     const result = [];
     for (const lbl of activeStructItems) {
-      const group = byLabel[lbl] ?? [];
-      result.push(...group);
+      const arr = blocksByLabel[lbl] ?? [];
+      if (arr.length === 0) continue;
+      const idx = nextIdxByLabel[lbl] ?? 0;
+      result.push(...arr[Math.min(idx, arr.length - 1)]);
+      nextIdxByLabel[lbl] = idx + 1;
     }
     return result.length > 0 ? result : slides;
   }, [slides, activeStructItems]);

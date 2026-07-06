@@ -103,14 +103,31 @@ export default function SongDetail() {
     const rawSlides = selectedSong?.slides ?? [];
     const items = allStructures[Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))]?.items ?? [];
     if (!items.length || !rawSlides.length) return rawSlides;
-    const byLabel = {};
+
+    // Consumir bloques por ocurrencia de etiqueta (no todas las slides del label cada vez).
+    const blocks = [];
     for (const s of rawSlides) {
       const lbl = s.label?.trim() ?? '';
-      if (!byLabel[lbl]) byLabel[lbl] = [];
-      byLabel[lbl].push(s);
+      const last = blocks[blocks.length - 1];
+      if (!last || last.label !== lbl) blocks.push({ label: lbl, slides: [s] });
+      else last.slides.push(s);
     }
+
+    const blocksByLabel = {};
+    for (const b of blocks) {
+      if (!blocksByLabel[b.label]) blocksByLabel[b.label] = [];
+      blocksByLabel[b.label].push(b.slides);
+    }
+
+    const nextIdxByLabel = {};
     const result = [];
-    for (const lbl of items) result.push(...(byLabel[lbl] ?? []));
+    for (const lbl of items) {
+      const arr = blocksByLabel[lbl] ?? [];
+      if (arr.length === 0) continue;
+      const idx = nextIdxByLabel[lbl] ?? 0;
+      result.push(...arr[Math.min(idx, arr.length - 1)]);
+      nextIdxByLabel[lbl] = idx + 1;
+    }
     return result.length > 0 ? result : rawSlides;
   }, [selectedSong?.id, selectedSong?.slides, allStructures, activeStructIdx]);
 
