@@ -89,7 +89,7 @@ function drawText(ctx, item) {
 }
 
 function drawItem(ctx, item) {
-  if (item.type === 'stroke' || item.type === 'highlighter') drawStroke(ctx, item);
+  if (item.type === 'stroke' || item.type === 'highlighter' || item.type === 'pencil') drawStroke(ctx, item);
   else if (item.type === 'circle')  drawCircle(ctx, item);
   else if (item.type === 'arrow')   drawArrow(ctx, item);
   else if (item.type === 'text')    drawText(ctx, item);
@@ -113,7 +113,7 @@ function distToSegment(px, py, ax, ay, bx, by) {
 }
 
 function itemIsNear(item, x, y, radius) {
-  if (item.type === 'stroke' || item.type === 'highlighter') {
+  if (item.type === 'stroke' || item.type === 'highlighter' || item.type === 'pencil') {
     const pts = item.points ?? [];
     for (let i = 0; i < pts.length - 1; i++) {
       if (distToSegment(x, y, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]) < radius) return true;
@@ -133,7 +133,7 @@ function itemIsNear(item, x, y, radius) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function AnnotationCanvas({ containerRef, annotations, onSave, visible }) {
+export default function AnnotationCanvas({ containerRef, annotations, onSave, visible, onClose }) {
   const canvasRef    = useRef(null);
   const [items, setItems] = useState(() => annotations ?? []);
   const [tool,  setTool]  = useState('pencil');
@@ -222,7 +222,7 @@ export default function AnnotationCanvas({ containerRef, annotations, onSave, vi
 
     if (tool === 'pencil' || tool === 'highlighter') {
       currentPts.current.push([x, y]);
-      preview.current = { type: tool, color, width, points: [...currentPts.current] };
+      preview.current = { type: tool === 'pencil' ? 'stroke' : 'highlighter', color, width, points: [...currentPts.current] };
     } else if (tool === 'circle') {
       preview.current = {
         type: 'circle', color, width,
@@ -333,6 +333,18 @@ export default function AnnotationCanvas({ containerRef, annotations, onSave, vi
         style={{ backdropFilter: 'blur(12px)' }}
         onMouseDown={e => e.stopPropagation()}
       >
+        {onClose && (
+          <button
+            onClick={onClose}
+            title="Cerrar anotaciones"
+            className="p-2 rounded-xl text-white/40 hover:bg-white/10 hover:text-white/80"
+          >
+            <X size={15} />
+          </button>
+        )}
+
+        {onClose && <div className="w-full h-px bg-white/10 my-1" />}
+
         {/* Herramientas */}
         {TOOLS.map(t => {
           const Icon = t.icon;

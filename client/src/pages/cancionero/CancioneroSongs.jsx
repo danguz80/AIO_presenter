@@ -13,6 +13,15 @@ function authHeaders() {
 
 export default function CancioneroSongs() {
   const navigate  = useNavigate();
+  const isAdmin = (() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
+    } catch {
+      return false;
+    }
+  })();
   const scrollRef = useRef(null);
   useVolumeKeys(
     () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
@@ -54,13 +63,15 @@ export default function CancioneroSongs() {
           </button>
           <h1 className="text-base font-bold flex-1">Canciones</h1>
           <span className="text-xs text-white/30">{songs.length} total</span>
-          <button
-            onClick={() => setNewSongOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/35 border border-yellow-400/30 text-yellow-300 text-xs font-semibold transition-colors"
-            title="Nueva canción"
-          >
-            <Plus size={14} /> Nueva
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setNewSongOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/35 border border-yellow-400/30 text-yellow-300 text-xs font-semibold transition-colors"
+              title="Nueva canción"
+            >
+              <Plus size={14} /> Nueva
+            </button>
+          )}
         </div>
         {/* Search */}
         <div className="px-4 pb-3">
@@ -133,7 +144,7 @@ export default function CancioneroSongs() {
       </div>
       <CancioneroNavbar />
 
-      {newSongOpen && (
+      {newSongOpen && isAdmin && (
         <SongFormModal
           onClose={() => setNewSongOpen(false)}
           onSaved={(saved) => {

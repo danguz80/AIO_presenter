@@ -153,6 +153,15 @@ function findNextSyllablePos(text, pos) {
 export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const presenter = usePresenterOptional(); // null fuera del PresenterProvider
   const isEdit = Boolean(song?.id);
+  const isAdmin = useMemo(() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const initialLinks = useMemo(() => {
     const fromLinks = Array.isArray(song?.links)
@@ -323,6 +332,10 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   };
 
   const handleDelete = async () => {
+    if (!isAdmin) {
+      setError('Solo administradores pueden editar o borrar canciones.');
+      return;
+    }
     if (!confirmDel) { setConfirmDel(true); return; }
     try {
       if (presenter) {
@@ -341,6 +354,10 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isAdmin) {
+      setError('Solo administradores pueden editar o crear canciones.');
+      return;
+    }
     if (!title.trim()) { setError('El título es requerido'); return; }
     const parsedSlides = textToSlides(body);
     // Preservar slideBackground de los slides originales (por posición) para no perderlos al editar
@@ -394,6 +411,20 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
       setSaving(false);
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="bg-surface-800 border border-surface-600 rounded-xl w-full max-w-md p-5">
+          <h2 className="text-base font-semibold text-white">Acceso restringido</h2>
+          <p className="text-sm text-zinc-400 mt-2">Solo administradores pueden abrir el modal de edición de canciones.</p>
+          <div className="mt-4 flex justify-end">
+            <button onClick={onClose} className="btn-primary px-4 py-2 text-sm">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-0 sm:p-3">

@@ -435,6 +435,15 @@ function CollapsibleLibrary() {
 function EventsPanel() {
   const today = new Date();
   const { state, actions } = usePresenter();
+  const isAdmin = (() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
+    } catch {
+      return false;
+    }
+  })();
   const [open,       setOpen]       = useState(false);
   const { width: panelWidth, onMouseDown: onResizeMouseDown } = useResizablePanel(280, 160, 480);
   const [year,       setYear]       = useState(today.getFullYear());
@@ -940,6 +949,7 @@ function EventsPanel() {
   };
 
   const openEditSong = async (song_id) => {
+    if (!isAdmin) return;
     try {
       const res = await authFetch(`/api/songs/${song_id}`);
       const data = await res.json();
@@ -1779,11 +1789,13 @@ function EventsPanel() {
                         {isPlayed ? <CheckCircle2 size={12} /> : <Circle size={12} />}
                       </button>
                       {/* Editar */}
-                      <button
-                        onClick={() => openEditSong(s.song_id)}
-                        className="px-1 py-2 text-zinc-600 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 shrink-0"
-                        title="Editar canción"
-                      ><Pencil size={10} /></button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => openEditSong(s.song_id)}
+                          className="px-1 py-2 text-zinc-600 hover:text-accent transition-colors opacity-0 group-hover:opacity-100 shrink-0"
+                          title="Editar canción"
+                        ><Pencil size={10} /></button>
+                      )}
                       {/* Quitar */}
                       <button
                         onClick={() => removeItem(i)}

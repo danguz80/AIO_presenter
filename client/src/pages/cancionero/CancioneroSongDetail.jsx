@@ -488,6 +488,15 @@ export default function CancioneroSongDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const isAdmin = (() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
+    } catch {
+      return false;
+    }
+  })();
 
   // Contexto de evento: lista de canciones para navegar prev/next
   const songList   = location.state?.songList   ?? null; // [{id, title}, ...]
@@ -1026,13 +1035,15 @@ export default function CancioneroSongDetail() {
               </button>
             </div>
           )}
-          <button
-            onClick={() => setEditOpen(true)}
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-            title="Editar canción"
-          >
-            <Pencil size={17} className="text-white/60" />
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setEditOpen(true)}
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              title="Editar canción"
+            >
+              <Pencil size={17} className="text-white/60" />
+            </button>
+          )}
         </div>
 
         {/* ════════════════════════════════════════════
@@ -1395,6 +1406,7 @@ export default function CancioneroSongDetail() {
         annotations={annotations}
         onSave={handleSaveAnnotations}
         visible={annotating}
+        onClose={() => setAnnotating(false)}
       />
     </div>
 

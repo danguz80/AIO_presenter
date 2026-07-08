@@ -119,6 +119,15 @@ function formatRelativeDate(dateStr) {
 
 export default function SongLibrary() {
   const { state, actions } = usePresenter();
+  const isAdmin = (() => {
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      if (!token) return false;
+      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
+    } catch {
+      return false;
+    }
+  })();
   const [search,      setSearch]      = useState('');
   const [showForm,    setShowForm]    = useState(false);
   const [showImport,  setShowImport]  = useState(false);
@@ -192,12 +201,14 @@ export default function SongLibrary() {
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
+    if (!isAdmin) return;
     if (!confirm('¿Eliminar esta canción?')) return;
     await actions.deleteSong(id);
   };
 
   const handleEdit = async (e, song) => {
     e.stopPropagation();
+    if (!isAdmin) return;
     setLoadingEdit(song.id);
     try {
       const res = await api.get(`/songs/${song.id}`);
@@ -240,12 +251,14 @@ export default function SongLibrary() {
           >
             <Upload size={13} />Importar
           </button>
-          <button
-            onClick={() => setShowForm(true)}
-            className="btn-primary py-1 px-2 flex items-center gap-1"
-          >
-            <Plus size={14} />Nueva
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setShowForm(true)}
+              className="btn-primary py-1 px-2 flex items-center gap-1"
+            >
+              <Plus size={14} />Nueva
+            </button>
+          )}
         </div>
       </div>
 
@@ -373,7 +386,7 @@ export default function SongLibrary() {
                   </div>
 
                   {/* Acciones hover (solo cuando no hay selección activa) */}
-                  {selectedIds.size === 0 && (
+                  {selectedIds.size === 0 && isAdmin && (
                     <div className="hidden group-hover:flex items-center gap-1">
                       <button
                         onClick={e => handleEdit(e, song)}
@@ -412,7 +425,7 @@ export default function SongLibrary() {
         />
       )}
 
-      {showForm && (
+      {showForm && isAdmin && (
         <SongFormModal
           song={editingSong}
           onClose={() => { setShowForm(false); setEditingSong(null); }}
