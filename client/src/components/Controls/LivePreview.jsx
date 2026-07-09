@@ -6,6 +6,7 @@ import VirtualRenderer from '../shared/VirtualRenderer';
 import OutputRenderer from '../shared/OutputRenderer';
 import { useTimerDisplay, fmtTimer } from '../../hooks/useTimerDisplay';
 import { Monitor, MonitorOff } from 'lucide-react';
+import { ensureMediaCached } from '../../utils/fsaUtils';
 
 import { getLabelColor } from '../../utils/labelColors';
 
@@ -15,6 +16,7 @@ export default function LivePreview() {
   const outputCfg    = state.outputConfig  ?? {};
   const displayCfg   = state.displayConfig ?? {};
   const timerSeconds = useTimerDisplay(state.timerState);
+  const [bgCacheKey, setBgCacheKey] = useState(0);
 
   // Medir el contenedor del preview Principal para canvas escalado (ancho + alto)
   const principalRef = useRef(null);
@@ -54,6 +56,24 @@ export default function LivePreview() {
     injectGoogleFont(outputCfg.artistFontFamily);
   }, [outputCfg.fontFamily, outputCfg.commentFontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
   const { slideData, nextSlideData, isBlank, background } = liveState;
+
+  // Pre-cachear fondos locales para que el preview principal refleje el output incluso en /local-media/*
+  useEffect(() => {
+    const bgName = liveState.backgroundMedia?.fileName || liveState.backgroundMedia?.name;
+    if (bgName && liveState.backgroundMedia?.url?.startsWith('/local-media/')) {
+      ensureMediaCached(bgName).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+    }
+
+    const titleName = outputCfg.titleBackground?.fileName || outputCfg.titleBackground?.name;
+    if (titleName && outputCfg.titleBackground?.url?.startsWith('/local-media/')) {
+      ensureMediaCached(titleName).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+    }
+
+    const bibleName = outputCfg.bibleBackground?.fileName || outputCfg.bibleBackground?.name;
+    if (bibleName && outputCfg.bibleBackground?.url?.startsWith('/local-media/')) {
+      ensureMediaCached(bibleName).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
+    }
+  }, [liveState.backgroundMedia?.url, outputCfg.titleBackground?.url, outputCfg.bibleBackground?.url]);
 
   const live = !isBlank && !!slideData;
 
@@ -316,6 +336,7 @@ export default function LivePreview() {
                   slideIndex={liveState.slideIndex}
                   totalSlides={liveState.totalSlides}
                   backgroundMedia={liveState.backgroundMedia}
+                  bgCacheKey={bgCacheKey}
                 />
                 {/* Overlay timer/mensaje en preview output */}
                 {(() => {

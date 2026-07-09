@@ -94,6 +94,15 @@ export default function SongDetail() {
       ensureMediaCached(name).catch(() => {});
   }, [outputCfg.bibleBackground?.url]);
 
+  // Pre-cachear fondo global en vivo (imagen o video) para que miniaturas y preview interno carguen igual que Output.
+  useEffect(() => {
+    const bg = liveState.backgroundMedia;
+    const name = bg?.fileName || bg?.name;
+    if (name && bg?.url?.startsWith('/local-media/')) {
+      ensureMediaCached(name).catch(() => {});
+    }
+  }, [liveState.backgroundMedia?.url]);
+
   // ── Estructura activa (misma lógica que cancionero) ───────────────────────
   const [activeStructIdx, setActiveStructIdx] = useState(0);
   // Reiniciar índice al cambiar de canción y cargar el guardado en localStorage
@@ -544,8 +553,8 @@ export default function SongDetail() {
     chordsColor:  stageCfg.chordsColor  ?? '#fde047',
     commentColor: stageCfg.commentColor ?? '#facc15',
   };
-  // Fondo global si es imagen (evitamos videos en thumbnails)
-  const thumbGlobalBg = liveState.backgroundMedia?.mediaType === 'image' ? liveState.backgroundMedia : null;
+  // Fondo global de salida (imagen o video) para reflejar exactamente el output real en miniaturas.
+  const thumbGlobalBg = liveState.backgroundMedia ?? null;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -910,12 +919,12 @@ export default function SongDetail() {
                           }}
                           isBlank={false}
                           background={
-                            slideBg?.mediaType === 'video'
-                              ? { type: 'color', color: 'transparent' }
+                            slideBg?.mediaType
+                              ? { type: 'color', color: '#000000' }
                               : liveState.background ?? { type: 'color', color: '#000000' }
                           }
                           backgroundMedia={
-                            slide.slide_background?.mediaType === 'image'
+                            slide.slide_background?.mediaType
                               ? slide.slide_background
                               : thumbGlobalBg
                           }
