@@ -420,6 +420,19 @@ export default function SongDetail() {
     };
   }, [selectedSong, selectedSlide, schedule, actions]);
 
+  // Navegación remota (móvil/otros clientes): consume navigateRequest y usa
+  // la misma ruta de navegación local para que también cuente en auto-marcado.
+  const lastNavTsRef = useRef(0);
+  useEffect(() => {
+    if (!navigateRequest || !selectedSong) return;
+    const ts = Number(navigateRequest.ts || 0);
+    if (ts && ts === lastNavTsRef.current) return;
+    if (ts) lastNavTsRef.current = ts;
+    if (navigateRequest.dir === 'next' || navigateRequest.dir === 'prev') {
+      navigate(navigateRequest.dir);
+    }
+  }, [navigateRequest, selectedSong?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!selectedSong) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-zinc-600 gap-3">
@@ -514,19 +527,6 @@ export default function SongDetail() {
       actions.markPlayed(eventId, occurrenceDate, songIdNum, seen, total, false);
     }
   };
-
-  // Navegación remota (móvil/otros clientes): consume navigateRequest y usa
-  // la misma ruta de navegación local para que también cuente en auto-marcado.
-  const lastNavTsRef = useRef(0);
-  useEffect(() => {
-    if (!navigateRequest || !selectedSong) return;
-    const ts = Number(navigateRequest.ts || 0);
-    if (ts && ts === lastNavTsRef.current) return;
-    if (ts) lastNavTsRef.current = ts;
-    if (navigateRequest.dir === 'next' || navigateRequest.dir === 'prev') {
-      navigate(navigateRequest.dir);
-    }
-  }, [navigateRequest, selectedSong?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isLive = (slide, index) =>
     liveState.slideData?.slideId === slide.id &&
