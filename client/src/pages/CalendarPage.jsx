@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar,
-  Music, Trash2, X, Clock, RefreshCw, ArrowLeft,
+  Music, Trash2, X, Clock, RefreshCw, ArrowLeft, ExternalLink,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import CancioneroNavbar from './cancionero/CancioneroNavbar';
 
 const DAYS_ES   = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -23,6 +23,14 @@ const RECURRENCE_LABEL = { weekly: 'Semanal', biweekly: 'Cada 2 semanas', monthl
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function dateKey(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
+function formatAbsenceShort(dateStr) {
+  const d = new Date(`${String(dateStr).slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return String(dateStr).slice(0, 10);
+  const weekday = d.toLocaleDateString('es-CL', { weekday: 'short' }).toLowerCase().replace(/\./g, '').trim();
+  const day = d.toLocaleDateString('es-CL', { day: '2-digit' });
+  const month = d.toLocaleDateString('es-CL', { month: 'short' }).toLowerCase().replace(/\./g, '').trim();
+  return `${weekday}-${day}-${month}`;
+}
 function norm(str) {
   return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
@@ -306,11 +314,13 @@ function EventModal({ event, defaultDate, allSongs, onClose, onSaved }) {
 
 // ─── CalendarPage ─────────────────────────────────────────────────────────────
 export default function CalendarPage() {
+  const navigate = useNavigate();
   const today = new Date();
   const [year,         setYear]         = useState(today.getFullYear());
   const [month,        setMonth]        = useState(today.getMonth());
   const [selectedDay,  setSelectedDay]  = useState(today.getDate());
   const [events,       setEvents]       = useState([]);
+  const [blockedDates, setBlockedDates] = useState([]);
   const [allSongs,     setAllSongs]     = useState([]);
   const [showModal,    setShowModal]    = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
@@ -323,14 +333,19 @@ export default function CalendarPage() {
       .catch(console.error);
   }, []);
 
-  // Cargar eventos del mes actual
+  // Cargar eventos y ausencias del mes actual
   const loadEvents = () => {
     const start = `${year}-${pad(month + 1)}-01`;
     const lastDay = new Date(year, month + 1, 0).getDate();
     const end = `${year}-${pad(month + 1)}-${pad(lastDay)}`;
-    authFetch(`/api/events?start=${start}&end=${end}`)
-      .then(r => r.json())
-      .then(data => setEvents(Array.isArray(data) ? data : []))
+    Promise.all([
+      authFetch(`/api/events?start=${start}&end=${end}`).then(r => r.json()).catch(() => []),
+      authFetch(`/api/blocked-dates?start=${start}&end=${end}`).then(r => r.json()).catch(() => []),
+    ])
+      .then(([eventsData, blockedData]) => {
+        setEvents(Array.isArray(eventsData) ? eventsData : []);
+        setBlockedDates(Array.isArray(blockedData) ? blockedData : []);
+      })
       .catch(console.error);
   };
 
@@ -351,6 +366,27 @@ export default function CalendarPage() {
     if (!eventsByDate[k]) eventsByDate[k] = [];
     eventsByDate[k].push(ev);
   }
+
+  const blockedByDate = {};
+  for (const blk of blockedDates) {
+    const k = String(blk.date).slice(0, 10);
+    if (!blockedByDate[k]) blockedByDate[k] = [];
+    blockedByDate[k].push(blk);
+  }
+
+  const blockedByUser = blockedDates.reduce((acc, blk) => {
+    const name = String(blk.display_name || '').trim() || `Integrante ${blk.user_id || ''}`.trim();
+    if (!acc[name]) acc[name] = [];
+    acc[name].push(blk);
+    return acc;
+  }, {});
+
+  const blockedUsersList = Object.entries(blockedByUser)
+    .map(([name, items]) => ({
+      name,
+      items: [...items].sort((a, b) => String(a.date).slice(0, 10).localeCompare(String(b.date).slice(0, 10))),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
   const todayKey   = dateKey(today.getFullYear(), today.getMonth(), today.getDate());
   const selKey     = selectedDay ? dateKey(year, month, selectedDay) : null;
@@ -388,6 +424,14 @@ export default function CalendarPage() {
     if (!window.confirm('¿Eliminar este evento?')) return;
     await authFetch(`/api/events/${id}`, { method: 'DELETE' });
     loadEvents();
+  };
+
+  const openEventDetail = (ev) => {
+    if (!ev?.id) return;
+    const occurrenceDate = String(ev.occurrence_date ?? ev.date ?? '').slice(0, 10) || null;
+    navigate(`/cancionero/eventos/${ev.id}`, {
+      state: { occurrence_date: occurrenceDate },
+    });
   };
 
   return (
@@ -444,6 +488,7 @@ export default function CalendarPage() {
             const isToday   = k === todayKey;
             const isSelected = day === selectedDay;
             const dayEvts   = eventsByDate[k] || [];
+            const dayBlocked = blockedByDate[k] || [];
 
             return (
               <button
@@ -466,20 +511,79 @@ export default function CalendarPage() {
                 </span>
                 <div className="flex flex-col gap-px w-full overflow-hidden">
                   {dayEvts.slice(0, 2).map(ev => (
-                    <span
+                    <button
                       key={ev.id || ev.date + ev.title}
-                      className="text-[10px] truncate bg-accent/25 text-accent-light px-1 py-px rounded"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEventDetail(ev);
+                      }}
+                      className="text-[10px] truncate bg-accent/25 text-accent-light px-1 py-px rounded text-left hover:bg-accent/35 transition-colors"
+                      title="Abrir detalle del evento"
                     >
                       {ev.time ? ev.time.slice(0, 5) + ' ' : ''}{ev.title}
-                    </span>
+                    </button>
                   ))}
                   {dayEvts.length > 2 && (
                     <span className="text-[10px] text-zinc-500">+{dayEvts.length - 2}</span>
+                  )}
+
+                  {dayBlocked.length > 0 && (
+                    <div className="flex items-center gap-0.5 mt-0.5">
+                      {dayBlocked.slice(0, 4).map((blk, idx) => (
+                        <span
+                          key={`${blk.id || blk.user_id || 'b'}-${idx}`}
+                          className="w-1.5 h-1.5 rounded-full bg-rose-400"
+                          title={`${blk.display_name || 'Integrante'} ausente`}
+                        />
+                      ))}
+                      {dayBlocked.length > 4 && (
+                        <span className="text-[9px] text-rose-300">+{dayBlocked.length - 4}</span>
+                      )}
+                    </div>
                   )}
                 </div>
               </button>
             );
           })}
+        </div>
+
+        {/* Listado general de ausencias por usuario */}
+        <div className="mt-2 sm:mt-3 rounded-xl border border-surface-700 bg-surface-800/70 p-2 sm:p-3 overflow-y-auto max-h-[28vh]">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xs sm:text-sm font-semibold text-white/85">Ausencias del mes</h2>
+            <span className="text-[10px] sm:text-xs text-zinc-400">{blockedDates.length} en total</span>
+          </div>
+
+          {blockedUsersList.length === 0 ? (
+            <p className="text-xs text-zinc-500">No hay ausencias registradas este mes.</p>
+          ) : (
+            <div className="space-y-2">
+              {blockedUsersList.map(userGroup => (
+                <div key={userGroup.name} className="rounded-lg border border-surface-700 bg-surface-700/50 p-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs sm:text-sm font-semibold text-white">{userGroup.name}</p>
+                    <span className="text-[10px] text-zinc-400">{userGroup.items.length} ausencia{userGroup.items.length === 1 ? '' : 's'}</span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {userGroup.items.map(item => {
+                      const label = formatAbsenceShort(item.date);
+                      return (
+                        <span
+                          key={item.id || `${item.user_id}-${item.date}`}
+                          className="inline-flex items-center gap-1 rounded-md border border-rose-300/30 bg-rose-500/10 text-rose-200 px-2 py-0.5 text-[10px] sm:text-xs"
+                          title={item.reason || ''}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-300" />
+                          {label}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -548,6 +652,13 @@ export default function CalendarPage() {
                       )}
                     </div>
                     <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => openEventDetail(ev)}
+                        className="text-zinc-400 hover:text-cyan-300 p-1 rounded hover:bg-surface-600 transition-colors"
+                        title="Abrir en detalle de evento"
+                      >
+                        <ExternalLink size={13} />
+                      </button>
                       <button
                         onClick={() => openEdit(ev)}
                         className="text-zinc-400 hover:text-white p-1 rounded hover:bg-surface-600 transition-colors"

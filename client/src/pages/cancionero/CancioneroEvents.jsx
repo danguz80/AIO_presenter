@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History, AlertTriangle, Download } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
 
@@ -22,6 +22,12 @@ function pastStr(days) {
   return toLocalDateStr(d);
 }
 function toDateStr(d) { return String(d).slice(0, 10); }
+function monthKeyFromDateStr(dateStr) { return toDateStr(dateStr).slice(0, 7); }
+function monthLabelFromKey(monthKey) {
+  const [y, m] = monthKey.split('-').map(Number);
+  const d = new Date(y, (m || 1) - 1, 1);
+  return d.toLocaleDateString('es-CL', { month: 'long', year: 'numeric' });
+}
 function formatDate(dateStr) {
   const d = new Date(toDateStr(dateStr) + 'T12:00:00');
   return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -53,6 +59,7 @@ export default function CancioneroEvents() {
   const [pastEvents,  setPastEvents]  = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [expanded,    setExpanded]    = useState({});
+  const [monthOpen,   setMonthOpen]   = useState({});
   const [pastOpen,    setPastOpen]    = useState(false);
   const [showCreate,  setShowCreate]  = useState(false);
   const [creating,    setCreating]    = useState(false);
@@ -118,6 +125,137 @@ export default function CancioneroEvents() {
   }, []);
 
   const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleMonth = (key) => setMonthOpen(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const futureByMonth = useMemo(() => {
+    const grouped = {};
+    for (const ev of events) {
+      const k = monthKeyFromDateStr(ev.occurrence_date ?? ev.date);
+      if (!grouped[k]) grouped[k] = [];
+      grouped[k].push(ev);
+    }
+    return Object.keys(grouped)
+      .sort((a, b) => a.localeCompare(b))
+      .map(k => ({ key: k, label: monthLabelFromKey(k), events: grouped[k] }));
+  }, [events]);
+
+  useEffect(() => {
+    const currentMonthKey = monthKeyFromDateStr(todayStr());
+    setMonthOpen(prev => {
+      const next = {};
+      for (const g of futureByMonth) {
+        next[g.key] = prev[g.key] ?? (g.key === currentMonthKey);
+      }
+      if (futureByMonth.length > 0 && !Object.values(next).some(Boolean)) {
+        next[futureByMonth[0].key] = true;
+      }
+      return next;
+    });
+  }, [futureByMonth]);
+
+  const downloadBandSummaryPDF = async (monthGroup) => {
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      const margin = 12;
+      const maxW = pageW - margin * 2;
+      let y = 16;
+
+      const ensureSpace = (h = 8) => {
+        if (y + h > pageH - margin) {
+          doc.addPage();
+          y = margin;
+        }
+      };
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(20, 20, 45);
+      doc.text('Resumen de configuraciones de banda', margin, y);
+      y += 7;
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(90, 90, 120);
+      doc.text(monthGroup.label, margin, y);
+      y += 8;
+
+      for (const ev of monthGroup.events) {
+        const rawDate = toDateStr(ev.occurrence_date ?? ev.date);
+        const [yy, mm, dd] = String(rawDate).split('-');
+        const evDate = (yy && mm && dd) ? `${dd}-${mm}-${yy}` : rawDate;
+        const cfg = ev.band_config_id ? bandConfigs.find(c => Number(c.id) === Number(ev.band_config_id)) : null;
+        const slots = Array.isArray(cfg?.slots) ? cfg.slots : [];
+
+        ensureSpace(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(25, 25, 55);
+        const eventTitle = `${evDate}${ev.time ? ` · ${String(ev.time).slice(0, 5)}` : ''} · ${ev.title || 'Evento'}`;
+        doc.text(eventTitle, margin, y);
+        y += 5;
+
+        if (!cfg) {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(9);
+          doc.setTextColor(130, 130, 150);
+          doc.text('Sin configuración de banda asignada', margin + 2, y);
+          y += 6;
+          continue;
+        }
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(9.5);
+        doc.setTextColor(70, 70, 120);
+        doc.text(`Configuración: ${cfg.name || 'Sin nombre'}${cfg.subtitle ? ` · ${cfg.subtitle}` : ''}`, margin + 2, y);
+        y += 5;
+
+        if (slots.length === 0) {
+          doc.setFont('helvetica', 'italic');
+          doc.setFontSize(9);
+          doc.setTextColor(130, 130, 150);
+          doc.text('Sin músicos asignados', margin + 4, y);
+          y += 6;
+        } else {
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.setTextColor(55, 55, 85);
+          slots.forEach((slot, idx) => {
+            const who = (
+              slot.userName ||
+              slot.user_name ||
+              slot.memberName ||
+              slot.member_name ||
+              slot.display_name ||
+              slot.name ||
+              slot.email ||
+              ''
+            ).toString().trim() || `Músico ${idx + 1}`;
+            const line = `• ${who}${slot.instrument ? ` — ${slot.instrument}` : ''}`;
+            const wrapped = doc.splitTextToSize(line, maxW - 8);
+            ensureSpace(4 * wrapped.length + 1);
+            doc.text(wrapped, margin + 4, y);
+            y += 4 * wrapped.length;
+          });
+          y += 2;
+        }
+
+        ensureSpace(4);
+        doc.setDrawColor(210, 210, 225);
+        doc.setLineWidth(0.2);
+        doc.line(margin, y, pageW - margin, y);
+        y += 5;
+      }
+
+      const safeMonth = monthGroup.label.toLowerCase().replace(/\s+/g, '-');
+      doc.save(`config-bandas-${safeMonth}.pdf`);
+    } catch (err) {
+      console.error('Error al generar PDF de configuraciones de banda:', err);
+      alert('No se pudo generar el PDF del mes');
+    }
+  };
 
   const createEvent = async () => {
     if (!newEv.title.trim() || !newEv.date) {
@@ -407,7 +545,7 @@ export default function CancioneroEvents() {
               )}
             </div>
 
-            {/* ── Eventos futuros (abajo, siempre visibles, ascendente) ── */}
+            {/* ── Eventos futuros (abajo), agrupados por mes colapsable ── */}
             <div className="mt-6">
               <div className="w-full flex items-center gap-2 py-2 text-left">
                 <CalendarDays size={15} className="text-white/30" />
@@ -417,7 +555,43 @@ export default function CancioneroEvents() {
 
               {events.length > 0 ? (
                 <div className="space-y-3 mt-2">
-                  {events.map(ev => renderEvent(ev, false))}
+                  {futureByMonth.map(group => (
+                    <div key={group.key} className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
+                        <button
+                          onClick={() => toggleMonth(group.key)}
+                          className="flex-1 flex items-center gap-2 text-left"
+                        >
+                          <span className="text-[11px] font-semibold text-white/70 uppercase tracking-wider">
+                            {group.label}
+                          </span>
+                          <span className="text-xs text-white/30">({group.events.length})</span>
+                        </button>
+
+                        <button
+                          onClick={() => downloadBandSummaryPDF(group)}
+                          className="shrink-0 flex items-center gap-1.5 text-[11px] px-2 py-1 rounded border border-white/15 text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                          title={`Descargar resumen de configuraciones de banda de ${group.label}`}
+                        >
+                          <Download size={12} /> PDF bandas
+                        </button>
+
+                        <button
+                          onClick={() => toggleMonth(group.key)}
+                          className="shrink-0 text-white/40 hover:text-white/70"
+                          title={monthOpen[group.key] ? 'Contraer mes' : 'Expandir mes'}
+                        >
+                          {monthOpen[group.key] ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </button>
+                      </div>
+
+                      {monthOpen[group.key] && (
+                        <div className="p-2 space-y-3">
+                          {group.events.map(ev => renderEvent(ev, false))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-white/40 text-center">
