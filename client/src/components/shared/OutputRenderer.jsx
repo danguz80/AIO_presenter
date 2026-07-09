@@ -1,6 +1,48 @@
-import { useEffect, Fragment } from 'react';
+import { useEffect, useRef, Fragment } from 'react';
 import { stripChords, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
+
+function StaticVideoFrame({ src, fit = 'contain', bg = '#000' }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || !src) return;
+
+    const seekPreview = () => {
+      try {
+        const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
+        v.currentTime = Math.min(0.5, dur > 0 ? dur * 0.1 : 0.5);
+      } catch {}
+    };
+
+    const onMeta = () => seekPreview();
+    const onSeeked = () => {
+      try { v.pause(); } catch {}
+    };
+
+    v.addEventListener('loadedmetadata', onMeta);
+    v.addEventListener('seeked', onSeeked);
+
+    return () => {
+      v.removeEventListener('loadedmetadata', onMeta);
+      v.removeEventListener('seeked', onSeeked);
+    };
+  }, [src]);
+
+  return (
+    <video
+      key={src}
+      ref={ref}
+      src={src}
+      muted
+      playsInline
+      preload="metadata"
+      data-bg-video="1"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: bg, zIndex: 0 }}
+    />
+  );
+}
 
 /**
  * OutputRenderer — render idéntico al de la ventana /output.
@@ -13,7 +55,7 @@ import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
  *  - background: { type, color, url }
  *  - slideIndex, totalSlides: para indicador de progreso
  */
-export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia, containerWidth = null, containerHeight = null, bgCacheKey = 0 }) {
+export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia, containerWidth = null, containerHeight = null, bgCacheKey = 0, staticVideoFrame = false }) {
   // Inyectar Google Fonts
   useEffect(() => {
     injectGoogleFont(cfg.fontFamily);
@@ -115,8 +157,12 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
       {/* Capa de fondo multimedia */}
       {hasBg && (
         effectiveBgMedia.mediaType === 'video'
-          ? <video key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} autoPlay loop muted playsInline preload="auto" data-bg-video="1"
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />
+          ? (
+            staticVideoFrame
+              ? <StaticVideoFrame key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} fit={bgFit} bg="#000" />
+              : <video key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} autoPlay loop muted playsInline preload="auto" data-bg-video="1"
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />
+          )
           : <img key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />
       )}

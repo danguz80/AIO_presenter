@@ -61,6 +61,7 @@ export default function SongDetail() {
     return [];
   }, [selectedSong?.links, selectedSong?.song_links, selectedSong?.link]);
   const [selectedLinkUrl, setSelectedLinkUrl] = useState('');
+  const [thumbBgCacheKey, setThumbBgCacheKey] = useState(0);
 
   useEffect(() => {
     setSelectedLinkUrl(songLinks[0]?.url || '');
@@ -97,11 +98,30 @@ export default function SongDetail() {
   // Pre-cachear fondo global en vivo (imagen o video) para que miniaturas y preview interno carguen igual que Output.
   useEffect(() => {
     const bg = liveState.backgroundMedia;
-    const name = bg?.fileName || bg?.name;
-    if (name && bg?.url?.startsWith('/local-media/')) {
-      ensureMediaCached(name).catch(() => {});
+    const url = bg?.url;
+    const name = bg?.fileName || bg?.name || (url?.startsWith('/local-media/') ? decodeURIComponent(url.replace('/local-media/', '')) : null);
+    if (name && url?.startsWith('/local-media/')) {
+      ensureMediaCached(name).then(ok => { if (ok) setThumbBgCacheKey(k => k + 1); }).catch(() => {});
     }
   }, [liveState.backgroundMedia?.url]);
+
+  // Pre-cachear fondos de slides para que miniaturas de video local reintenten tras cachearse.
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      const slides = Array.isArray(selectedSong?.slides) ? selectedSong.slides : [];
+      const localNames = slides
+        .map(s => s?.slide_background)
+        .filter(bg => bg?.url?.startsWith('/local-media/'))
+        .map(bg => bg.fileName || bg.name || decodeURIComponent(String(bg.url).replace('/local-media/', '')))
+        .filter(Boolean);
+      if (localNames.length === 0) return;
+      const results = await Promise.all(localNames.map(n => ensureMediaCached(n).catch(() => false)));
+      if (!cancelled && results.some(Boolean)) setThumbBgCacheKey(k => k + 1);
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [selectedSong?.id, selectedSong?.slides]);
 
   // ── Estructura activa (misma lógica que cancionero) ───────────────────────
   const [activeStructIdx, setActiveStructIdx] = useState(0);
@@ -553,8 +573,8 @@ export default function SongDetail() {
     chordsColor:  stageCfg.chordsColor  ?? '#fde047',
     commentColor: stageCfg.commentColor ?? '#facc15',
   };
-  // Fondo global de salida (imagen o video) para reflejar exactamente el output real en miniaturas.
-  const thumbGlobalBg = liveState.backgroundMedia ?? null;
+  // En miniaturas solo aplicamos fondo propio del slide; no heredar el fondo de la diapo activa.
+  const thumbGlobalBg = null;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -758,8 +778,7 @@ export default function SongDetail() {
                   {/* Fondo: imagen/video del titleBackground o color sólido */}
                   {outputCfg.titleBackground ? (
                     outputCfg.titleBackground.mediaType === 'video'
-                      ? <video src={outputCfg.titleBackground.url} muted playsInline preload="metadata"
-                          className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
+                      ? <VideoFrameThumb url={outputCfg.titleBackground.url} fileName={outputCfg.titleBackground.name || outputCfg.titleBackground.fileName} />
                       : <img src={outputCfg.titleBackground.url} alt=""
                           className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0 }} />
                   ) : (
@@ -930,6 +949,8 @@ export default function SongDetail() {
                           }
                           slideIndex={index}
                           totalSlides={orderedSlides.length}
+                          bgCacheKey={thumbBgCacheKey}
+                          staticVideoFrame={true}
                         />
                       </div>
                     </div>

@@ -56,11 +56,13 @@ export default function LivePreview() {
     injectGoogleFont(outputCfg.artistFontFamily);
   }, [outputCfg.fontFamily, outputCfg.commentFontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
   const { slideData, nextSlideData, isBlank, background } = liveState;
+  const principalBgMedia = liveState.slideData?.slideBackground || liveState.backgroundMedia;
 
   // Pre-cachear fondos locales para que el preview principal refleje el output incluso en /local-media/*
   useEffect(() => {
-    const bgName = liveState.backgroundMedia?.fileName || liveState.backgroundMedia?.name;
-    if (bgName && liveState.backgroundMedia?.url?.startsWith('/local-media/')) {
+    const bgUrl = principalBgMedia?.url;
+    const bgName = principalBgMedia?.fileName || principalBgMedia?.name || (bgUrl?.startsWith('/local-media/') ? decodeURIComponent(bgUrl.replace('/local-media/', '')) : null);
+    if (bgName && bgUrl?.startsWith('/local-media/')) {
       ensureMediaCached(bgName).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
     }
 
@@ -73,7 +75,7 @@ export default function LivePreview() {
     if (bibleName && outputCfg.bibleBackground?.url?.startsWith('/local-media/')) {
       ensureMediaCached(bibleName).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
     }
-  }, [liveState.backgroundMedia?.url, outputCfg.titleBackground?.url, outputCfg.bibleBackground?.url]);
+  }, [principalBgMedia?.url, outputCfg.titleBackground?.url, outputCfg.bibleBackground?.url]);
 
   const live = !isBlank && !!slideData;
 
@@ -335,8 +337,9 @@ export default function LivePreview() {
                   background={liveState.background}
                   slideIndex={liveState.slideIndex}
                   totalSlides={liveState.totalSlides}
-                  backgroundMedia={liveState.backgroundMedia}
+                  backgroundMedia={principalBgMedia}
                   bgCacheKey={bgCacheKey}
+                  staticVideoFrame={true}
                 />
                 {/* Overlay timer/mensaje en preview output */}
                 {(() => {
