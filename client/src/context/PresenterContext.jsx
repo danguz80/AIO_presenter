@@ -566,23 +566,19 @@ export function PresenterProvider({ children }) {
         total_slides: totalSlides,
         manual,
       });
-      dispatch({ type: 'ADD_EVENT_PLAY', payload: songId });
-      const ctx = state.eventPlaysContext;
-      if (ctx) {
-        const ids = [...state.eventPlays, songId];
-        socketRef.current?.emit('event:plays', { ids, ctx });
-      }
+      const nextIds = Array.from(new Set([...state.eventPlays, songId]));
+      const ctx = { eventId, occurrenceDate: occurrenceDate || null };
+      dispatch({ type: 'SET_EVENT_PLAYS', payload: { ids: nextIds, ctx } });
+      socketRef.current?.emit('event:plays', { ids: nextIds, ctx });
     },
 
     unmarkPlayed: async (eventId, occurrenceDate, songId) => {
       const q = occurrenceDate ? `?occurrence_date=${occurrenceDate}` : '';
       await api.delete(`/events/${eventId}/plays/${songId}${q}`);
-      dispatch({ type: 'REMOVE_EVENT_PLAY', payload: songId });
-      const ctx = state.eventPlaysContext;
-      if (ctx) {
-        const ids = [...state.eventPlays].filter(id => id !== songId);
-        socketRef.current?.emit('event:plays', { ids, ctx });
-      }
+      const nextIds = [...state.eventPlays].filter(id => String(id) !== String(songId));
+      const ctx = { eventId, occurrenceDate: occurrenceDate || null };
+      dispatch({ type: 'SET_EVENT_PLAYS', payload: { ids: nextIds, ctx } });
+      socketRef.current?.emit('event:plays', { ids: nextIds, ctx });
     },
 
     reloadSongs: async (search, labelFilter) => {

@@ -2513,9 +2513,20 @@ function StageMobileSlide({ content, chordsColor, lyricsColor, showComments, com
 
 // ─── Botón de navegación de slides ───────────────────────────────────────────
 function NavBtn({ flash, onPointerDown, children }) {
+  const lastFireRef = useRef(0);
+  const fire = (e) => {
+    e?.preventDefault?.();
+    const now = Date.now();
+    if (now - lastFireRef.current < 180) return;
+    lastFireRef.current = now;
+    onPointerDown?.();
+  };
+
   return (
     <button
-      onPointerDown={onPointerDown}
+      onPointerDown={fire}
+      onTouchStart={fire}
+      onClick={fire}
       className={`flex flex-col items-center justify-center gap-1 py-4 xs:py-5 sm:py-6 rounded-2xl border-2 transition-all active:scale-95 ${
         flash ? 'bg-accent/30 border-accent text-accent' : 'bg-surface-800 border-surface-600 text-zinc-300'
       }`}
