@@ -618,12 +618,13 @@ export default function MobileControllerPage() {
       else setActiveSongSlideIndex(null);
     } else if (slideData?.type === 'title') {
       setActiveSongSlideIndex(-1);
-    } else if (slideData?.type === 'bible' && slideData.reference && bibleVerses.length) {
-      // Sincronizar versículo activo en móvil cuando el PC navega bíblicamente
-      const match = slideData.reference.trim().match(/^.+?\s+\d+:(\d+)$/);
-      const verseNum = match ? parseInt(match[1], 10) : null;
-      if (verseNum !== null) {
-        const v = bibleVerses.find(v => v.verse === verseNum);
+    } else if (slideData?.type === 'bible' && slideData.reference) {
+      // Sincronizar versículo activo en móvil cuando el PC navega bíblicamente.
+      // La referencia puede ser "Libro cap:verso" o "Libro cap:verso (N/M)" (multi-página)
+      const match = slideData.reference.trim().match(/^(.+?)\s+(\d+):(\d+)/);
+      if (match && bibleVerses.length) {
+        const verseNum = parseInt(match[3], 10);
+        const v = bibleVerses.find(vv => vv.verse === verseNum);
         if (v && v.id !== activeVerse?.id) {
           setActiveVerse(v);
           setActiveVerseList(bibleVerses);
@@ -683,7 +684,8 @@ export default function MobileControllerPage() {
   const trigger = (fn, dir) => { fn(); setFlash(dir); setTimeout(() => setFlash(null), 200); };
   const handlePrev  = () => {
     // ── Modo Biblia: navegar dentro de activeVerseList / páginas ──────────
-    if (slideData?.type === 'bible' && activeVerse) {
+    if (slideData?.type === 'bible') {
+      if (!activeVerse) { trigger(() => actions.navigate('prev'), 'prev'); return; }
       if (activeSplit) {
         const { verse: sv, pages, pageIdx, list } = activeSplit;
         if (pageIdx > 0) {
@@ -724,7 +726,8 @@ export default function MobileControllerPage() {
   };
   const handleNext  = () => {
     // ── Modo Biblia: navegar dentro de activeVerseList / páginas ──────────
-    if (slideData?.type === 'bible' && activeVerse) {
+    if (slideData?.type === 'bible') {
+      if (!activeVerse) { trigger(() => actions.navigate('next'), 'next'); return; }
       if (activeSplit) {
         const { verse: sv, pages, pageIdx, list } = activeSplit;
         const total = pages.length;
@@ -2350,35 +2353,15 @@ export default function MobileControllerPage() {
                   ))}
                 </div>
                 {(activeVerse || activeSplit) && (
-                  <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center gap-2 bg-surface-900/80">
+                  <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center justify-center gap-2 bg-surface-900/80">
                     {activeSplit ? (
-                      <>
-                        <span className="text-[10px] font-bold text-zinc-500 shrink-0">{activeSplit.pageIdx + 1}/{activeSplit.pages.length}</span>
-                        <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
-                          {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
-                        </p>
-                        {activeSplit.pageIdx < activeSplit.pages.length - 1 && (
-                          <button onClick={handleNext} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold">
-                            Parte {activeSplit.pageIdx + 2} <ChevronRight size={13} />
-                          </button>
-                        )}
-                      </>
+                      <span className="text-xs text-accent font-semibold">
+                        {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse} &middot; {activeSplit.pageIdx + 1}/{activeSplit.pages.length}
+                      </span>
                     ) : (
-                      <>
-                        <button
-                          onClick={() => { const i = bibleResults.findIndex(v => v.id === activeVerse.id); if (i > 0) sendVerse(bibleResults[i - 1], bibleResults); }}
-                          disabled={bibleResults.findIndex(v => v.id === activeVerse.id) <= 0}
-                          className="p-1.5 rounded-lg bg-surface-700 border border-surface-600 text-zinc-300 disabled:opacity-30"
-                        ><ChevronLeft size={16} /></button>
-                        <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
-                          {activeVerse.book_name} {activeVerse.chapter}:{activeVerse.verse}
-                        </p>
-                        <button
-                          onClick={() => { const i = bibleResults.findIndex(v => v.id === activeVerse.id); if (i < bibleResults.length - 1) sendVerse(bibleResults[i + 1], bibleResults); }}
-                          disabled={bibleResults.findIndex(v => v.id === activeVerse.id) >= bibleResults.length - 1}
-                          className="p-1.5 rounded-lg bg-surface-700 border border-surface-600 text-zinc-300 disabled:opacity-30"
-                        ><ChevronRight size={16} /></button>
-                      </>
+                      <span className="text-xs text-accent font-semibold">
+                        {activeVerse.book_name} {activeVerse.chapter}:{activeVerse.verse}
+                      </span>
                     )}
                   </div>
                 )}
@@ -2421,21 +2404,13 @@ export default function MobileControllerPage() {
                   })()}
                 </div>
                 {(activeVerse || activeSplit) && (
-                  <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center gap-2 bg-surface-900/80">
+                  <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center justify-center bg-surface-900/80">
                     {activeSplit ? (
-                      <>
-                        <span className="text-[10px] font-bold text-zinc-500 shrink-0">{activeSplit.pageIdx + 1}/{activeSplit.pages.length}</span>
-                        <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
-                          {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
-                        </p>
-                        {activeSplit.pageIdx < activeSplit.pages.length - 1 && (
-                          <button onClick={handleNext} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold">
-                            Parte {activeSplit.pageIdx + 2} <ChevronRight size={13} />
-                          </button>
-                        )}
-                      </>
+                      <span className="text-xs text-accent font-semibold">
+                        {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse} &middot; {activeSplit.pageIdx + 1}/{activeSplit.pages.length}
+                      </span>
                     ) : (
-                      <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
+                      <p className="text-xs text-accent font-semibold truncate">
                         ▶ {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
                       </p>
                     )}
@@ -2540,35 +2515,15 @@ export default function MobileControllerPage() {
                       ))}
                     </div>
                     {(activeVerse || activeSplit) && (
-                      <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center gap-2 bg-surface-900/80">
+                      <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center justify-center gap-2 bg-surface-900/80">
                         {activeSplit ? (
-                          <>
-                            <span className="text-[10px] font-bold text-zinc-500 shrink-0">{activeSplit.pageIdx + 1}/{activeSplit.pages.length}</span>
-                            <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
-                              {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
-                            </p>
-                            {activeSplit.pageIdx < activeSplit.pages.length - 1 && (
-                              <button onClick={handleNext} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold">
-                                Parte {activeSplit.pageIdx + 2} <ChevronRight size={13} />
-                              </button>
-                            )}
-                          </>
+                          <span className="text-xs text-accent font-semibold">
+                            {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse} · {activeSplit.pageIdx + 1}/{activeSplit.pages.length}
+                          </span>
                         ) : (
-                          <>
-                            <button
-                              onClick={() => { const i = activeVerseList.findIndex(v => v.id === activeVerse.id); if (i > 0) sendVerse(activeVerseList[i - 1], activeVerseList); }}
-                              disabled={activeVerseList.findIndex(v => v.id === activeVerse.id) <= 0}
-                              className="p-1.5 rounded-lg bg-surface-700 border border-surface-600 text-zinc-300 disabled:opacity-30"
-                            ><ChevronLeft size={16} /></button>
-                            <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
-                              {activeVerse.book_name} {activeVerse.chapter}:{activeVerse.verse}
-                            </p>
-                            <button
-                              onClick={() => { const i = activeVerseList.findIndex(v => v.id === activeVerse.id); if (i < activeVerseList.length - 1) sendVerse(activeVerseList[i + 1], activeVerseList); }}
-                              disabled={activeVerseList.findIndex(v => v.id === activeVerse.id) >= activeVerseList.length - 1}
-                              className="p-1.5 rounded-lg bg-surface-700 border border-surface-600 text-zinc-300 disabled:opacity-30"
-                            ><ChevronRight size={16} /></button>
-                          </>
+                          <span className="text-xs text-accent font-semibold">
+                            {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
+                          </span>
                         )}
                       </div>
                     )}
