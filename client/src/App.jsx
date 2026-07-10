@@ -139,7 +139,10 @@ function RequireAuth({ children }) {
     if (!isAuthenticated()) { setStatus('denied'); return; }
     const API = import.meta.env.VITE_API_URL || 'http://localhost:3001';
     const token = localStorage.getItem('aio_sync_token');
-    fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } })
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
       .then(r => {
         if (!r.ok) throw new Error('no autorizado');
         _authCacheToken  = token;
@@ -152,10 +155,27 @@ function RequireAuth({ children }) {
         _authCacheToken  = null;
         _authCacheResult = null;
         setStatus('denied');
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
       });
+
+    return () => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (status === 'checking') return null; // solo en el primer login
+  if (status === 'checking') {
+    return (
+      <div className="min-h-screen bg-surface-900 text-zinc-100 flex items-center justify-center px-6">
+        <div className="w-full max-w-sm rounded-2xl border border-surface-700 bg-surface-800 p-5">
+          <p className="text-sm font-semibold">Conectando...</p>
+          <p className="text-xs text-zinc-400 mt-1">Validando sesión ({BUILD_VERSION})</p>
+        </div>
+      </div>
+    );
+  }
   if (status === 'denied')   return <Navigate to="/" replace />;
   return children;
 }

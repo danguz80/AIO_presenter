@@ -200,7 +200,7 @@ export default function MobileControllerPage() {
     }
   }, [internalMessages]);
   const { liveState, connected, songs, schedule, reservasMode, stageConfig, eventPlays, eventPlaysContext, remoteSongSelected } = state;
-  const { slideData, nextSlideData, isBlank } = liveState;
+  const { slideData, nextSlideData, isBlank } = liveState || {};
   const navigate = useNavigate();
 
   // Leer PIN desde parámetro URL (?pin=abc123) — al escanear el QR del PC
@@ -231,8 +231,15 @@ export default function MobileControllerPage() {
     const mq = window.matchMedia('(min-width: 1280px) and (min-height: 600px)');
     if (mq.matches) { navigate('/app', { replace: true }); return; }
     const handler = (e) => { if (e.matches) navigate('/app', { replace: true }); };
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handler);
+      return () => mq.removeEventListener('change', handler);
+    }
+    if (typeof mq.addListener === 'function') {
+      mq.addListener(handler);
+      return () => mq.removeListener(handler);
+    }
+    return undefined;
   }, [navigate]);
 
   const [tab,              setTab]              = useState('live');
