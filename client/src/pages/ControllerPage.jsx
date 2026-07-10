@@ -16,8 +16,9 @@ import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, Chev
 import { Link, useNavigate } from 'react-router-dom';
 import OrgSwitcher from '../components/shared/OrgSwitcher';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
+import { APP_VERSION } from '../version';
 
-const BUILD_VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
+const BUILD_VERSION = APP_VERSION;
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -193,7 +194,7 @@ export default function ControllerPage() {
             <Home size={15} />
           </Link>
           <span className="text-accent font-bold text-lg tracking-tight">AIO Presenter</span>
-          <span className="text-xs text-zinc-500 bg-surface-700 px-2 py-0.5 rounded">build {BUILD_VERSION}</span>
+          <span className="text-xs text-zinc-500 bg-surface-700 px-2 py-0.5 rounded">v{BUILD_VERSION}</span>
         </div>
 
         <div className="flex items-center gap-3">

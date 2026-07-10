@@ -15,6 +15,7 @@ import { stripChords, stripComments, isCommentLine, extractInlineComment, buildS
 import { getLabelColor } from '../utils/labelColors';
 import useVolumeKeys from '../hooks/useVolumeKeys';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
+import { APP_VERSION } from '../version';
 import {
   ChevronLeft, ChevronRight, EyeOff, Eye,
   Wifi, WifiOff, Music, Music2, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
@@ -23,7 +24,7 @@ import {
   CheckCircle2, Circle, MonitorPlay, MessageSquare,
 } from 'lucide-react';
 
-const BUILD_VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
+const BUILD_VERSION = APP_VERSION;
 
 // ─── Utilidad: leer/guardar conexión ─────────────────────────────────────────
 function getSavedIp()   { return localStorage.getItem('aio_server_ip')   || window.location.hostname; }
@@ -1197,7 +1198,7 @@ export default function MobileControllerPage() {
         ) : (
           <div className="flex flex-col leading-tight">
             <span className="text-accent font-bold text-base tracking-tight">AIO Presenter</span>
-            <span className="text-[10px] text-zinc-500">build {BUILD_VERSION}</span>
+            <span className="text-[10px] text-zinc-500">v{BUILD_VERSION}</span>
           </div>
         )}
         <div className="flex items-center gap-1.5 text-xs">
@@ -1264,9 +1265,6 @@ export default function MobileControllerPage() {
               </button>
             </>
           )}
-          <span className="ml-1 px-1.5 py-0.5 rounded bg-surface-700 border border-surface-600 text-[10px] text-zinc-300 font-mono">
-            {BUILD_VERSION}
-          </span>
         </div>
       </header>
 

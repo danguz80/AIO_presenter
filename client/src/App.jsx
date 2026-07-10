@@ -1,6 +1,7 @@
 import { useEffect, useState, Component } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
+import { APP_VERSION } from './version';
 import { PresenterProvider } from './context/PresenterContext';
 import { usePresenter } from './context/usePresenter';
 import LandingPage          from './pages/LandingPage';
@@ -24,7 +25,7 @@ import AdminPage               from './pages/AdminPage';
 import TrialExpiredBanner      from './components/shared/TrialExpiredBanner';
 import { forceRefreshApp }     from './utils/forceRefreshApp';
 
-const BUILD_VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
+const BUILD_VERSION = APP_VERSION;
 
 // Intercepta sync_token / sync_error de la URL (redirect post-OAuth) y redirige a /app
 function OAuthCallbackHandler() {
