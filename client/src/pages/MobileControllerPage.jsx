@@ -2304,6 +2304,44 @@ export default function MobileControllerPage() {
           </button>
           {openPanels.has('ajustes') && (
             <div className="overflow-y-auto" style={{ maxHeight: '65vh' }}>
+              {/* Vincular presentador por PIN (acceso persistente desde Ajustes) */}
+              <MobileSettingsSection title="Vincular presentador (PIN)">
+                <div className="mb-3 rounded-xl border border-surface-600 bg-surface-900/60 overflow-hidden">
+                  <div className="px-3 py-2 flex items-center justify-between border-b border-surface-700">
+                    <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Presentador vinculado</span>
+                    {currentPin
+                      ? <span className="text-xs font-mono font-bold text-accent bg-accent/15 px-2 py-0.5 rounded">{currentPin}</span>
+                      : <span className="text-xs text-zinc-600 italic">sin vincular</span>
+                    }
+                  </div>
+                  <div className="px-3 py-2.5 flex items-center gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      placeholder="PIN (6 car.)"
+                      value={pinInput}
+                      onChange={e => setPinInput(e.target.value.toLowerCase().slice(0, 6))}
+                      className="flex-1 bg-surface-800 border border-surface-600 rounded-lg px-2.5 py-1.5 text-sm text-white placeholder:text-zinc-600 font-mono outline-none focus:border-accent"
+                    />
+                    <button
+                      onClick={autoDetectPin}
+                      disabled={pinDetecting}
+                      className="px-2.5 py-1.5 rounded-lg bg-surface-700 border border-surface-600 text-xs text-zinc-300 active:bg-surface-600 shrink-0"
+                      title="Auto-detectar presentador en la red"
+                    >
+                      {pinDetecting ? '...' : 'Auto'}
+                    </button>
+                    <button
+                      onClick={() => applyPresenterPin(pinInput)}
+                      disabled={!pinInput || pinInput.length < 4}
+                      className="px-2.5 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold active:bg-accent/80 disabled:opacity-40 shrink-0"
+                    >
+                      Vincular
+                    </button>
+                  </div>
+                </div>
+              </MobileSettingsSection>
+
               {/* Ajustes de salida, escenario y virtual */}
               <OutputControls />
               <StageControls />
