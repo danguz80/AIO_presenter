@@ -1,36 +1,60 @@
-import { useEffect, useRef, Fragment } from 'react';
+import { useEffect, useRef, useState, Fragment } from 'react';
 import { stripChords, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 
-// Muestra el primer frame de un video de forma estática.
-// Usa autoPlay para que el browser cargue el primer frame sin necesidad de
-// Range requests (que fallan en algunos contextos de SW/caché).
-// Al disparar canplay pausa inmediatamente, mostrando el primer frame fijo.
+// Cache global de thumbnails de video (src → dataURL) para no re-procesar.
+const _videoThumbCache = new Map();
+
+// Captura el primer frame de un video usando un elemento offscreen a tamaño real.
+// Esto evita que Chrome bloquee autoPlay en contenedores con transform:scale pequeño.
 function StaticVideoFrame({ src, fit = 'contain', bg = '#000' }) {
-  const ref = useRef(null);
+  const [imgUrl, setImgUrl] = useState(() => _videoThumbCache.get(src) ?? null);
 
   useEffect(() => {
-    const v = ref.current;
-    if (!v || !src) return;
-    const tryPause = () => { try { v.pause(); } catch {} };
-    v.addEventListener('canplay', tryPause);
-    if (v.readyState >= 3) tryPause();
-    return () => v.removeEventListener('canplay', tryPause);
+    if (!src) return;
+    if (_videoThumbCache.has(src)) { setImgUrl(_videoThumbCache.get(src)); return; }
+
+    let cancelled = false;
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    // Offscreen pero en el DOM para evitar throttling de Chrome
+    v.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:320px;height:180px;opacity:0.01;pointer-events:none';
+    document.body.appendChild(v);
+
+    const cleanup = () => {
+      try { document.body.removeChild(v); } catch {}
+      v.src = '';
+    };
+
+    const capture = () => {
+      if (cancelled) { cleanup(); return; }
+      try {
+        v.pause();
+        const c = document.createElement('canvas');
+        c.width  = v.videoWidth  || 320;
+        c.height = v.videoHeight || 180;
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        const url = c.toDataURL('image/jpeg', 0.85);
+        _videoThumbCache.set(src, url);
+        if (!cancelled) setImgUrl(url);
+      } catch { /* CORS / canvas tainted → silencio */ }
+      cleanup();
+    };
+
+    v.addEventListener('canplay', capture, { once: true });
+    v.addEventListener('error',   cleanup, { once: true });
+    setTimeout(() => { if (!cancelled) cleanup(); }, 8000); // timeout máximo
+
+    v.src = src;
+    v.play().catch(() => {});
+
+    return () => { cancelled = true; cleanup(); };
   }, [src]);
 
-  return (
-    <video
-      key={src}
-      ref={ref}
-      src={src}
-      autoPlay
-      muted
-      playsInline
-      preload="auto"
-      data-bg-video="1"
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: bg, zIndex: 0 }}
-    />
-  );
+  if (!imgUrl) return <div data-bg-video="1" style={{ position:'absolute', inset:0, background: bg, zIndex:0 }} />;
+  return <img src={imgUrl} alt="" data-bg-video="1" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit: fit, zIndex:0 }} />;
 }
 
 /**

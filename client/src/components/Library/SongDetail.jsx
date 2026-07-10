@@ -8,43 +8,62 @@ import { getLabelColor } from '../../utils/labelColors';
 import OutputRenderer from '../shared/OutputRenderer';
 import { ensureMediaCached } from '../../utils/fsaUtils';
 
-/** Muestra el primer frame de un video como imagen estática en thumbnails.
- *  Usa autoPlay+pause en canplay para cargar el primer frame sin Range requests.
- *  Si la URL está en /local-media/ pero no está en caché, busca el archivo
- *  por nombre en las carpetas FSA locales (OneDrive/Dropbox compartido). */
-function VideoFrameThumb({ url, fileName }) {
-  const ref = useRef(null);
-  const [cacheKey, setCacheKey] = useState(0);
+// Cache global de thumbnails de video — compartida con OutputRenderer
+const _videoThumbCache = new Map();
 
+/** Muestra el primer frame de un video como imagen estática en thumbnails.
+ *  Usa un video offscreen a tamaño real (evita throttling de Chrome en elementos
+ *  con transform:scale pequeño). Cachea el resultado como data URL. */
+function VideoFrameThumb({ url, fileName }) {
+  const [imgUrl, setImgUrl] = useState(() => _videoThumbCache.get(url) ?? null);
+
+  // Auto-cachear archivo local si no está en la Cache API
   useEffect(() => {
     if (!url?.startsWith('/local-media/') || !fileName) return;
-    ensureMediaCached(fileName)
-      .then(ok => { if (ok) setCacheKey(k => k + 1); })
-      .catch(() => {});
+    ensureMediaCached(fileName).catch(() => {});
   }, [url, fileName]);
 
   useEffect(() => {
-    const v = ref.current;
-    if (!v || !url) return;
-    const tryPause = () => { try { v.pause(); } catch {} };
-    v.addEventListener('canplay', tryPause);
-    if (v.readyState >= 3) tryPause();
-    return () => v.removeEventListener('canplay', tryPause);
-  }, [url, cacheKey]);
+    if (!url) return;
+    if (_videoThumbCache.get(url)) { setImgUrl(_videoThumbCache.get(url)); return; }
 
-  return (
-    <video
-      key={url + cacheKey}
-      ref={ref}
-      src={url}
-      autoPlay
-      muted
-      playsInline
-      preload="auto"
-      className="absolute inset-0 w-full h-full object-cover"
-      style={{ zIndex: 0, pointerEvents: 'none' }}
-    />
-  );
+    let cancelled = false;
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.preload = 'auto';
+    v.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:320px;height:180px;opacity:0.01;pointer-events:none';
+    document.body.appendChild(v);
+
+    const cleanup = () => { try { document.body.removeChild(v); } catch {} v.src = ''; };
+
+    const capture = () => {
+      if (cancelled) { cleanup(); return; }
+      try {
+        v.pause();
+        const c = document.createElement('canvas');
+        c.width  = v.videoWidth  || 320;
+        c.height = v.videoHeight || 180;
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        const dataUrl = c.toDataURL('image/jpeg', 0.85);
+        _videoThumbCache.set(url, dataUrl);
+        if (!cancelled) setImgUrl(dataUrl);
+      } catch {}
+      cleanup();
+    };
+
+    v.addEventListener('canplay', capture, { once: true });
+    v.addEventListener('error',   cleanup, { once: true });
+    setTimeout(() => { if (!cancelled) cleanup(); }, 8000);
+
+    v.src = url;
+    v.play().catch(() => {});
+
+    return () => { cancelled = true; cleanup(); };
+  }, [url]);
+
+  if (!imgUrl) return null;
+  return <img src={imgUrl} alt="" className="absolute inset-0 w-full h-full object-cover" style={{ zIndex: 0, pointerEvents: 'none' }} />;
 }
 
 export default function SongDetail() {
