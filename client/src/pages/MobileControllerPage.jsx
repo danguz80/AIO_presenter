@@ -790,6 +790,26 @@ export default function MobileControllerPage() {
 
   };
 
+  // playsCtx debe declararse ANTES del useEffect que lo usa en su dependency array
+  // para evitar TDZ en el bundle de producción (const no es hoisted).
+  const playsCtx = useMemo(() => {
+    if (eventPlaysContext?.eventId) {
+      return {
+        eventId: eventPlaysContext.eventId,
+        occurrenceDate: eventPlaysContext.occurrenceDate || null,
+      };
+    }
+    if (eventDetail?.id) {
+      return {
+        eventId: eventDetail.id,
+        occurrenceDate: eventDetail.is_recurring
+          ? String(eventDetail.occurrence_date || eventDetail.date).split('T')[0]
+          : null,
+      };
+    }
+    return null;
+  }, [eventPlaysContext?.eventId, eventPlaysContext?.occurrenceDate, eventDetail?.id, eventDetail?.is_recurring, eventDetail?.occurrence_date, eventDetail?.date]);
+
   // Auto-marcar como tocada al 50% al navegar en vivo (botones prev/next o click slide)
   useEffect(() => {
     if (slideData?.type !== 'song') return;
@@ -989,24 +1009,6 @@ export default function MobileControllerPage() {
     const q = norm(songSearch);
     return norm(s.title).includes(q) || norm(s.artist).includes(q);
   });
-
-  const playsCtx = useMemo(() => {
-    if (eventPlaysContext?.eventId) {
-      return {
-        eventId: eventPlaysContext.eventId,
-        occurrenceDate: eventPlaysContext.occurrenceDate || null,
-      };
-    }
-    if (eventDetail?.id) {
-      return {
-        eventId: eventDetail.id,
-        occurrenceDate: eventDetail.is_recurring
-          ? String(eventDetail.occurrence_date || eventDetail.date).split('T')[0]
-          : null,
-      };
-    }
-    return null;
-  }, [eventPlaysContext?.eventId, eventPlaysContext?.occurrenceDate, eventDetail?.id, eventDetail?.is_recurring, eventDetail?.occurrence_date, eventDetail?.date]);
 
   return (
     <div
