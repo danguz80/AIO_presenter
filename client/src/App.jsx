@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Component } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { PresenterProvider } from './context/PresenterContext';
@@ -264,6 +264,17 @@ function UpdateBanner() {
     await forceRefreshApp(window.location.pathname);
   };
 
+  // En móvil: aplicar update automáticamente sin pedir confirmación.
+  // El código viejo en caché puede crashear; así se reemplaza de inmediato.
+  useEffect(() => {
+    if (!ready) return;
+    const isMobile = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile/i.test(navigator.userAgent)
+      || (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches);
+    if (isMobile) {
+      applyUpdate();
+    }
+  }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!ready) return null;
   return (
     <div className="fixed top-0 inset-x-0 z-[9999] flex items-center justify-between gap-3 px-4 py-2 bg-accent text-white text-xs shadow-lg">
@@ -277,6 +288,37 @@ function UpdateBanner() {
       </button>
     </div>
   );
+}
+
+// ErrorBoundary: captura cualquier crash de render y muestra mensaje en pantalla
+// en vez de pantalla blanca. Imprescindible para diagnosticar y sobrevivir crashes de PWA.
+class MobileErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(err) {
+    return { error: err };
+  }
+  render() {
+    if (this.state.error) {
+      const msg = this.state.error?.message || String(this.state.error);
+      return (
+        <div style={{ minHeight: '100dvh', background: '#0f0f14', color: '#f4f4f5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: 'sans-serif' }}>
+          <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '8px' }}>Error al cargar la app</p>
+          <p style={{ fontSize: '0.75rem', color: '#a1a1aa', marginBottom: '16px', wordBreak: 'break-all', maxWidth: '90vw', textAlign: 'center' }}>{msg}</p>
+          <button
+            onClick={() => forceRefreshApp(window.location.pathname)}
+            style={{ background: 'var(--accent,#6366f1)', color: '#fff', border: 'none', borderRadius: '12px', padding: '10px 20px', fontWeight: 700, fontSize: '0.875rem', cursor: 'pointer' }}
+          >
+            Reintentar
+          </button>
+          <p style={{ fontSize: '0.65rem', color: '#52525b', marginTop: '12px' }}>build {BUILD_VERSION}</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export default function App() {
@@ -293,7 +335,7 @@ export default function App() {
         <Route path="/mode-select" element={<ModeSelectPage />} />
         {/* App principal — requiere autenticación */}
         <Route path="/app"      element={<RequireAuth><ControllerPage /></RequireAuth>} />
-        <Route path="/mobile"   element={<RequireAuth><MobileControllerPage /></RequireAuth>} />
+        <Route path="/mobile"   element={<MobileErrorBoundary><RequireAuth><MobileControllerPage /></RequireAuth></MobileErrorBoundary>} />
         <Route path="/calendar" element={<RequireAuth><CalendarPage /></RequireAuth>} />
         {/* Cancionero — requiere autenticación */}
         <Route path="/cancionero/select-org"         element={<RequireAuth><OrgSelectPage /></RequireAuth>} />
