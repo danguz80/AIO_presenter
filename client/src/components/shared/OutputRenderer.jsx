@@ -2,33 +2,20 @@ import { useEffect, useRef, Fragment } from 'react';
 import { stripChords, isCommentLine, extractInlineComment } from '../../utils/chordUtils';
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 
+// Muestra el primer frame de un video de forma estática.
+// Usa autoPlay para que el browser cargue el primer frame sin necesidad de
+// Range requests (que fallan en algunos contextos de SW/caché).
+// Al disparar canplay pausa inmediatamente, mostrando el primer frame fijo.
 function StaticVideoFrame({ src, fit = 'contain', bg = '#000' }) {
   const ref = useRef(null);
 
   useEffect(() => {
     const v = ref.current;
     if (!v || !src) return;
-
-    const seekPreview = () => {
-      try {
-        const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0;
-        v.currentTime = Math.min(0.5, dur > 0 ? dur * 0.1 : 0.5);
-      } catch {}
-    };
-
-    const onMeta   = () => seekPreview();
-    const onSeeked = () => { try { v.pause(); } catch {} };
-
-    v.addEventListener('loadedmetadata', onMeta);
-    v.addEventListener('seeked',         onSeeked);
-
-    // Si los metadatos ya están disponibles (caché rápida) → seek inmediato
-    if (v.readyState >= 1) seekPreview();
-
-    return () => {
-      v.removeEventListener('loadedmetadata', onMeta);
-      v.removeEventListener('seeked',         onSeeked);
-    };
+    const tryPause = () => { try { v.pause(); } catch {} };
+    v.addEventListener('canplay', tryPause);
+    if (v.readyState >= 3) tryPause();
+    return () => v.removeEventListener('canplay', tryPause);
   }, [src]);
 
   return (
@@ -36,9 +23,10 @@ function StaticVideoFrame({ src, fit = 'contain', bg = '#000' }) {
       key={src}
       ref={ref}
       src={src}
+      autoPlay
       muted
       playsInline
-      preload="metadata"
+      preload="auto"
       data-bg-video="1"
       style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: bg, zIndex: 0 }}
     />

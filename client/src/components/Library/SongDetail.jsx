@@ -9,13 +9,13 @@ import OutputRenderer from '../shared/OutputRenderer';
 import { ensureMediaCached } from '../../utils/fsaUtils';
 
 /** Muestra el primer frame de un video como imagen estática en thumbnails.
+ *  Usa autoPlay+pause en canplay para cargar el primer frame sin Range requests.
  *  Si la URL está en /local-media/ pero no está en caché, busca el archivo
  *  por nombre en las carpetas FSA locales (OneDrive/Dropbox compartido). */
 function VideoFrameThumb({ url, fileName }) {
   const ref = useRef(null);
   const [cacheKey, setCacheKey] = useState(0);
 
-  // Auto-cachear: si la URL no está en caché, buscarla en carpetas FSA locales
   useEffect(() => {
     if (!url?.startsWith('/local-media/') || !fileName) return;
     ensureMediaCached(fileName)
@@ -26,11 +26,10 @@ function VideoFrameThumb({ url, fileName }) {
   useEffect(() => {
     const v = ref.current;
     if (!v || !url) return;
-    const seek = () => { try { v.currentTime = 0.5; } catch {} };
-    v.addEventListener('loadedmetadata', seek);
-    // Si el video ya está cacheado y readyState >= 1, el evento ya disparó: seek inmediato
-    if (v.readyState >= 1) seek();
-    return () => v.removeEventListener('loadedmetadata', seek);
+    const tryPause = () => { try { v.pause(); } catch {} };
+    v.addEventListener('canplay', tryPause);
+    if (v.readyState >= 3) tryPause();
+    return () => v.removeEventListener('canplay', tryPause);
   }, [url, cacheKey]);
 
   return (
@@ -38,9 +37,10 @@ function VideoFrameThumb({ url, fileName }) {
       key={url + cacheKey}
       ref={ref}
       src={url}
+      autoPlay
       muted
       playsInline
-      preload="metadata"
+      preload="auto"
       className="absolute inset-0 w-full h-full object-cover"
       style={{ zIndex: 0, pointerEvents: 'none' }}
     />
