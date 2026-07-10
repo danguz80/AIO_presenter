@@ -810,6 +810,23 @@ export default function MobileControllerPage() {
     return null;
   }, [eventPlaysContext?.eventId, eventPlaysContext?.occurrenceDate, eventDetail?.id, eventDetail?.is_recurring, eventDetail?.occurrence_date, eventDetail?.date]);
 
+  // allStructures y effectiveSongSlides también deben declararse ANTES del useEffect
+  // auto-mark que los usa en su dependency array (mismo problema TDZ que playsCtx).
+  const allStructures = useMemo(() => {
+    if (!songDetail) return [];
+    if (Array.isArray(songDetail.structures) && songDetail.structures.length > 0) return songDetail.structures;
+    if (Array.isArray(songDetail.structure) && songDetail.structure.length > 0) {
+      return [{ name: 'Estructura 1', items: songDetail.structure }];
+    }
+    return [];
+  }, [songDetail?.id, songDetail?.structures, songDetail?.structure]);
+
+  const effectiveSongSlides = useMemo(() => {
+    const rawSlides = Array.isArray(songDetail?.slides) ? songDetail.slides : [];
+    const items = allStructures[Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))]?.items ?? [];
+    return buildOrderedSlides(rawSlides, items);
+  }, [songDetail?.id, songDetail?.slides, allStructures, activeStructIdx]);
+
   // Auto-marcar como tocada al 50% al navegar en vivo (botones prev/next o click slide)
   useEffect(() => {
     if (slideData?.type !== 'song') return;
@@ -887,21 +904,6 @@ export default function MobileControllerPage() {
     if (!songDetail?.id) return;
     localStorage.setItem(`aio_active_struct_${songDetail.id}`, String(activeStructIdx));
   }, [activeStructIdx, songDetail?.id]);
-
-  const allStructures = useMemo(() => {
-    if (!songDetail) return [];
-    if (Array.isArray(songDetail.structures) && songDetail.structures.length > 0) return songDetail.structures;
-    if (Array.isArray(songDetail.structure) && songDetail.structure.length > 0) {
-      return [{ name: 'Estructura 1', items: songDetail.structure }];
-    }
-    return [];
-  }, [songDetail?.id, songDetail?.structures, songDetail?.structure]);
-
-  const effectiveSongSlides = useMemo(() => {
-    const rawSlides = Array.isArray(songDetail?.slides) ? songDetail.slides : [];
-    const items = allStructures[Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))]?.items ?? [];
-    return buildOrderedSlides(rawSlides, items);
-  }, [songDetail?.id, songDetail?.slides, allStructures, activeStructIdx]);
 
   // Si el escritorio ya está proyectando esta canción, elegir automáticamente
   // la estructura del móvil que mejor coincide con el estado en vivo (total/index/slideId).
