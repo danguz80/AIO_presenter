@@ -16,17 +16,18 @@ function StaticVideoFrame({ src, fit = 'contain', bg = '#000' }) {
       } catch {}
     };
 
-    const onMeta = () => seekPreview();
-    const onSeeked = () => {
-      try { v.pause(); } catch {}
-    };
+    const onMeta   = () => seekPreview();
+    const onSeeked = () => { try { v.pause(); } catch {} };
 
     v.addEventListener('loadedmetadata', onMeta);
-    v.addEventListener('seeked', onSeeked);
+    v.addEventListener('seeked',         onSeeked);
+
+    // Si los metadatos ya están disponibles (caché rápida) → seek inmediato
+    if (v.readyState >= 1) seekPreview();
 
     return () => {
       v.removeEventListener('loadedmetadata', onMeta);
-      v.removeEventListener('seeked', onSeeked);
+      v.removeEventListener('seeked',         onSeeked);
     };
   }, [src]);
 

@@ -26,9 +26,11 @@ function VideoFrameThumb({ url, fileName }) {
   useEffect(() => {
     const v = ref.current;
     if (!v || !url) return;
-    const onMeta = () => { v.currentTime = 0.5; };
-    v.addEventListener('loadedmetadata', onMeta);
-    return () => v.removeEventListener('loadedmetadata', onMeta);
+    const seek = () => { try { v.currentTime = 0.5; } catch {} };
+    v.addEventListener('loadedmetadata', seek);
+    // Si el video ya está cacheado y readyState >= 1, el evento ya disparó: seek inmediato
+    if (v.readyState >= 1) seek();
+    return () => v.removeEventListener('loadedmetadata', seek);
   }, [url, cacheKey]);
 
   return (

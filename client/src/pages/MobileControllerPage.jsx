@@ -330,6 +330,8 @@ export default function MobileControllerPage() {
   const [eventsYear,  setEventsYear]  = useState(today0.getFullYear());
   const [eventsMonth, setEventsMonth] = useState(today0.getMonth()); // 0-indexed
 
+  const [pastEventsOpen, setPastEventsOpen] = useState(false);
+
   const MONTHS_ES_MOB = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
   const loadEvents = useCallback(async (y, m) => {
@@ -1949,52 +1951,88 @@ export default function MobileControllerPage() {
               {!eventsLoading && events.length === 0 && (
                 <p className="text-center text-zinc-600 text-sm pt-10">Sin eventos este mes</p>
               )}
-              {!eventsLoading && events.map(ev => (
-                <div
-                  key={ev.occurrence_date ? `${ev.id}-${ev.occurrence_date}` : ev.id}
-                  className="bg-surface-800 rounded-xl border border-surface-700 overflow-hidden"
-                >
-                  <button
-                    onClick={() => { setConfirmDeleteId(null); setEventDetail(ev); }}
-                    className="w-full text-left px-4 py-3.5 active:bg-surface-700 transition-colors"
+              {!eventsLoading && events.length > 0 && (() => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                const evKey = ev => String(ev.occurrence_date || ev.date).slice(0, 10);
+                const upcoming = events
+                  .filter(ev => evKey(ev) >= todayStr)
+                  .sort((a, b) => evKey(a).localeCompare(evKey(b)));
+                const past = events
+                  .filter(ev => evKey(ev) < todayStr)
+                  .sort((a, b) => evKey(b).localeCompare(evKey(a)));
+
+                const renderEvCard = (ev) => (
+                  <div
+                    key={ev.occurrence_date ? `${ev.id}-${ev.occurrence_date}` : ev.id}
+                    className="bg-surface-800 rounded-xl border border-surface-700 overflow-hidden"
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-zinc-200 text-sm font-medium leading-snug truncate">{ev.title}</p>
-                        <p className="text-zinc-500 text-xs mt-0.5">
-                          {new Date(String(ev.occurrence_date || ev.date).slice(0,10) + 'T12:00:00').toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
-                          {ev.time && ` · ${String(ev.time).slice(0,5)}`}
-                        </p>
+                    <button
+                      onClick={() => { setConfirmDeleteId(null); setEventDetail(ev); }}
+                      className="w-full text-left px-4 py-3.5 active:bg-surface-700 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-zinc-200 text-sm font-medium leading-snug truncate">{ev.title}</p>
+                          <p className="text-zinc-500 text-xs mt-0.5">
+                            {new Date(String(ev.occurrence_date || ev.date).slice(0,10) + 'T12:00:00').toLocaleDateString('es', { weekday: 'short', day: 'numeric', month: 'short' })}
+                            {ev.time && ` · ${String(ev.time).slice(0,5)}`}
+                          </p>
+                        </div>
+                        {(ev.songs || []).length > 0 && (
+                          <span className="shrink-0 text-[10px] bg-surface-700 text-zinc-400 rounded-full px-2 py-0.5 border border-surface-600">
+                            {ev.songs.length} canc.
+                          </span>
+                        )}
                       </div>
-                      {(ev.songs || []).length > 0 && (
-                        <span className="shrink-0 text-[10px] bg-surface-700 text-zinc-400 rounded-full px-2 py-0.5 border border-surface-600">
-                          {ev.songs.length} canc.
-                        </span>
-                      )}
+                    </button>
+                    <div className="flex border-t border-surface-700/60">
+                      <button
+                        onClick={() => {
+                          const dateStr = String(ev.occurrence_date || ev.date).split('T')[0];
+                          setEventFormData({ title: ev.title, date: dateStr, time: ev.time ? String(ev.time).slice(0,5) : '', description: ev.description || '' });
+                          setEventDetail(ev);
+                          setEventFormMode('edit');
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-zinc-400 text-xs active:bg-surface-700 transition-colors"
+                      >
+                        <Pencil size={13} /> Editar
+                      </button>
+                      <div className="w-px bg-surface-700/60" />
+                      <button
+                        onClick={() => setConfirmDeleteId(ev.id)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-red-400 text-xs active:bg-red-950/30 transition-colors"
+                      >
+                        <Trash2 size={13} /> Eliminar
+                      </button>
                     </div>
-                  </button>
-                  <div className="flex border-t border-surface-700/60">
-                    <button
-                      onClick={() => {
-                        const dateStr = String(ev.occurrence_date || ev.date).split('T')[0];
-                        setEventFormData({ title: ev.title, date: dateStr, time: ev.time ? String(ev.time).slice(0,5) : '', description: ev.description || '' });
-                        setEventDetail(ev);
-                        setEventFormMode('edit');
-                      }}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-zinc-400 text-xs active:bg-surface-700 transition-colors"
-                    >
-                      <Pencil size={13} /> Editar
-                    </button>
-                    <div className="w-px bg-surface-700/60" />
-                    <button
-                      onClick={() => setConfirmDeleteId(ev.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 text-red-400 text-xs active:bg-red-950/30 transition-colors"
-                    >
-                      <Trash2 size={13} /> Eliminar
-                    </button>
                   </div>
-                </div>
-              ))}
+                );
+
+                return (
+                  <>
+                    {upcoming.length === 0 && past.length === 0 && (
+                      <p className="text-center text-zinc-600 text-sm pt-10">Sin eventos este mes</p>
+                    )}
+                    {upcoming.map(renderEvCard)}
+                    {past.length > 0 && (
+                      <div className="mt-2">
+                        <button
+                          onClick={() => setPastEventsOpen(v => !v)}
+                          className="w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-surface-800/50 border border-surface-700/50 text-zinc-500 text-xs font-semibold mb-2"
+                        >
+                          {pastEventsOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                          Eventos Pasados ({past.length})
+                        </button>
+                        {pastEventsOpen && (
+                          <div className="space-y-2 opacity-60">
+                            {past.map(renderEvCard)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
