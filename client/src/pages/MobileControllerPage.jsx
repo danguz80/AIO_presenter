@@ -234,7 +234,7 @@ export default function MobileControllerPage() {
   const [songEditData,     setSongEditData]     = useState({});
   const [songEditSaving,   setSongEditSaving]   = useState(false);
   const [songEditError,    setSongEditError]    = useState('');
-  const [activeSongSlideId,setActiveSongSlideId] = useState(null);
+  const [activeSongSlideIndex, setActiveSongSlideIndex] = useState(null); // -1 = título
   const [loadingSong,      setLoadingSong]      = useState(false);
   const [songSearch,       setSongSearch]       = useState('');
 
@@ -256,6 +256,8 @@ export default function MobileControllerPage() {
   const songEditBodyRef  = useRef(null);
   const savedCursorPos   = useRef(null);
   const slideGridRef     = useRef(null);
+  const seenSlideIdxBySongRef = useRef(new Map());
+  const autoMarkedSongIdsRef  = useRef(new Set());
 
   const insertChord = (chord) => {
     const ta  = songEditBodyRef.current;
@@ -556,6 +558,11 @@ export default function MobileControllerPage() {
     }
   }, [eventDetail?.id]); // eslint-disable-line
 
+  useEffect(() => {
+    seenSlideIdxBySongRef.current = new Map();
+    autoMarkedSongIdsRef.current = new Set();
+  }, [eventPlaysContext?.eventId, eventPlaysContext?.occurrenceDate]);
+
   // Publicar el schedule al contexto global cuando se abre/cierra un evento desde móvil
   // (necesario para que StagePage pueda mostrar la siguiente canción del listado)
   useEffect(() => {
@@ -566,11 +573,12 @@ export default function MobileControllerPage() {
   // Si está en negro, limpiar la selección
   useEffect(() => {
     if (isBlank) {
-      setActiveSongSlideId(null);
-    } else if (slideData?.type === 'song' && slideData.slideId) {
-      setActiveSongSlideId(slideData.slideId);
+      setActiveSongSlideIndex(null);
+    } else if (slideData?.type === 'song') {
+      if (Number.isInteger(liveState?.slideIndex)) setActiveSongSlideIndex(liveState.slideIndex);
+      else setActiveSongSlideIndex(null);
     } else if (slideData?.type === 'title') {
-      setActiveSongSlideId('__title__');
+      setActiveSongSlideIndex(-1);
     } else if (slideData?.type === 'bible' && slideData.reference && bibleVerses.length) {
       // Sincronizar versículo activo en móvil cuando el PC navega bíblicamente
       const match = slideData.reference.trim().match(/^.+?\s+\d+:(\d+)$/);
@@ -583,20 +591,20 @@ export default function MobileControllerPage() {
         }
       }
     }
-  }, [slideData, isBlank]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [slideData, isBlank, liveState?.slideIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-scroll a la diapo activa cuando cambia (centrada dentro del panel)
   useEffect(() => {
-    if (!activeSongSlideId || !slideGridRef.current) return;
+    if (!Number.isInteger(activeSongSlideIndex) || activeSongSlideIndex < 0 || !slideGridRef.current) return;
     const container = slideGridRef.current;
-    const el = container.querySelector(`[data-slide-id="${activeSongSlideId}"]`);
+    const el = container.querySelector(`[data-slide-idx="${activeSongSlideIndex}"]`);
     if (!el) return;
     const containerTop    = container.getBoundingClientRect().top;
     const elTop           = el.getBoundingClientRect().top;
     const elOffsetInCont  = elTop - containerTop + container.scrollTop;
     const targetScroll    = elOffsetInCont - container.clientHeight / 2 + el.offsetHeight / 2;
     container.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
-  }, [activeSongSlideId]);
+  }, [activeSongSlideIndex]);
 
   // Al abrir cualquier canción, ir al tope del grid
   useEffect(() => {
@@ -639,10 +647,10 @@ export default function MobileControllerPage() {
     // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
     // navegar localmente (enviar navigate haría que el servidor naviegue la canción anterior)
     if (slides?.length && songDetail && slideData?.type === 'song' && slideData.songId && songDetail.id !== slideData.songId) {
-      const currentIdx = slides.findIndex(s => s.id === activeSongSlideId);
+      const currentIdx = Number.isInteger(activeSongSlideIndex) ? activeSongSlideIndex : 0;
       const newIdx = currentIdx <= 0 ? 0 : currentIdx - 1;
       setFlash('prev'); setTimeout(() => setFlash(null), 200);
-      if (slides[newIdx]) sendSlide(songDetail, slides[newIdx], slides);
+      if (slides[newIdx]) sendSlide(songDetail, slides[newIdx], slides, { slideIndexOverride: newIdx });
       return;
     }
     trigger(() => actions.navigate('prev'), 'prev');
@@ -652,17 +660,17 @@ export default function MobileControllerPage() {
     // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
     // navegar localmente en lugar de enviar navigate (evita proyectar slides de la canción anterior)
     if (slides?.length && songDetail && slideData?.type === 'song' && slideData.songId && songDetail.id !== slideData.songId) {
-      const currentIdx = slides.findIndex(s => s.id === activeSongSlideId);
+      const currentIdx = Number.isInteger(activeSongSlideIndex) ? activeSongSlideIndex : -1;
       const newIdx = currentIdx < 0 ? 0 : currentIdx + 1;
       if (newIdx < slides.length) {
         setFlash('next'); setTimeout(() => setFlash(null), 200);
-        sendSlide(songDetail, slides[newIdx], slides);
+        sendSlide(songDetail, slides[newIdx], slides, { slideIndexOverride: newIdx });
       }
       return;
     }
     // Misma canción: lógica original con auto-avance al final del setlist
-    const lastSlideId = slides?.[slides.length - 1]?.id;
-    if (slideData?.type === 'song' && lastSlideId && slideData.slideId === lastSlideId && schedule?.length) {
+    const isAtLastSlide = Number.isInteger(liveState?.slideIndex) && slides?.length > 0 && liveState.slideIndex === (slides.length - 1);
+    if (slideData?.type === 'song' && isAtLastSlide && schedule?.length) {
       const currentIdx = schedule.findIndex(it => it.song_id === songDetail.id);
       let nextItem = null;
       if (currentIdx >= 0) {
@@ -677,7 +685,7 @@ export default function MobileControllerPage() {
         actions.loadSongDetail(nextItem.song_id).then(detail => { // eslint-disable-line
           setSongDetail(detail);
           // showTitle=true: el auto-avance SÍ muestra la diapositiva de título
-          if (detail.slides?.length > 0) sendSlide(detail, detail.slides[0], detail.slides, true); // eslint-disable-line
+          if (detail.slides?.length > 0) sendSlide(detail, detail.slides[0], detail.slides, { showTitle: true, slideIndexOverride: 0 }); // eslint-disable-line
         }).finally(() => setLoadingSong(false));
         return;
       }
@@ -711,7 +719,7 @@ export default function MobileControllerPage() {
 
   // ── Canciones ────────────────────────────────────────────────────────────
   const openSong = async (id) => {
-    setActiveSongSlideId(null);   // limpiar indicador activo al cambiar canción
+    setActiveSongSlideIndex(null);   // limpiar indicador activo al cambiar canción
     setLoadingSong(true);
     try { setSongDetail(await actions.loadSongDetail(id)); }
     finally { setLoadingSong(false); }
@@ -726,11 +734,12 @@ export default function MobileControllerPage() {
 
   // showTitle=false (default): el clic directo NO muestra diapositiva de título
   // showTitle=true: el auto-avance SÍ muestra diapositiva de título
-  const sendSlide = (song, slide, slides, showTitle = false) => {
+  const sendSlide = (song, slide, slides, opts = {}) => {
+    const { showTitle = false, slideIndexOverride = null } = opts || {};
     // Slide de título → enviar como 'title-direct' para que el servidor no lo intercepte
     if (slide.type === 'title') {
       const firstSlide = slides?.[0] || null;
-      setActiveSongSlideId('__title__');
+      setActiveSongSlideIndex(-1);
       actions.showSlide({
         type: 'title-direct',
         slides,
@@ -739,18 +748,43 @@ export default function MobileControllerPage() {
       });
       return;
     }
-    const idx  = slides.findIndex(s => s.id === slide.id);
+    const idx = Number.isInteger(slideIndexOverride)
+      ? Math.max(0, Math.min(slides.length - 1, slideIndexOverride))
+      : slides.findIndex(s => s.id === slide.id);
     const next = slides[idx + 1] || null;
-    setActiveSongSlideId(slide.id);
+    setActiveSongSlideIndex(idx);
     actions.selectSlide(slide);
     actions.showSlide({
       type:                'song',
       slides,
       slideIndex:          idx,
       skipTitleIntercept:  !showTitle,  // true = ir directo al slide sin mostrar título
-      slideData:           { type: 'song', songId: song.id, slideId: slide.id, songTitle: song.title, label: slide.label, content: slide.content },
+      slideData:           { type: 'song', songId: song.id, slideId: slide.id, slideIndex: idx, songTitle: song.title, label: slide.label, content: slide.content },
       nextSlideData:       next ? { type: 'song', label: next.label, content: next.content } : null,
     });
+
+    // Auto-marcar como tocada al 50% en móvil (por índice de ocurrencia, no por slide.id)
+    if (song?.id && eventPlaysContext?.eventId && idx >= 0 && Array.isArray(slides) && slides.length > 0) {
+      const songId = song.id;
+      if (!autoMarkedSongIdsRef.current.has(songId) && !eventPlays?.has(songId)) {
+        let seenSet = seenSlideIdxBySongRef.current.get(songId);
+        if (!seenSet) {
+          seenSet = new Set();
+          seenSlideIdxBySongRef.current.set(songId, seenSet);
+        }
+        seenSet.add(idx);
+        const seen = seenSet.size;
+        const total = slides.length;
+        const pct = total > 0 ? (seen / total) : 0;
+        if (pct >= 0.5) {
+          autoMarkedSongIdsRef.current.add(songId);
+          actions.markPlayed(eventPlaysContext.eventId, eventPlaysContext.occurrenceDate || null, songId, seen, total, false)
+            .catch(() => {
+              autoMarkedSongIdsRef.current.delete(songId);
+            });
+        }
+      }
+    }
   };
 
   // ── Ajustes ──────────────────────────────────────────────────────────────
@@ -954,7 +988,7 @@ export default function MobileControllerPage() {
               <span className="text-sm font-medium">Canción</span>
             </button>
           ) : (
-            <button onClick={() => { setSongDetail(null); setActiveSongSlideId(null); setSongEditMode(false); setSongOriginTab('songs'); }} className="flex items-center gap-1.5 text-zinc-300">
+            <button onClick={() => { setSongDetail(null); setActiveSongSlideIndex(null); setSongEditMode(false); setSongOriginTab('songs'); }} className="flex items-center gap-1.5 text-zinc-300">
               <ArrowLeft size={16} />
               <span className="text-sm font-medium">{songOriginTab === 'events' ? 'Setlist' : 'Canciones'}</span>
             </button>
@@ -1201,8 +1235,11 @@ export default function MobileControllerPage() {
                       const id = slideData.songId;
                       if (eventPlays?.has(id)) {
                         await actions.unmarkPlayed(eventPlaysContext.eventId, eventPlaysContext.occurrenceDate, id);
+                        autoMarkedSongIdsRef.current.delete(id);
+                        seenSlideIdxBySongRef.current.delete(id);
                       } else {
                         await actions.markPlayed(eventPlaysContext.eventId, eventPlaysContext.occurrenceDate, id, 0, 0, true);
+                        autoMarkedSongIdsRef.current.add(id);
                       }
                     }}
                     className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-semibold transition-all active:scale-95 ${
@@ -1265,7 +1302,7 @@ export default function MobileControllerPage() {
                     <div
                       onClick={() => sendSlide(songDetail, { type: 'title' }, effectiveSongSlides)}
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
-                        ((activeSongSlideId === '__title__' && slideData?.songId === songDetail?.id) || (slideData?.type === 'title' && slideData?.songId === songDetail?.id && !isBlank))
+                        ((activeSongSlideIndex === -1 && slideData?.songId === songDetail?.id) || (slideData?.type === 'title' && slideData?.songId === songDetail?.id && !isBlank))
                           ? 'bg-accent/15 border-accent text-accent'
                           : 'bg-surface-800 border-surface-700 text-zinc-300'
                       }`}
@@ -1279,12 +1316,12 @@ export default function MobileControllerPage() {
                   )}
                   {(effectiveSongSlides || []).map((slide, idx) => {
                     const labelColor = getLabelColor(slide.label);
-                    const isActive   = activeSongSlideId === slide.id;
+                    const isActive   = activeSongSlideIndex === idx;
                     return (
                       <div
-                        key={idx}
-                        data-slide-id={slide.id}
-                        onClick={() => sendSlide(songDetail, slide, effectiveSongSlides, idx)}
+                        key={`${slide.id}-${idx}`}
+                        data-slide-idx={idx}
+                        onClick={() => sendSlide(songDetail, slide, effectiveSongSlides, { slideIndexOverride: idx })}
                         className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
                           isActive ? 'bg-accent/15 border-accent' : 'bg-surface-800 border-surface-700'
                         }`}
@@ -1422,20 +1459,20 @@ export default function MobileControllerPage() {
                       </select>
                     </div>
                   )}
-                  {(effectiveSongSlides || []).map(slide => (
+                  {(effectiveSongSlides || []).map((slide, idx) => (
                     <button
-                      key={slide.id}
-                      data-slide-id={slide.id}
-                      onClick={() => sendSlide(songDetail, slide, effectiveSongSlides)}
+                      key={`${slide.id}-${idx}`}
+                      data-slide-idx={idx}
+                      onClick={() => sendSlide(songDetail, slide, effectiveSongSlides, { slideIndexOverride: idx })}
                       className={`w-full text-left px-4 py-5 rounded-xl border-2 transition-colors ${
-                        activeSongSlideId === slide.id
+                        activeSongSlideIndex === idx
                           ? 'bg-accent/10 border-accent shadow-[0_0_0_1px_var(--accent)]'
                           : 'bg-surface-800 active:bg-surface-700 border-surface-700'
                       }`}
                     >
                       {slide.label && (
                         <span className={`inline-block text-[10px] font-semibold rounded px-1.5 py-0.5 mb-2 border ${
-                          activeSongSlideId === slide.id
+                          activeSongSlideIndex === idx
                             ? 'text-accent bg-accent/20 border-accent/50'
                             : 'text-accent bg-accent/10 border-accent/30'
                         }`}>
@@ -2002,8 +2039,11 @@ export default function MobileControllerPage() {
                               : null;
                             if (eventPlays?.has(item.song_id)) {
                               await actions.unmarkPlayed(eventDetail.id, occDate, item.song_id);
+                              autoMarkedSongIdsRef.current.delete(item.song_id);
+                              seenSlideIdxBySongRef.current.delete(item.song_id);
                             } else {
                               await actions.markPlayed(eventDetail.id, occDate, item.song_id, 0, 0, true);
+                              autoMarkedSongIdsRef.current.add(item.song_id);
                             }
                           }}
                           className={`shrink-0 px-4 flex items-center justify-center border-l border-surface-700 active:bg-surface-700 transition-colors ${
