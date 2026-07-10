@@ -23,6 +23,8 @@ import {
   CheckCircle2, Circle, MonitorPlay, MessageSquare,
 } from 'lucide-react';
 
+const BUILD_VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
+
 // ─── Utilidad: leer/guardar conexión ─────────────────────────────────────────
 function getSavedIp()   { return localStorage.getItem('aio_server_ip')   || window.location.hostname; }
 function getSavedPort() { return localStorage.getItem('aio_server_port') || '3001'; }
@@ -148,6 +150,21 @@ function buildOrderedSlides(rawSlides = [], structItems = []) {
     nextIdxByLabel[lbl] = idx + 1;
   }
   return result.length > 0 ? result : rawSlides;
+}
+
+function resolveSlidesForSongDetail(song) {
+  const rawSlides = Array.isArray(song?.slides) ? song.slides : [];
+  if (!song) return rawSlides;
+  const allStructures = Array.isArray(song.structures) && song.structures.length > 0
+    ? song.structures
+    : (Array.isArray(song.structure) && song.structure.length > 0
+      ? [{ name: 'Estructura 1', items: song.structure }]
+      : []);
+  if (!allStructures.length) return rawSlides;
+  const saved = localStorage.getItem(`aio_active_struct_${song.id}`);
+  const idx = saved !== null ? Math.max(0, parseInt(saved, 10) || 0) : 0;
+  const items = allStructures[Math.min(idx, allStructures.length - 1)]?.items ?? [];
+  return buildOrderedSlides(rawSlides, items);
 }
 
 // ─── Categorías de libros bíblicos (índice en canon protestante 66 libros) ────
@@ -671,7 +688,7 @@ export default function MobileControllerPage() {
     // Misma canción: lógica original con auto-avance al final del setlist
     const isAtLastSlide = Number.isInteger(liveState?.slideIndex) && slides?.length > 0 && liveState.slideIndex === (slides.length - 1);
     if (slideData?.type === 'song' && isAtLastSlide && schedule?.length) {
-      const currentIdx = schedule.findIndex(it => it.song_id === songDetail.id);
+      const currentIdx = schedule.findIndex(it => String(it.song_id) === String(songDetail.id));
       let nextItem = null;
       if (currentIdx >= 0) {
         for (let i = currentIdx + 1; i < schedule.length; i++) {
@@ -684,8 +701,9 @@ export default function MobileControllerPage() {
         setLoadingSong(true);
         actions.loadSongDetail(nextItem.song_id).then(detail => { // eslint-disable-line
           setSongDetail(detail);
+          const nextSlides = resolveSlidesForSongDetail(detail);
           // showTitle=true: el auto-avance SÍ muestra la diapositiva de título
-          if (detail.slides?.length > 0) sendSlide(detail, detail.slides[0], detail.slides, { showTitle: true, slideIndexOverride: 0 }); // eslint-disable-line
+          if (nextSlides?.length > 0) sendSlide(detail, nextSlides[0], nextSlides, { showTitle: true, slideIndexOverride: 0 }); // eslint-disable-line
         }).finally(() => setLoadingSong(false));
         return;
       }
@@ -763,29 +781,49 @@ export default function MobileControllerPage() {
       nextSlideData:       next ? { type: 'song', label: next.label, content: next.content } : null,
     });
 
-    // Auto-marcar como tocada al 50% en móvil (por índice de ocurrencia, no por slide.id)
-    if (song?.id && eventPlaysContext?.eventId && idx >= 0 && Array.isArray(slides) && slides.length > 0) {
-      const songId = song.id;
-      if (!autoMarkedSongIdsRef.current.has(songId) && !eventPlays?.has(songId)) {
-        let seenSet = seenSlideIdxBySongRef.current.get(songId);
-        if (!seenSet) {
-          seenSet = new Set();
-          seenSlideIdxBySongRef.current.set(songId, seenSet);
-        }
-        seenSet.add(idx);
-        const seen = seenSet.size;
-        const total = slides.length;
-        const pct = total > 0 ? (seen / total) : 0;
-        if (pct >= 0.5) {
-          autoMarkedSongIdsRef.current.add(songId);
-          actions.markPlayed(eventPlaysContext.eventId, eventPlaysContext.occurrenceDate || null, songId, seen, total, false)
-            .catch(() => {
-              autoMarkedSongIdsRef.current.delete(songId);
-            });
-        }
-      }
-    }
   };
+
+  // Auto-marcar como tocada al 50% al navegar en vivo (botones prev/next o click slide)
+  useEffect(() => {
+    if (slideData?.type !== 'song') return;
+    const songId = slideData?.songId;
+    const idx = Number.isInteger(liveState?.slideIndex) ? liveState.slideIndex : null;
+    if (!songId || idx == null || idx < 0) return;
+    if (!playsCtx?.eventId) return;
+    if (eventPlays?.has(songId) || autoMarkedSongIdsRef.current.has(songId)) return;
+
+    const total = (songDetail?.id === songId && effectiveSongSlides.length > 0)
+      ? effectiveSongSlides.length
+      : (Number.isInteger(liveState?.totalSlides) ? liveState.totalSlides : 0);
+    if (!total || total <= 0) return;
+
+    let seenSet = seenSlideIdxBySongRef.current.get(songId);
+    if (!seenSet) {
+      seenSet = new Set();
+      seenSlideIdxBySongRef.current.set(songId, seenSet);
+    }
+    seenSet.add(idx);
+
+    const seen = seenSet.size;
+    const pct = seen / total;
+    if (pct >= 0.5) {
+      autoMarkedSongIdsRef.current.add(songId);
+      actions.markPlayed(playsCtx.eventId, playsCtx.occurrenceDate || null, songId, seen, total, false)
+        .catch(() => {
+          autoMarkedSongIdsRef.current.delete(songId);
+        });
+    }
+  }, [
+    slideData?.type,
+    slideData?.songId,
+    liveState?.slideIndex,
+    liveState?.totalSlides,
+    playsCtx?.eventId,
+    playsCtx?.occurrenceDate,
+    eventPlays,
+    songDetail?.id,
+    effectiveSongSlides.length,
+  ]);
 
   // ── Ajustes ──────────────────────────────────────────────────────────────
   const saveSettings = () => {
@@ -945,6 +983,24 @@ export default function MobileControllerPage() {
     return norm(s.title).includes(q) || norm(s.artist).includes(q);
   });
 
+  const playsCtx = useMemo(() => {
+    if (eventPlaysContext?.eventId) {
+      return {
+        eventId: eventPlaysContext.eventId,
+        occurrenceDate: eventPlaysContext.occurrenceDate || null,
+      };
+    }
+    if (eventDetail?.id) {
+      return {
+        eventId: eventDetail.id,
+        occurrenceDate: eventDetail.is_recurring
+          ? String(eventDetail.occurrence_date || eventDetail.date).split('T')[0]
+          : null,
+      };
+    }
+    return null;
+  }, [eventPlaysContext?.eventId, eventPlaysContext?.occurrenceDate, eventDetail?.id, eventDetail?.is_recurring, eventDetail?.occurrence_date, eventDetail?.date]);
+
   return (
     <div
       className="h-[100dvh] bg-surface-900 flex flex-col select-none overflow-hidden mobile-controller-root"
@@ -999,7 +1055,10 @@ export default function MobileControllerPage() {
             <span className="text-sm font-medium">Eventos</span>
           </button>
         ) : (
-          <span className="text-accent font-bold text-base tracking-tight">AIO Presenter</span>
+          <div className="flex flex-col leading-tight">
+            <span className="text-accent font-bold text-base tracking-tight">AIO Presenter</span>
+            <span className="text-[10px] text-zinc-500">build {BUILD_VERSION}</span>
+          </div>
         )}
         <div className="flex items-center gap-1.5 text-xs">
           {songDetail && songEditMode ? (
@@ -1065,6 +1124,9 @@ export default function MobileControllerPage() {
               </button>
             </>
           )}
+          <span className="ml-1 px-1.5 py-0.5 rounded bg-surface-700 border border-surface-600 text-[10px] text-zinc-300 font-mono">
+            {BUILD_VERSION}
+          </span>
         </div>
       </header>
 
@@ -1229,16 +1291,16 @@ export default function MobileControllerPage() {
                 </button>
 
                 {/* Marcar como tocada */}
-                {slideData?.type === 'song' && slideData?.songId && eventPlaysContext && (
+                {slideData?.type === 'song' && slideData?.songId && playsCtx && (
                   <button
                     onClick={async () => {
                       const id = slideData.songId;
                       if (eventPlays?.has(id)) {
-                        await actions.unmarkPlayed(eventPlaysContext.eventId, eventPlaysContext.occurrenceDate, id);
+                        await actions.unmarkPlayed(playsCtx.eventId, playsCtx.occurrenceDate, id);
                         autoMarkedSongIdsRef.current.delete(id);
                         seenSlideIdxBySongRef.current.delete(id);
                       } else {
-                        await actions.markPlayed(eventPlaysContext.eventId, eventPlaysContext.occurrenceDate, id, 0, 0, true);
+                        await actions.markPlayed(playsCtx.eventId, playsCtx.occurrenceDate, id, 0, 0, true);
                         autoMarkedSongIdsRef.current.add(id);
                       }
                     }}

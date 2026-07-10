@@ -24,6 +24,8 @@ import AdminPage               from './pages/AdminPage';
 import TrialExpiredBanner      from './components/shared/TrialExpiredBanner';
 import { forceRefreshApp }     from './utils/forceRefreshApp';
 
+const BUILD_VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
+
 // Intercepta sync_token / sync_error de la URL (redirect post-OAuth) y redirige a /app
 function OAuthCallbackHandler() {
   const navigate = useNavigate();
@@ -161,18 +163,78 @@ function RequireAuth({ children }) {
 // Banner de actualización cuando el SW activa una nueva versión
 function UpdateBanner() {
   const [ready, setReady] = useState(false);
+
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return;
-    const handler = () => setReady(true);
-    navigator.serviceWorker.addEventListener('controllerchange', handler);
-    return () => navigator.serviceWorker.removeEventListener('controllerchange', handler);
+
+    let mounted = true;
+    let regRef = null;
+
+    const inspectRegistration = (reg) => {
+      if (!reg) return;
+      regRef = reg;
+
+      if (reg.waiting && navigator.serviceWorker.controller) {
+        setReady(true);
+      }
+
+      reg.addEventListener('updatefound', () => {
+        const installing = reg.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          if (!mounted) return;
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            setReady(true);
+          }
+        });
+      });
+    };
+
+    const onControllerChange = () => {
+      // Se activó el nuevo SW y ya tomamos control de la página.
+      if (mounted) setReady(false);
+    };
+
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+
+    navigator.serviceWorker.getRegistration()
+      .then((reg) => {
+        if (!mounted) return;
+        inspectRegistration(reg);
+        reg?.update?.().catch(() => {});
+      })
+      .catch(() => {});
+
+    const intervalId = setInterval(() => {
+      regRef?.update?.().catch(() => {});
+    }, 60000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+    };
   }, []);
+
+  const applyUpdate = async () => {
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg?.waiting) {
+        reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        return;
+      }
+    } catch {
+      // no-op
+    }
+    await forceRefreshApp(window.location.pathname);
+  };
+
   if (!ready) return null;
   return (
     <div className="fixed top-0 inset-x-0 z-[9999] flex items-center justify-between gap-3 px-4 py-2 bg-accent text-white text-xs shadow-lg">
-      <span>¡Nueva versión disponible!</span>
+      <span>¡Nueva versión disponible! (build {BUILD_VERSION})</span>
       <button
-        onClick={() => forceRefreshApp(window.location.pathname)}
+        onClick={applyUpdate}
         className="flex items-center gap-1 font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition-colors"
       >
         <RefreshCw size={12} />
