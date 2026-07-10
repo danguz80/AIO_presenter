@@ -552,6 +552,51 @@ export default function MobileControllerPage() {
     }
   };
 
+  // Carga el capítulo completo de un versículo del historial y navega a él,
+  // dejando al usuario listo para seguir avanzando con los botones normales.
+  const navigateToVerseInContext = async (histVerse) => {
+    try {
+      // 1. Encontrar la versión (match por abbreviation, que es el campo "version" en el verso)
+      let versions = bibleVersions;
+      if (!versions.length) {
+        const r = await fetch(`${getApiBase()}/api/bible/versions`);
+        if (r.ok) { versions = await r.json(); setBibleVersions(versions); }
+      }
+      const version = versions.find(v => v.abbreviation === histVerse.version) ?? versions[0];
+      if (!version) return;
+
+      // 2. Cargar libros para esa versión
+      let books = (bibleVersion?.id === version.id && bibleBooks.length) ? bibleBooks : null;
+      if (!books) {
+        const r = await fetch(`${getApiBase()}/api/bible/${version.id}/books`);
+        if (!r.ok) return;
+        books = await r.json();
+        setBibleBooks(books);
+      }
+      const book = books.find(b => b.name === histVerse.book_name);
+      if (!book) return;
+
+      // 3. Cargar los versículos del capítulo
+      const r = await fetch(`${getApiBase()}/api/bible/${version.id}/books/${book.id}/chapters/${histVerse.chapter}`);
+      if (!r.ok) return;
+      const verses = await r.json();
+
+      // 4. Encontrar el verso exacto dentro del capítulo
+      const target = verses.find(v => v.verse === histVerse.verse) ?? verses[0];
+      if (!target) return;
+
+      // 5. Actualizar todo el estado de navegación para que el usuario pueda continuar
+      setBibleVersion(version);
+      setBibleBook(book);
+      setBibleChapter(histVerse.chapter);
+      setBibleVerses(verses);
+      setBibleMode('nav');
+
+      // 6. Proyectar y dejar lista la lista completa del capítulo
+      sendVerse(target, verses);
+    } catch { /* sin conexión */ }
+  };
+
   // Scroll versículo activo al centro de la lista
   useEffect(() => {
     if (!activeVerse || !verseListRef.current) return;
@@ -2385,7 +2430,7 @@ export default function MobileControllerPage() {
                     return recent.map(h => (
                       <button
                         key={`${h.id}-${h.ts}`}
-                        onClick={() => sendVerse(h, recent)}
+                        onClick={() => navigateToVerseInContext(h)}
                         className={`w-full text-left px-4 py-3 rounded-xl border transition-colors ${
                           activeVerse?.id === h.id
                             ? 'bg-accent/15 border-accent/50'
