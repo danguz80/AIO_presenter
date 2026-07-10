@@ -527,7 +527,7 @@ export default function SongDetail() {
     });
   };
 
-  // Trackea el slide visto y auto-marca cuando ≥90% de slides han sido proyectados
+  // Trackea el slide visto y auto-marca cuando ≥50% de slides han sido proyectados
   const trackSlide = (slideId) => {
     if (!selectedSong || !eventPlaysContext) return;
     seenSlideIds.current.add(slideId);
@@ -543,7 +543,7 @@ export default function SongDetail() {
     if (!inSchedule) return;
     const { eventId, occurrenceDate } = eventPlaysContext;
     const pct = seen / total;
-    if (pct >= 0.9) {
+    if (pct >= 0.5) {
       actions.markPlayed(eventId, occurrenceDate, songIdNum, seen, total, false);
     }
   };

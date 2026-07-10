@@ -14,6 +14,7 @@ import OrgSwitcher     from '../components/shared/OrgSwitcher';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
 import useVolumeKeys from '../hooks/useVolumeKeys';
+import { forceRefreshApp } from '../utils/forceRefreshApp';
 import {
   ChevronLeft, ChevronRight, EyeOff, Eye,
   Wifi, WifiOff, Music, Music2, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
@@ -164,7 +165,7 @@ export default function MobileControllerPage() {
         localStorage.setItem('aio_target_pin', pinFromUrl);
         // Limpiar el param de la URL y recargar para reconectar el socket con el nuevo PIN
         window.history.replaceState({}, '', '/mobile');
-        window.location.reload();
+        forceRefreshApp('/mobile');
       }
     }
   }, []);
@@ -320,7 +321,7 @@ export default function MobileControllerPage() {
     const clean = (pin || '').trim().toLowerCase().slice(0, 6);
     if (!clean) return;
     localStorage.setItem('aio_target_pin', clean);
-    window.location.reload();
+    forceRefreshApp('/mobile');
   };
 
   const saveEventForm = async () => {
@@ -725,7 +726,7 @@ export default function MobileControllerPage() {
     localStorage.setItem('aio_server_ip',   cfgIp.trim());
     localStorage.setItem('aio_server_port', cfgPort.trim());
     setCfgSaved(true);
-    setTimeout(() => window.location.reload(), 600);
+    setTimeout(() => forceRefreshApp('/mobile'), 600);
   };
 
   // Auto-abrir panel Grid cuando se selecciona una canción
@@ -908,8 +909,8 @@ export default function MobileControllerPage() {
                 : <><WifiOff size={13} className="text-red-400" /><span className="text-red-400">Sin conexión</span></>
               }
               <button
-                onClick={() => window.location.reload()}
-                title="Recargar aplicación"
+                onClick={() => forceRefreshApp('/mobile')}
+                title="Forzar refresh"
                 className="text-zinc-400 hover:text-accent transition-colors p-1"
               >
                 <RefreshCw size={14} />

@@ -15,6 +15,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck, MessageSquare } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import OrgSwitcher from '../components/shared/OrgSwitcher';
+import { forceRefreshApp } from '../utils/forceRefreshApp';
 
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
@@ -247,8 +248,8 @@ export default function ControllerPage() {
 
           {/* Botón recargar */}
           <button
-            onClick={() => window.location.reload()}
-            title="Recargar aplicación"
+            onClick={() => forceRefreshApp('/app')}
+            title="Forzar refresh"
             className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-accent transition-colors px-2 py-1 rounded hover:bg-surface-700"
           >
             <RefreshCw size={15} />
