@@ -119,6 +119,37 @@ function textToSlides(text) {
   return slides.length > 0 ? slides : [{ label: '', content: text.trim() }];
 }
 
+function buildOrderedSlides(rawSlides = [], structItems = []) {
+  if (!Array.isArray(rawSlides) || rawSlides.length === 0) return [];
+  if (!Array.isArray(structItems) || structItems.length === 0) return rawSlides;
+
+  // Misma estrategia de SongDetail: consumir bloques por ocurrencia de etiqueta.
+  const blocks = [];
+  for (const s of rawSlides) {
+    const lbl = s.label?.trim() ?? '';
+    const last = blocks[blocks.length - 1];
+    if (!last || last.label !== lbl) blocks.push({ label: lbl, slides: [s] });
+    else last.slides.push(s);
+  }
+
+  const blocksByLabel = {};
+  for (const b of blocks) {
+    if (!blocksByLabel[b.label]) blocksByLabel[b.label] = [];
+    blocksByLabel[b.label].push(b.slides);
+  }
+
+  const nextIdxByLabel = {};
+  const result = [];
+  for (const lbl of structItems) {
+    const arr = blocksByLabel[lbl] ?? [];
+    if (arr.length === 0) continue;
+    const idx = nextIdxByLabel[lbl] ?? 0;
+    result.push(...arr[Math.min(idx, arr.length - 1)]);
+    nextIdxByLabel[lbl] = idx + 1;
+  }
+  return result.length > 0 ? result : rawSlides;
+}
+
 // ─── Categorías de libros bíblicos (índice en canon protestante 66 libros) ────
 const BOOK_CATEGORIES = [
   { label: 'Pentateuco',         start: 0,  end: 5,  bg: 'bg-emerald-900/50 border-emerald-700/40', text: 'text-emerald-100', accent: 'text-emerald-400' },
@@ -770,34 +801,63 @@ export default function MobileControllerPage() {
   const effectiveSongSlides = useMemo(() => {
     const rawSlides = Array.isArray(songDetail?.slides) ? songDetail.slides : [];
     const items = allStructures[Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))]?.items ?? [];
-    if (!items.length || !rawSlides.length) return rawSlides;
-
-    // Consumir bloques por ocurrencia de etiqueta, no todas las slides del label de una vez.
-    const blocks = [];
-    for (const s of rawSlides) {
-      const lbl = s.label?.trim() ?? '';
-      const last = blocks[blocks.length - 1];
-      if (!last || last.label !== lbl) blocks.push({ label: lbl, slides: [s] });
-      else last.slides.push(s);
-    }
-
-    const blocksByLabel = {};
-    for (const b of blocks) {
-      if (!blocksByLabel[b.label]) blocksByLabel[b.label] = [];
-      blocksByLabel[b.label].push(b.slides);
-    }
-
-    const nextIdxByLabel = {};
-    const result = [];
-    for (const lbl of items) {
-      const arr = blocksByLabel[lbl] ?? [];
-      if (arr.length === 0) continue;
-      const idx = nextIdxByLabel[lbl] ?? 0;
-      result.push(...arr[Math.min(idx, arr.length - 1)]);
-      nextIdxByLabel[lbl] = idx + 1;
-    }
-    return result.length > 0 ? result : rawSlides;
+    return buildOrderedSlides(rawSlides, items);
   }, [songDetail?.id, songDetail?.slides, allStructures, activeStructIdx]);
+
+  // Si el escritorio ya está proyectando esta canción, elegir automáticamente
+  // la estructura del móvil que mejor coincide con el estado en vivo (total/index/slideId).
+  useEffect(() => {
+    if (!songDetail?.id) return;
+    if (!allStructures.length || allStructures.length === 1) return;
+    if (slideData?.songId !== songDetail.id) return;
+
+    const liveTotal = Number.isInteger(liveState?.totalSlides) ? liveState.totalSlides : null;
+    const liveIdx = Number.isInteger(liveState?.slideIndex) ? liveState.slideIndex : null;
+    const liveSlideId = slideData?.slideId || null;
+    if (liveTotal == null && liveIdx == null && !liveSlideId) return;
+
+    const rawSlides = Array.isArray(songDetail.slides) ? songDetail.slides : [];
+    const candidates = allStructures.map((s, i) => {
+      const slides = buildOrderedSlides(rawSlides, s?.items ?? []);
+      let score = 0;
+
+      if (liveTotal != null && slides.length === liveTotal) score += 100;
+
+      if (liveSlideId) {
+        const idxs = [];
+        for (let j = 0; j < slides.length; j++) {
+          if (String(slides[j]?.id) === String(liveSlideId)) idxs.push(j);
+        }
+        if (idxs.length > 0) score += 20;
+        if (liveIdx != null && idxs.length > 0) {
+          if (idxs.includes(liveIdx)) {
+            score += 80;
+          } else {
+            const minDiff = Math.min(...idxs.map(v => Math.abs(v - liveIdx)));
+            score += Math.max(0, 30 - minDiff);
+          }
+        }
+      }
+
+      if (i === activeStructIdx) score += 1; // desempate estable
+      return { i, score };
+    });
+
+    candidates.sort((a, b) => b.score - a.score);
+    const best = candidates[0];
+    if (best && best.i !== activeStructIdx) {
+      setActiveStructIdx(best.i);
+    }
+  }, [
+    songDetail?.id,
+    songDetail?.slides,
+    allStructures,
+    activeStructIdx,
+    slideData?.songId,
+    slideData?.slideId,
+    liveState?.slideIndex,
+    liveState?.totalSlides,
+  ]);
 
   // ── Datos del slide actual ────────────────────────────────────────────────
   const slideText      = slideData && (slideData.type === 'song' ? stripChords(stripComments(slideData.content)) : slideData.text);
