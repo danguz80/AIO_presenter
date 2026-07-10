@@ -22,6 +22,7 @@ import CancioneroSettings      from './pages/cancionero/CancioneroSettings';
 import SpotifyCallbackPage     from './pages/cancionero/SpotifyCallbackPage';
 import AdminPage               from './pages/AdminPage';
 import TrialExpiredBanner      from './components/shared/TrialExpiredBanner';
+import { forceRefreshApp }     from './utils/forceRefreshApp';
 
 // Intercepta sync_token / sync_error de la URL (redirect post-OAuth) y redirige a /app
 function OAuthCallbackHandler() {
@@ -171,7 +172,7 @@ function UpdateBanner() {
     <div className="fixed top-0 inset-x-0 z-[9999] flex items-center justify-between gap-3 px-4 py-2 bg-accent text-white text-xs shadow-lg">
       <span>¡Nueva versión disponible!</span>
       <button
-        onClick={() => window.location.reload()}
+        onClick={() => forceRefreshApp(window.location.pathname)}
         className="flex items-center gap-1 font-semibold bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition-colors"
       >
         <RefreshCw size={12} />

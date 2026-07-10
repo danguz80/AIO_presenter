@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePresenter } from '../context/usePresenter';
 import OutputControls  from '../components/Controls/OutputControls';
@@ -198,6 +198,7 @@ export default function MobileControllerPage() {
   });
   const [songDetail,       setSongDetail]       = useState(null);
   const [songOriginTab,    setSongOriginTab]    = useState('songs');
+  const [activeStructIdx,  setActiveStructIdx]  = useState(0);
   const [songEditMode,     setSongEditMode]     = useState(false);
   const [songEditData,     setSongEditData]     = useState({});
   const [songEditSaving,   setSongEditSaving]   = useState(false);
@@ -603,7 +604,7 @@ export default function MobileControllerPage() {
   // ── Navegación ──────────────────────────────────────────────────────────
   const trigger = (fn, dir) => { fn(); setFlash(dir); setTimeout(() => setFlash(null), 200); };
   const handlePrev  = () => {
-    const slides = songDetail?.slides;
+    const slides = effectiveSongSlides;
     // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
     // navegar localmente (enviar navigate haría que el servidor naviegue la canción anterior)
     if (slides?.length && songDetail && slideData?.type === 'song' && slideData.songId && songDetail.id !== slideData.songId) {
@@ -616,7 +617,7 @@ export default function MobileControllerPage() {
     trigger(() => actions.navigate('prev'), 'prev');
   };
   const handleNext  = () => {
-    const slides = songDetail?.slides;
+    const slides = effectiveSongSlides;
     // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
     // navegar localmente en lugar de enviar navigate (evita proyectar slides de la canción anterior)
     if (slides?.length && songDetail && slideData?.type === 'song' && slideData.songId && songDetail.id !== slideData.songId) {
@@ -744,6 +745,59 @@ export default function MobileControllerPage() {
     if (songDetail?.id === activeSongId) return;
     openSong(activeSongId);
   }, [slideData?.songId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mantener la estructura activa por canción (igual que en escritorio)
+  useEffect(() => {
+    if (!songDetail?.id) return;
+    const saved = localStorage.getItem(`aio_active_struct_${songDetail.id}`);
+    setActiveStructIdx(saved !== null ? Math.max(0, parseInt(saved, 10) || 0) : 0);
+  }, [songDetail?.id]);
+
+  useEffect(() => {
+    if (!songDetail?.id) return;
+    localStorage.setItem(`aio_active_struct_${songDetail.id}`, String(activeStructIdx));
+  }, [activeStructIdx, songDetail?.id]);
+
+  const allStructures = useMemo(() => {
+    if (!songDetail) return [];
+    if (Array.isArray(songDetail.structures) && songDetail.structures.length > 0) return songDetail.structures;
+    if (Array.isArray(songDetail.structure) && songDetail.structure.length > 0) {
+      return [{ name: 'Estructura 1', items: songDetail.structure }];
+    }
+    return [];
+  }, [songDetail?.id, songDetail?.structures, songDetail?.structure]);
+
+  const effectiveSongSlides = useMemo(() => {
+    const rawSlides = Array.isArray(songDetail?.slides) ? songDetail.slides : [];
+    const items = allStructures[Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))]?.items ?? [];
+    if (!items.length || !rawSlides.length) return rawSlides;
+
+    // Consumir bloques por ocurrencia de etiqueta, no todas las slides del label de una vez.
+    const blocks = [];
+    for (const s of rawSlides) {
+      const lbl = s.label?.trim() ?? '';
+      const last = blocks[blocks.length - 1];
+      if (!last || last.label !== lbl) blocks.push({ label: lbl, slides: [s] });
+      else last.slides.push(s);
+    }
+
+    const blocksByLabel = {};
+    for (const b of blocks) {
+      if (!blocksByLabel[b.label]) blocksByLabel[b.label] = [];
+      blocksByLabel[b.label].push(b.slides);
+    }
+
+    const nextIdxByLabel = {};
+    const result = [];
+    for (const lbl of items) {
+      const arr = blocksByLabel[lbl] ?? [];
+      if (arr.length === 0) continue;
+      const idx = nextIdxByLabel[lbl] ?? 0;
+      result.push(...arr[Math.min(idx, arr.length - 1)]);
+      nextIdxByLabel[lbl] = idx + 1;
+    }
+    return result.length > 0 ? result : rawSlides;
+  }, [songDetail?.id, songDetail?.slides, allStructures, activeStructIdx]);
 
   // ── Datos del slide actual ────────────────────────────────────────────────
   const slideText      = slideData && (slideData.type === 'song' ? stripChords(stripComments(slideData.content)) : slideData.text);
@@ -1149,7 +1203,7 @@ export default function MobileControllerPage() {
                 <div className="px-4 py-3 space-y-2">
                   {(songDetail.titleEnabled ?? true) && (
                     <div
-                      onClick={() => sendSlide(songDetail, { type: 'title' }, songDetail.slides)}
+                      onClick={() => sendSlide(songDetail, { type: 'title' }, effectiveSongSlides)}
                       className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
                         ((activeSongSlideId === '__title__' && slideData?.songId === songDetail?.id) || (slideData?.type === 'title' && slideData?.songId === songDetail?.id && !isBlank))
                           ? 'bg-accent/15 border-accent text-accent'
@@ -1163,14 +1217,14 @@ export default function MobileControllerPage() {
                       </div>
                     </div>
                   )}
-                  {(songDetail.slides || []).map((slide, idx) => {
+                  {(effectiveSongSlides || []).map((slide, idx) => {
                     const labelColor = getLabelColor(slide.label);
                     const isActive   = activeSongSlideId === slide.id;
                     return (
                       <div
                         key={idx}
                         data-slide-id={slide.id}
-                        onClick={() => sendSlide(songDetail, slide, songDetail.slides, idx)}
+                        onClick={() => sendSlide(songDetail, slide, effectiveSongSlides, idx)}
                         className={`flex items-start gap-2 px-3 py-2.5 rounded-xl border cursor-pointer active:scale-95 transition-all ${
                           isActive ? 'bg-accent/15 border-accent' : 'bg-surface-800 border-surface-700'
                         }`}
@@ -1295,11 +1349,24 @@ export default function MobileControllerPage() {
                   </button>
                 </div>
                 <div className="flex-1 overflow-y-auto px-4 pb-4 pt-3 space-y-2">
-                  {(songDetail.slides || []).map(slide => (
+                  {allStructures.length > 1 && (
+                    <div className="mb-1">
+                      <select
+                        value={activeStructIdx}
+                        onChange={(e) => setActiveStructIdx(parseInt(e.target.value, 10) || 0)}
+                        className="w-full bg-surface-800 border border-surface-600 rounded-xl px-3 py-2 text-xs text-zinc-200"
+                      >
+                        {allStructures.map((s, i) => (
+                          <option key={i} value={i}>{s.name || `Estructura ${i + 1}`}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {(effectiveSongSlides || []).map(slide => (
                     <button
                       key={slide.id}
                       data-slide-id={slide.id}
-                      onClick={() => sendSlide(songDetail, slide, songDetail.slides)}
+                      onClick={() => sendSlide(songDetail, slide, effectiveSongSlides)}
                       className={`w-full text-left px-4 py-5 rounded-xl border-2 transition-colors ${
                         activeSongSlideId === slide.id
                           ? 'bg-accent/10 border-accent shadow-[0_0_0_1px_var(--accent)]'
@@ -2515,6 +2582,7 @@ function StageMobileSlide({ content, chordsColor, lyricsColor, showComments, com
 // ─── Botón de navegación de slides ───────────────────────────────────────────
 function NavBtn({ flash, onPointerDown, children }) {
   const lastFireRef = useRef(0);
+  const supportsPointer = typeof window !== 'undefined' && 'PointerEvent' in window;
   const fire = (e) => {
     e?.preventDefault?.();
     const now = Date.now();
@@ -2525,9 +2593,8 @@ function NavBtn({ flash, onPointerDown, children }) {
 
   return (
     <button
-      onPointerDown={fire}
-      onTouchStart={fire}
-      onClick={fire}
+      onPointerDown={supportsPointer ? fire : undefined}
+      onClick={!supportsPointer ? fire : undefined}
       className={`flex flex-col items-center justify-center gap-1 py-4 xs:py-5 sm:py-6 rounded-2xl border-2 transition-all active:scale-95 ${
         flash ? 'bg-accent/30 border-accent text-accent' : 'bg-surface-800 border-surface-600 text-zinc-300'
       }`}
