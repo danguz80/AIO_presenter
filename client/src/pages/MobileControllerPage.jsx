@@ -667,6 +667,20 @@ export default function MobileControllerPage() {
   // ── Navegación ──────────────────────────────────────────────────────────
   const trigger = (fn, dir) => { fn(); setFlash(dir); setTimeout(() => setFlash(null), 200); };
   const handlePrev  = () => {
+    // ── Modo Biblia: navegar dentro de activeVerseList ─────────────────────
+    if (slideData?.type === 'bible' && activeVerse) {
+      if (activeSplit) {
+        // Estamos en parte 1 de un verso dividido → prev vuelve al verso anterior de la lista
+        const list = activeSplit.list;
+        const i = list.findIndex(v => v.id === activeSplit.verse.id);
+        if (i > 0) { setFlash('prev'); setTimeout(() => setFlash(null), 200); sendVerse(list[i - 1], list); }
+        return;
+      }
+      const list = activeVerseList;
+      const i = list.findIndex(v => v.id === activeVerse.id);
+      if (i > 0) { setFlash('prev'); setTimeout(() => setFlash(null), 200); sendVerse(list[i - 1], list); }
+      return;
+    }
     const slides = effectiveSongSlides;
     // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
     // navegar localmente (enviar navigate haría que el servidor naviegue la canción anterior)
@@ -680,6 +694,31 @@ export default function MobileControllerPage() {
     trigger(() => actions.navigate('prev'), 'prev');
   };
   const handleNext  = () => {
+    // ── Modo Biblia: navegar dentro de activeVerseList ─────────────────────
+    if (slideData?.type === 'bible' && activeVerse) {
+      if (activeSplit) {
+        // Estamos en parte 1 de un verso dividido → next muestra parte 2
+        const { verse: sv, part2, list: sl } = activeSplit;
+        const ref = `${sv.book_name} ${sv.chapter}:${sv.verse}`;
+        const si  = sl.findIndex(v => v.id === sv.id);
+        const nx  = si >= 0 && si < sl.length - 1 ? sl[si + 1] : null;
+        actions.showSlide({
+          type: 'bible',
+          slideData:     makeVerseSD(part2, ref, sv.version),
+          nextSlideData: nx ? makeVerseSD(nx.text, `${nx.book_name} ${nx.chapter}:${nx.verse}`, nx.version) : null,
+        });
+        setActiveSplit(null);
+        setFlash('next'); setTimeout(() => setFlash(null), 200);
+        return;
+      }
+      const list = activeVerseList;
+      const i = list.findIndex(v => v.id === activeVerse.id);
+      if (i >= 0 && i < list.length - 1) {
+        setFlash('next'); setTimeout(() => setFlash(null), 200);
+        sendVerse(list[i + 1], list);
+      }
+      return;
+    }
     const slides = effectiveSongSlides;
     // Si el servidor tiene activa una canción diferente a la cargada en el móvil,
     // navegar localmente en lugar de enviar navigate (evita proyectar slides de la canción anterior)
