@@ -50,17 +50,26 @@ function norm(str) {
 }
 
 // ─── Utilidad: dividir versos bíblicos largos ───────────────────────────────
-function splitBibleVerse(text, threshold = 170) {
-  if (!text || text.length <= threshold) return null;
-  const mid = Math.floor(text.length / 2);
-  for (const delim of ['.', ';', ',']) {
-    const idx = text.lastIndexOf(delim, mid);
-    if (idx > text.length * 0.25 && idx < text.length * 0.75)
-      return [text.slice(0, idx + 1).trim(), text.slice(idx + 1).trim()];
+// Divide un versículo en páginas según el máximo de líneas configurado (mismo algoritmo
+// que BibleBrowser.jsx de escritorio). Devuelve array de strings o null si no hay split.
+function splitBibleVerse(text, maxLines) {
+  if (!maxLines || !text) return null;
+  const charsPerLine = 46;
+  const estLines = Math.max(
+    text.split('\n').filter(l => l.trim()).length,
+    Math.ceil(text.length / charsPerLine)
+  );
+  if (estLines <= maxLines) return null;
+  const words = text.split(/\s+/);
+  const pages = []; let cur = '';
+  for (const w of words) {
+    const t = cur ? `${cur} ${w}` : w;
+    if (Math.ceil(t.length / charsPerLine) > maxLines && cur) {
+      pages.push(cur.trim()); cur = w;
+    } else { cur = t; }
   }
-  const spaceIdx = text.lastIndexOf(' ', mid);
-  if (spaceIdx > 0) return [text.slice(0, spaceIdx).trim(), text.slice(spaceIdx + 1).trim()];
-  return null;
+  if (cur.trim()) pages.push(cur.trim());
+  return pages.length > 1 ? pages : null;
 }
 
 // ─── Parsear contenido de diapo: comentarios + acordes-solo ──────────────────
@@ -509,29 +518,35 @@ export default function MobileControllerPage() {
   const sendVerse = (verse, list = []) => {
     setActiveVerse(verse);
     setActiveVerseList(list);
-    const ref  = `${verse.book_name} ${verse.chapter}:${verse.verse}`;
+    const baseRef = `${verse.book_name} ${verse.chapter}:${verse.verse}`;
     // Registrar en historial (mueve al tope si ya existe)
     setVerseHistory(prev => {
-      const entry = { ...verse, ref, ts: Date.now() };
+      const entry = { ...verse, ref: baseRef, ts: Date.now() };
       return [entry, ...prev.filter(h => h.id !== verse.id)].slice(0, 60);
     });
     const i    = list.findIndex(v => v.id === verse.id);
     const next = i >= 0 && i < list.length - 1 ? list[i + 1] : null;
     const nextSD = next ? makeVerseSD(next.text, `${next.book_name} ${next.chapter}:${next.verse}`, next.version) : null;
-    const parts = splitBibleVerse(verse.text || '');
-    if (parts) {
-      const [p1, p2] = parts;
-      setActiveSplit({ verse, part2: p2, list });
+
+    // Usar bibleMaxLines del outputConfig (mismo criterio que escritorio)
+    const maxLines = state.outputConfig?.bibleMaxLines ?? 0;
+    const pages = splitBibleVerse(verse.text || '', maxLines);
+
+    if (pages) {
+      const total = pages.length;
+      const pageRef = (n) => total > 1 ? `${baseRef} (${n + 1}/${total})` : baseRef;
+      // activeSplit: { verse, pages, pageIdx, list }
+      setActiveSplit({ verse, pages, pageIdx: 0, list });
       actions.showSlide({
         type: 'bible',
-        slideData:     makeVerseSD(p1, ref, verse.version),
-        nextSlideData: makeVerseSD(p2, ref, verse.version),
+        slideData:     makeVerseSD(pages[0], pageRef(0), verse.version),
+        nextSlideData: makeVerseSD(pages[1], pageRef(1), verse.version),
       });
     } else {
       setActiveSplit(null);
       actions.showSlide({
         type: 'bible',
-        slideData:     makeVerseSD(verse.text, ref, verse.version),
+        slideData:     makeVerseSD(verse.text, baseRef, verse.version),
         nextSlideData: nextSD,
       });
     }
@@ -667,12 +682,26 @@ export default function MobileControllerPage() {
   // ── Navegación ──────────────────────────────────────────────────────────
   const trigger = (fn, dir) => { fn(); setFlash(dir); setTimeout(() => setFlash(null), 200); };
   const handlePrev  = () => {
-    // ── Modo Biblia: navegar dentro de activeVerseList ─────────────────────
+    // ── Modo Biblia: navegar dentro de activeVerseList / páginas ──────────
     if (slideData?.type === 'bible' && activeVerse) {
       if (activeSplit) {
-        // Estamos en parte 1 de un verso dividido → prev vuelve al verso anterior de la lista
-        const list = activeSplit.list;
-        const i = list.findIndex(v => v.id === activeSplit.verse.id);
+        const { verse: sv, pages, pageIdx, list } = activeSplit;
+        if (pageIdx > 0) {
+          // Retroceder a la página anterior del mismo versículo
+          const total = pages.length;
+          const newIdx = pageIdx - 1;
+          const pageRef = (n) => `${sv.book_name} ${sv.chapter}:${sv.verse} (${n + 1}/${total})`;
+          setActiveSplit({ ...activeSplit, pageIdx: newIdx });
+          setFlash('prev'); setTimeout(() => setFlash(null), 200);
+          actions.showSlide({
+            type: 'bible',
+            slideData:     makeVerseSD(pages[newIdx], pageRef(newIdx), sv.version),
+            nextSlideData: makeVerseSD(pages[newIdx + 1], pageRef(newIdx + 1), sv.version),
+          });
+          return;
+        }
+        // Página 0: ir al versículo anterior de la lista
+        const i = list.findIndex(v => v.id === sv.id);
         if (i > 0) { setFlash('prev'); setTimeout(() => setFlash(null), 200); sendVerse(list[i - 1], list); }
         return;
       }
@@ -694,21 +723,34 @@ export default function MobileControllerPage() {
     trigger(() => actions.navigate('prev'), 'prev');
   };
   const handleNext  = () => {
-    // ── Modo Biblia: navegar dentro de activeVerseList ─────────────────────
+    // ── Modo Biblia: navegar dentro de activeVerseList / páginas ──────────
     if (slideData?.type === 'bible' && activeVerse) {
       if (activeSplit) {
-        // Estamos en parte 1 de un verso dividido → next muestra parte 2
-        const { verse: sv, part2, list: sl } = activeSplit;
-        const ref = `${sv.book_name} ${sv.chapter}:${sv.verse}`;
-        const si  = sl.findIndex(v => v.id === sv.id);
-        const nx  = si >= 0 && si < sl.length - 1 ? sl[si + 1] : null;
-        actions.showSlide({
-          type: 'bible',
-          slideData:     makeVerseSD(part2, ref, sv.version),
-          nextSlideData: nx ? makeVerseSD(nx.text, `${nx.book_name} ${nx.chapter}:${nx.verse}`, nx.version) : null,
-        });
-        setActiveSplit(null);
-        setFlash('next'); setTimeout(() => setFlash(null), 200);
+        const { verse: sv, pages, pageIdx, list } = activeSplit;
+        const total = pages.length;
+        const pageRef = (n) => total > 1 ? `${sv.book_name} ${sv.chapter}:${sv.verse} (${n + 1}/${total})` : `${sv.book_name} ${sv.chapter}:${sv.verse}`;
+        if (pageIdx < total - 1) {
+          // Avanzar a la siguiente página del mismo versículo
+          const newIdx = pageIdx + 1;
+          setActiveSplit({ ...activeSplit, pageIdx: newIdx });
+          const si  = list.findIndex(v => v.id === sv.id);
+          const nx  = si >= 0 && si < list.length - 1 ? list[si + 1] : null;
+          actions.showSlide({
+            type: 'bible',
+            slideData:     makeVerseSD(pages[newIdx], pageRef(newIdx), sv.version),
+            nextSlideData: newIdx < total - 1
+              ? makeVerseSD(pages[newIdx + 1], pageRef(newIdx + 1), sv.version)
+              : (nx ? makeVerseSD(nx.text, `${nx.book_name} ${nx.chapter}:${nx.verse}`, nx.version) : null),
+          });
+          setFlash('next'); setTimeout(() => setFlash(null), 200);
+          return;
+        }
+        // Última página: ir al siguiente versículo
+        const si = list.findIndex(v => v.id === sv.id);
+        if (si >= 0 && si < list.length - 1) {
+          setFlash('next'); setTimeout(() => setFlash(null), 200);
+          sendVerse(list[si + 1], list);
+        }
         return;
       }
       const list = activeVerseList;
@@ -2311,25 +2353,15 @@ export default function MobileControllerPage() {
                   <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center gap-2 bg-surface-900/80">
                     {activeSplit ? (
                       <>
-                        <span className="text-[10px] font-bold text-zinc-500 shrink-0">1/2</span>
+                        <span className="text-[10px] font-bold text-zinc-500 shrink-0">{activeSplit.pageIdx + 1}/{activeSplit.pages.length}</span>
                         <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
                           {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
                         </p>
-                        <button
-                          onClick={() => {
-                            const { verse: sv, part2, list: sl } = activeSplit;
-                            const ref = `${sv.book_name} ${sv.chapter}:${sv.verse}`;
-                            const si  = sl.findIndex(v => v.id === sv.id);
-                            const nx  = si >= 0 && si < sl.length - 1 ? sl[si + 1] : null;
-                            actions.showSlide({
-                              type: 'bible',
-                              slideData:     makeVerseSD(part2, ref, sv.version),
-                              nextSlideData: nx ? makeVerseSD(nx.text, `${nx.book_name} ${nx.chapter}:${nx.verse}`, nx.version) : null,
-                            });
-                            setActiveSplit(null);
-                          }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold"
-                        >Parte 2 <ChevronRight size={13} /></button>
+                        {activeSplit.pageIdx < activeSplit.pages.length - 1 && (
+                          <button onClick={handleNext} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold">
+                            Parte {activeSplit.pageIdx + 2} <ChevronRight size={13} />
+                          </button>
+                        )}
                       </>
                     ) : (
                       <>
@@ -2392,25 +2424,15 @@ export default function MobileControllerPage() {
                   <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center gap-2 bg-surface-900/80">
                     {activeSplit ? (
                       <>
-                        <span className="text-[10px] font-bold text-zinc-500 shrink-0">1/2</span>
+                        <span className="text-[10px] font-bold text-zinc-500 shrink-0">{activeSplit.pageIdx + 1}/{activeSplit.pages.length}</span>
                         <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
                           {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
                         </p>
-                        <button
-                          onClick={() => {
-                            const { verse: sv, part2, list: sl } = activeSplit;
-                            const ref = `${sv.book_name} ${sv.chapter}:${sv.verse}`;
-                            const si  = sl.findIndex(v => v.id === sv.id);
-                            const nx  = si >= 0 && si < sl.length - 1 ? sl[si + 1] : null;
-                            actions.showSlide({
-                              type: 'bible',
-                              slideData:     makeVerseSD(part2, ref, sv.version),
-                              nextSlideData: nx ? makeVerseSD(nx.text, `${nx.book_name} ${nx.chapter}:${nx.verse}`, nx.version) : null,
-                            });
-                            setActiveSplit(null);
-                          }}
-                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold"
-                        >Parte 2 <ChevronRight size={13} /></button>
+                        {activeSplit.pageIdx < activeSplit.pages.length - 1 && (
+                          <button onClick={handleNext} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold">
+                            Parte {activeSplit.pageIdx + 2} <ChevronRight size={13} />
+                          </button>
+                        )}
                       </>
                     ) : (
                       <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
@@ -2521,25 +2543,15 @@ export default function MobileControllerPage() {
                       <div className="shrink-0 border-t border-surface-700 px-3 py-2.5 flex items-center gap-2 bg-surface-900/80">
                         {activeSplit ? (
                           <>
-                            <span className="text-[10px] font-bold text-zinc-500 shrink-0">1/2</span>
+                            <span className="text-[10px] font-bold text-zinc-500 shrink-0">{activeSplit.pageIdx + 1}/{activeSplit.pages.length}</span>
                             <p className="flex-1 text-center text-xs text-accent font-semibold truncate">
                               {activeVerse?.book_name} {activeVerse?.chapter}:{activeVerse?.verse}
                             </p>
-                            <button
-                              onClick={() => {
-                                const { verse: sv, part2, list: sl } = activeSplit;
-                                const ref = `${sv.book_name} ${sv.chapter}:${sv.verse}`;
-                                const si  = sl.findIndex(v => v.id === sv.id);
-                                const nx  = si >= 0 && si < sl.length - 1 ? sl[si + 1] : null;
-                                actions.showSlide({
-                                  type: 'bible',
-                                  slideData:     makeVerseSD(part2, ref, sv.version),
-                                  nextSlideData: nx ? makeVerseSD(nx.text, `${nx.book_name} ${nx.chapter}:${nx.verse}`, nx.version) : null,
-                                });
-                                setActiveSplit(null);
-                              }}
-                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold"
-                            >Parte 2 <ChevronRight size={13} /></button>
+                            {activeSplit.pageIdx < activeSplit.pages.length - 1 && (
+                              <button onClick={handleNext} className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/20 border border-accent/40 text-accent text-xs font-bold">
+                                Parte {activeSplit.pageIdx + 2} <ChevronRight size={13} />
+                              </button>
+                            )}
                           </>
                         ) : (
                           <>
