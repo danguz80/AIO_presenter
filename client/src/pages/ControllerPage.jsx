@@ -17,6 +17,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import OrgSwitcher from '../components/shared/OrgSwitcher';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
 
+const BUILD_VERSION = typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev';
+
 const MONTHS_ES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -191,7 +193,7 @@ export default function ControllerPage() {
             <Home size={15} />
           </Link>
           <span className="text-accent font-bold text-lg tracking-tight">AIO Presenter</span>
-          <span className="text-xs text-zinc-500 bg-surface-700 px-2 py-0.5 rounded">Beta</span>
+          <span className="text-xs text-zinc-500 bg-surface-700 px-2 py-0.5 rounded">build {BUILD_VERSION}</span>
         </div>
 
         <div className="flex items-center gap-3">

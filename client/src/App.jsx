@@ -178,16 +178,27 @@ function UpdateBanner() {
         setReady(true);
       }
 
-      reg.addEventListener('updatefound', () => {
+      const handleUpdateFound = () => {
         const installing = reg.installing;
         if (!installing) return;
-        installing.addEventListener('statechange', () => {
+        const onState = () => {
           if (!mounted) return;
           if (installing.state === 'installed' && navigator.serviceWorker.controller) {
             setReady(true);
           }
-        });
-      });
+        };
+        if (typeof installing.addEventListener === 'function') {
+          installing.addEventListener('statechange', onState);
+        } else {
+          installing.onstatechange = onState;
+        }
+      };
+
+      if (typeof reg.addEventListener === 'function') {
+        reg.addEventListener('updatefound', handleUpdateFound);
+      } else {
+        reg.onupdatefound = handleUpdateFound;
+      }
     };
 
     const onControllerChange = () => {
@@ -195,7 +206,9 @@ function UpdateBanner() {
       if (mounted) setReady(false);
     };
 
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    if (typeof navigator.serviceWorker.addEventListener === 'function') {
+      navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    }
 
     navigator.serviceWorker.getRegistration()
       .then((reg) => {
@@ -212,7 +225,9 @@ function UpdateBanner() {
     return () => {
       mounted = false;
       clearInterval(intervalId);
-      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      if (typeof navigator.serviceWorker.removeEventListener === 'function') {
+        navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      }
     };
   }, []);
 
