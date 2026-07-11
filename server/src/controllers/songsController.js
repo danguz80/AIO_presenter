@@ -5,7 +5,7 @@ function normalizeLinksInput(input) {
   const cleaned = arr
     .map((it, idx) => {
       const url = String(it?.url || '').trim();
-      const title = String(it?.title || '').trim() || `Link ${idx + 1}`;
+      const title = String(it?.title || it?.link_title || it?.label || '').trim() || `Link ${idx + 1}`;
       return { title, url };
     })
     .filter(it => it.url.length > 0);
@@ -147,8 +147,32 @@ const updateSong = async (req, res) => {
     const { id } = req.params;
     const orgId = req.user.orgId;
     const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link, links } = req.body;
-    const normalizedLinks = normalizeLinksInput(links);
-    const legacyLink = normalizedLinks[0]?.url || (link ? String(link).trim() : null) || null;
+
+    const hasLinksField = Object.prototype.hasOwnProperty.call(req.body, 'links');
+    const hasLinkField = Object.prototype.hasOwnProperty.call(req.body, 'link');
+
+    const currentSongResult = await client.query(
+      "SELECT link, COALESCE(song_links, '[]'::jsonb) AS song_links FROM songs WHERE id = $1 AND organization_id = $2",
+      [id, orgId]
+    );
+    if (currentSongResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Canción no encontrada' });
+    }
+    const currentSong = currentSongResult.rows[0];
+
+    let normalizedLinks;
+    let legacyLink;
+    if (hasLinksField) {
+      normalizedLinks = normalizeLinksInput(links);
+      legacyLink = normalizedLinks[0]?.url || null;
+    } else if (hasLinkField) {
+      const singleUrl = String(link || '').trim();
+      normalizedLinks = singleUrl ? [{ title: 'Link', url: singleUrl }] : [];
+      legacyLink = singleUrl || null;
+    } else {
+      normalizedLinks = normalizeLinksInput(currentSong.song_links);
+      legacyLink = normalizedLinks[0]?.url || (currentSong.link ? String(currentSong.link).trim() : null) || null;
+    }
 
     await client.query('BEGIN');
 
@@ -164,7 +188,6 @@ const updateSong = async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Canción no encontrada' });
     }
-
     if (slides) {
       await client.query('DELETE FROM song_slides WHERE song_id = $1', [id]);
       for (let i = 0; i < slides.length; i++) {

@@ -244,13 +244,20 @@ export default function SongDetail() {
       );
       setUndoCount(undoStack.current.length);
     }
+    const cleanedLinks = (Array.isArray(selectedSong.links) ? selectedSong.links : (Array.isArray(selectedSong.song_links) ? selectedSong.song_links : []))
+      .map((l, i) => ({
+        title: String(l?.title || l?.link_title || '').trim() || `Link ${i + 1}`,
+        url: String(l?.url || '').trim(),
+      }))
+      .filter(l => l.url);
     await actions.updateSong(selectedSong.id, {
       title:    selectedSong.title,
       author:   selectedSong.author,
       song_key: selectedSong.song_key ?? null,
       bpm:      selectedSong.bpm ?? null,
       time_sig: selectedSong.time_sig ?? null,
-      link:     selectedSong.link ?? null,
+      links:    cleanedLinks,
+      link:     cleanedLinks[0]?.url || selectedSong.link || null,
       tags:     selectedSong.tags ?? [],
       slides:   newSlides,
     });

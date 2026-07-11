@@ -144,6 +144,7 @@ export default function SongLibrary() {
 
   // Label picker
   const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [draggingSongId, setDraggingSongId] = useState(null);
 
   // Cargar todas las etiquetas al montar
   useEffect(() => {
@@ -324,14 +325,33 @@ export default function SongLibrary() {
             {state.songs.map((song, idx) => {
               const isSelected = selectedIds.has(song.id);
               const isActive   = state.selectedSong?.id === song.id;
+              const isDragging = draggingSongId === song.id;
               return (
                 <li
                   key={song.id}
+                  draggable={selectedIds.size === 0}
+                  onDragStart={(e) => {
+                    if (selectedIds.size > 0) {
+                      e.preventDefault();
+                      return;
+                    }
+                    const payload = {
+                      id: song.id,
+                      title: song.title,
+                      author: song.author || null,
+                    };
+                    e.dataTransfer.setData('application/x-aio-song', JSON.stringify(payload));
+                    e.dataTransfer.setData('text/plain', song.title || 'song');
+                    e.dataTransfer.effectAllowed = 'copy';
+                    setDraggingSongId(song.id);
+                  }}
+                  onDragEnd={() => setDraggingSongId(null)}
                   onClick={() => handleRowClick(song)}
                   className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-surface-700/50
                     hover:bg-surface-700 transition-colors
                     ${isActive && selectedIds.size === 0 ? 'bg-surface-700 border-l-2 border-l-accent' : ''}
-                    ${isSelected ? 'bg-accent/10' : ''}`}
+                    ${isSelected ? 'bg-accent/10' : ''}
+                    ${isDragging ? 'opacity-60' : ''}`}
                 >
                   {/* Checkbox de selección */}
                   <button

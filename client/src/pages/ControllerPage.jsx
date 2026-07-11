@@ -492,6 +492,7 @@ function EventsPanel() {
   // Drag & drop
   const dragSrcIndex  = useRef(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [songDropOver, setSongDropOver] = useState(false);
   // Editar separador inline
   const [editingSepIdx,   setEditingSepIdx]   = useState(null);
   const [editingSepLabel, setEditingSepLabel] = useState('');
@@ -648,6 +649,11 @@ function EventsPanel() {
   }, [selectedEv, addMediaItem]); // eslint-disable-line
 
   const addSong = async (song) => {
+    if (!selectedEv || !song?.id) return;
+    const alreadyInEvent = (selectedEv.songs || []).some(
+      (item) => item.item_type !== 'separator' && item.item_type !== 'media' && Number(item.song_id) === Number(song.id)
+    );
+    if (alreadyInEvent) return;
     const newItems = [...(selectedEv.songs || []), { song_id: song.id, title: song.title, author: song.author, item_type: 'song' }];
     setSaving(true);
     try {
@@ -950,6 +956,45 @@ function EventsPanel() {
       if (activeTemplate) setTemplateDirty(true);
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
+  };
+
+  const parseDraggedSong = (event) => {
+    const raw = event.dataTransfer?.getData('application/x-aio-song');
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed?.id) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const isSongDragEvent = (event) => {
+    const types = Array.from(event.dataTransfer?.types || []);
+    return types.includes('application/x-aio-song');
+  };
+
+  const handleSongDropZoneOver = (event) => {
+    if (!selectedEv || !isSongDragEvent(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setSongDropOver(true);
+  };
+
+  const handleSongDropZoneLeave = (event) => {
+    if (!event.currentTarget.contains(event.relatedTarget)) {
+      setSongDropOver(false);
+    }
+  };
+
+  const handleSongDropToEvent = async (event) => {
+    if (!selectedEv || !isSongDragEvent(event)) return;
+    event.preventDefault();
+    setSongDropOver(false);
+    const song = parseDraggedSong(event);
+    if (!song) return;
+    await addSong(song);
   };
 
   const openEditSong = async (song_id) => {
@@ -1640,7 +1685,13 @@ function EventsPanel() {
           )}
 
           {/* Lista de canciones + separadores */}
-          {!editingEv && <div className="flex-1 overflow-y-auto">
+          {!editingEv && <div
+            className={`flex-1 overflow-y-auto transition-colors ${songDropOver ? 'bg-accent/10 ring-1 ring-inset ring-accent/40' : ''}`}
+            onDragOver={handleSongDropZoneOver}
+            onDragEnter={handleSongDropZoneOver}
+            onDragLeave={handleSongDropZoneLeave}
+            onDrop={handleSongDropToEvent}
+          >
             {selectedEv.songs?.length > 0 ? (
               <div className="flex flex-col">
                 {selectedEv.songs.map((s, i) => {

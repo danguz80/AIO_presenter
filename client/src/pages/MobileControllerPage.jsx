@@ -1214,13 +1214,20 @@ export default function MobileControllerPage() {
                     ...s,
                     slideBackground: songDetail.slides?.[i]?.slide_background ?? null,
                   }));
+                  const cleanedLinks = (Array.isArray(songDetail.links) ? songDetail.links : (Array.isArray(songDetail.song_links) ? songDetail.song_links : []))
+                    .map((l, i) => ({
+                      title: String(l?.title || l?.link_title || '').trim() || `Link ${i + 1}`,
+                      url: String(l?.url || '').trim(),
+                    }))
+                    .filter(l => l.url);
                   await actions.updateSong(songDetail.id, {
                     title:    songEditData.title.trim(),
                     author:   songEditData.author || null,
                     song_key: songEditData.songKey || null,
                     bpm:      songEditData.bpm !== '' ? songEditData.bpm : null,
                     time_sig: songEditData.timeSig || null,
-                    link:     songEditData.link || null,
+                    links:    cleanedLinks,
+                    link:     cleanedLinks[0]?.url || songEditData.link || null,
                     slides,
                   });
                   const refreshed = await actions.loadSongDetail(songDetail.id);
