@@ -916,7 +916,7 @@ export default function MobileControllerPage() {
       slides,
       slideIndex:          idx,
       skipTitleIntercept:  !showTitle,  // true = ir directo al slide sin mostrar título
-      slideData:           { type: 'song', songId: song.id, slideId: slide.id, slideIndex: idx, songTitle: song.title, label: slide.label, content: slide.content },
+      slideData:           { type: 'song', songId: song.id, slideId: slide.id, slideIndex: idx, songTitle: song.title, label: slide.label, content: slide.content, slideBackground: slide.slide_background || null },
       nextSlideData:       next ? { type: 'song', label: next.label, content: next.content } : null,
     });
 
