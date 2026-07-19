@@ -193,14 +193,17 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const [cursorPos,     setCursorPos]    = useState(0);
   const [keyPickerOpen, setKeyPickerOpen] = useState(false);
   const [chordMode,     setChordMode]     = useState(false);
-  // Ref para el modo acorde (anchor de inicio del acorde en curso)
+  // Refs para el modo acorde
   const chordAnchorRef = useRef(null); // posición de inicio del acorde en curso
+  const chordTimerRef  = useRef(null); // timer de detección de acorde
 
-  // Limpiar anchor al desactivar modo acorde
+  // Limpiar timer al desmontar o desactivar modo acorde
   useEffect(() => {
     if (!chordMode) {
+      clearTimeout(chordTimerRef.current);
       chordAnchorRef.current = null;
     }
+    return () => clearTimeout(chordTimerRef.current);
   }, [chordMode]);
 
   // Clave activa: el último marcador {key:X} que aparece antes del cursor en el texto
@@ -725,40 +728,39 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
 
                     if (NAV.includes(e.key) || e.ctrlKey || e.metaKey) {
                       // Navegación: reiniciar anchor
+                      clearTimeout(chordTimerRef.current);
                       chordAnchorRef.current = null;
-                    } else if (e.key === ' ' || e.key === 'Enter') {
-                      // Espacio o Enter: detectar y envolver acorde inmediatamente
-                      if (chordAnchorRef.current !== null) {
-                        const anchor  = chordAnchorRef.current;
-                        const curPos  = ta.selectionStart;
-                        const curVal  = ta.value;
-                        if (curPos > anchor) {
-                          const candidate = curVal.slice(anchor, curPos);
-                          if (candidate && CHORD_MODE_RE.test(candidate)) {
-                            e.preventDefault();
-                            const normalized = candidate
-                              .replace(/^[a-g]/, c => c.toUpperCase())
-                              .replace(/\/([a-g])/, (_, c) => '/' + c.toUpperCase());
-                            const insertChar = e.key === 'Enter' ? '\n' : ' ';
-                            const newBody = curVal.slice(0, anchor) + `[${normalized}]` + insertChar + curVal.slice(curPos);
-                            const newPos  = anchor + normalized.length + 2 + insertChar.length;
-                            setBody(newBody);
-                            setCursorPos(newPos);
-                            savedCursorPos.current = newPos;
-                            requestAnimationFrame(() => {
-                              if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(newPos, newPos); }
-                            });
-                            chordAnchorRef.current = null;
-                            return;
-                          }
-                        }
-                        chordAnchorRef.current = null;
-                      }
                     } else if (e.key !== 'Tab') {
                       // Cualquier tecla de escritura: fijar anchor al inicio si aún no está fijado
                       if (chordAnchorRef.current === null) {
                         chordAnchorRef.current = ta.selectionStart;
                       }
+                      // Reiniciar debounce (200ms)
+                      clearTimeout(chordTimerRef.current);
+                      chordTimerRef.current = setTimeout(() => {
+                        const el = textareaRef.current;
+                        if (!el || chordAnchorRef.current === null) return;
+                        const anchor     = chordAnchorRef.current;
+                        const curPos     = el.selectionStart;
+                        const curVal     = el.value;
+                        if (curPos <= anchor) { chordAnchorRef.current = null; return; }
+                        const candidate  = curVal.slice(anchor, curPos);
+                        if (candidate && CHORD_MODE_RE.test(candidate)) {
+                          // Capitalizar nota raíz y nota de bajo (slash chord): g/b → G/B
+                          const normalized = candidate
+                            .replace(/^[a-g]/, c => c.toUpperCase())
+                            .replace(/\/([a-g])/, (_, c) => '/' + c.toUpperCase());
+                          const newBody = curVal.slice(0, anchor) + `[${normalized}]` + curVal.slice(curPos);
+                          const newPos  = anchor + normalized.length + 2; // +2 por []
+                          setBody(newBody);
+                          setCursorPos(newPos);
+                          savedCursorPos.current = newPos;
+                          requestAnimationFrame(() => {
+                            if (el) { el.focus({ preventScroll: true }); el.setSelectionRange(newPos, newPos); }
+                          });
+                        }
+                        chordAnchorRef.current = null;
+                      }, 200);
                     }
                   }
                   // Tab → navegación de sílabas
