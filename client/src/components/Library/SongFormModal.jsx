@@ -760,7 +760,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                           });
                         }
                         chordAnchorRef.current = null;
-                      }, 200);
+                      }, 400);
                     }
                   }
                   // Tab → navegación de sílabas
