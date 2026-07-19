@@ -3,7 +3,7 @@ import { usePresenterOptional } from '../../context/usePresenter';
 import { X, Trash2, Tag, Plus, Music2 } from 'lucide-react';
 import api from '../../hooks/useApi';
 import { getLabelColor } from '../../utils/labelColors';
-import { buildScaleChords } from '../../utils/chordUtils';
+import { buildScaleChords, transposeContent } from '../../utils/chordUtils';
 
 // Convierte array de slides → texto editable
 // Slides del mismo label separados por línea en blanco.
@@ -193,17 +193,14 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const [cursorPos,     setCursorPos]    = useState(0);
   const [keyPickerOpen, setKeyPickerOpen] = useState(false);
   const [chordMode,     setChordMode]     = useState(false);
-  // Refs para el modo acorde por debounce
+  // Ref para el modo acorde (anchor de inicio del acorde en curso)
   const chordAnchorRef = useRef(null); // posición de inicio del acorde en curso
-  const chordTimerRef  = useRef(null); // timer de 1s para envolver el acorde
 
-  // Limpiar timer al desmontar o desactivar modo acorde
+  // Limpiar anchor al desactivar modo acorde
   useEffect(() => {
     if (!chordMode) {
-      clearTimeout(chordTimerRef.current);
       chordAnchorRef.current = null;
     }
-    return () => clearTimeout(chordTimerRef.current);
   }, [chordMode]);
 
   // Clave activa: el último marcador {key:X} que aparece antes del cursor en el texto
@@ -659,6 +656,40 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                   >
                     ↹ Tab
                   </button>
+                  {/* Botones transposición del texto seleccionado */}
+                  <div className="flex items-center gap-0.5 border border-surface-600 rounded overflow-hidden" title="Transponer texto seleccionado (semitono)">
+                    <button
+                      type="button"
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        const ta = textareaRef.current;
+                        if (!ta) return;
+                        const start = ta.selectionStart;
+                        const end   = ta.selectionEnd;
+                        if (start === end) return;
+                        const newBody = body.slice(0, start) + transposeContent(body.slice(start, end), -1) + body.slice(end);
+                        setBody(newBody);
+                        requestAnimationFrame(() => { if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(start, start + transposeContent(body.slice(start, end), -1).length); } });
+                      }}
+                      className="px-1.5 py-0.5 bg-surface-700 hover:bg-surface-600 text-zinc-300 hover:text-white text-[10px] transition-colors"
+                    >♭−</button>
+                    <span className="text-[9px] text-zinc-500 px-1">½t</span>
+                    <button
+                      type="button"
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        const ta = textareaRef.current;
+                        if (!ta) return;
+                        const start = ta.selectionStart;
+                        const end   = ta.selectionEnd;
+                        if (start === end) return;
+                        const newBody = body.slice(0, start) + transposeContent(body.slice(start, end), 1) + body.slice(end);
+                        setBody(newBody);
+                        requestAnimationFrame(() => { if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(start, start + transposeContent(body.slice(start, end), 1).length); } });
+                      }}
+                      className="px-1.5 py-0.5 bg-surface-700 hover:bg-surface-600 text-zinc-300 hover:text-white text-[10px] transition-colors"
+                    >♯+</button>
+                  </div>
                 </label>
                 <span className="text-xs text-zinc-600 hidden sm:inline">
                   Línea en blanco = nueva diapositiva.{' '}
@@ -694,39 +725,40 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
 
                     if (NAV.includes(e.key) || e.ctrlKey || e.metaKey) {
                       // Navegación: reiniciar anchor
-                      clearTimeout(chordTimerRef.current);
                       chordAnchorRef.current = null;
+                    } else if (e.key === ' ' || e.key === 'Enter') {
+                      // Espacio o Enter: detectar y envolver acorde inmediatamente
+                      if (chordAnchorRef.current !== null) {
+                        const anchor  = chordAnchorRef.current;
+                        const curPos  = ta.selectionStart;
+                        const curVal  = ta.value;
+                        if (curPos > anchor) {
+                          const candidate = curVal.slice(anchor, curPos);
+                          if (candidate && CHORD_MODE_RE.test(candidate)) {
+                            e.preventDefault();
+                            const normalized = candidate
+                              .replace(/^[a-g]/, c => c.toUpperCase())
+                              .replace(/\/([a-g])/, (_, c) => '/' + c.toUpperCase());
+                            const insertChar = e.key === 'Enter' ? '\n' : ' ';
+                            const newBody = curVal.slice(0, anchor) + `[${normalized}]` + insertChar + curVal.slice(curPos);
+                            const newPos  = anchor + normalized.length + 2 + insertChar.length;
+                            setBody(newBody);
+                            setCursorPos(newPos);
+                            savedCursorPos.current = newPos;
+                            requestAnimationFrame(() => {
+                              if (ta) { ta.focus({ preventScroll: true }); ta.setSelectionRange(newPos, newPos); }
+                            });
+                            chordAnchorRef.current = null;
+                            return;
+                          }
+                        }
+                        chordAnchorRef.current = null;
+                      }
                     } else if (e.key !== 'Tab') {
                       // Cualquier tecla de escritura: fijar anchor al inicio si aún no está fijado
                       if (chordAnchorRef.current === null) {
                         chordAnchorRef.current = ta.selectionStart;
                       }
-                      // Reiniciar debounce
-                      clearTimeout(chordTimerRef.current);
-                      chordTimerRef.current = setTimeout(() => {
-                        const el = textareaRef.current;
-                        if (!el || chordAnchorRef.current === null) return;
-                        const anchor     = chordAnchorRef.current;
-                        const curPos     = el.selectionStart;
-                        const curVal     = el.value;
-                        if (curPos <= anchor) { chordAnchorRef.current = null; return; }
-                        const candidate  = curVal.slice(anchor, curPos);
-                        if (candidate && CHORD_MODE_RE.test(candidate)) {
-                          // Capitalizar nota raíz y nota de bajo (slash chord): g/b → G/B
-                          const normalized = candidate
-                            .replace(/^[a-g]/, c => c.toUpperCase())
-                            .replace(/\/([a-g])/, (_, c) => '/' + c.toUpperCase());
-                          const newBody = curVal.slice(0, anchor) + `[${normalized}]` + curVal.slice(curPos);
-                          const newPos  = anchor + normalized.length + 2; // +2 por []
-                          setBody(newBody);
-                          setCursorPos(newPos);
-                          savedCursorPos.current = newPos;
-                          requestAnimationFrame(() => {
-                            if (el) { el.focus({ preventScroll: true }); el.setSelectionRange(newPos, newPos); }
-                          });
-                        }
-                        chordAnchorRef.current = null;
-                      }, 1000);
                     }
                   }
                   // Tab → navegación de sílabas
