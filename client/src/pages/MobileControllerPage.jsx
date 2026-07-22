@@ -864,12 +864,6 @@ export default function MobileControllerPage() {
     if (Math.abs(dx) > 60) {
       // Swipe horizontal
       dx < 0 ? handleNext() : handlePrev();
-    } else if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
-      // Tap — ignorar si el toque fue sobre un elemento interactivo
-      const el = e.target;
-      if (!el.closest('button, input, select, textarea, a, [role="button"], label')) {
-        e.changedTouches[0].clientX > window.innerWidth / 2 ? handleNext() : handlePrev();
-      }
     }
     touchStart.current = null;
   };
