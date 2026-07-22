@@ -227,6 +227,19 @@ export default function LandingPage() {
   const [trialLoading, setTrialLoading] = useState(null); // plan id que está cargando
   const [paypalCancelled, setPaypalCancelled] = useState(false);
 
+  // Si el usuario ya está autenticado (JWT local válido), ir directo al selector de modo
+  useEffect(() => {
+    const token = localStorage.getItem('aio_sync_token');
+    if (!token) return;
+    try {
+      const { exp } = JSON.parse(atob(token.split('.')[1]));
+      if (!exp || Date.now() / 1000 < exp) {
+        navigate('/mode-select', { replace: true });
+        return;
+      }
+    } catch { /* token inválido, ignorar */ }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Detectar si viene de cancelar PayPal
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

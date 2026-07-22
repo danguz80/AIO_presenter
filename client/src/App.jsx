@@ -145,17 +145,31 @@ function RequireAuth({ children }) {
 
     fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal })
       .then(r => {
-        if (!r.ok) throw new Error('no autorizado');
+        if (r.status === 401 || r.status === 403) {
+          // El servidor rechazó explícitamente → limpiar token
+          localStorage.removeItem('aio_sync_token');
+          localStorage.removeItem('aio_org_id');
+          _authCacheToken  = null;
+          _authCacheResult = null;
+          setStatus('denied');
+          return;
+        }
+        if (!r.ok) {
+          // Error de servidor (5xx, etc.) — JWT local válido, dejar pasar
+          _authCacheToken  = token;
+          _authCacheResult = 'ok';
+          setStatus('ok');
+          return;
+        }
         _authCacheToken  = token;
         _authCacheResult = 'ok';
         setStatus('ok');
       })
       .catch(() => {
-        localStorage.removeItem('aio_sync_token');
-        localStorage.removeItem('aio_org_id');
-        _authCacheToken  = null;
-        _authCacheResult = null;
-        setStatus('denied');
+        // Error de red o timeout — no borrar token, JWT local es válido
+        _authCacheToken  = token;
+        _authCacheResult = 'ok';
+        setStatus('ok');
       })
       .finally(() => {
         clearTimeout(timeoutId);
