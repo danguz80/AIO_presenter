@@ -554,7 +554,7 @@ function StageTitleSlide({ titleFF, artistFF, titleColor, artistColor, titleSize
   );
 }
 
-function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true, stageCfg = {} }) {
+export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true, stageCfg = {} }) {
   const stroke = strokeWidth > 0
     ? `${Array.from({ length: 4 }, (_, i) => {
         const angle = i * 90;
@@ -742,6 +742,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
       : lineCount <= 5 ? 'clamp(1.5rem, 3.6vw, 3.2rem)'
       : lineCount <= 8 ? 'clamp(1.1rem, 2.6vw, 2.4rem)'
       : 'clamp(0.85rem, 2vw, 1.8rem)';
+    const bibleLineHeight = useBibleTpl ? 1.04 : 1.08;
 
     return (
       <div
@@ -753,13 +754,14 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
         }}
       >
         <p
-          className="leading-relaxed whitespace-pre-line w-full"
+          className="whitespace-pre-line w-full"
           style={{
             fontSize: bibleFontSize || autoSize,
             color: bibleColor,
             fontFamily: bibleFontFamily,
             fontWeight: fontStyles.fontWeight,
             fontStyle: fontStyles.fontStyle,
+            lineHeight: bibleLineHeight,
             textShadow: '0 2px 12px rgba(0,0,0,0.7)',
           }}
         >
@@ -767,7 +769,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
         </p>
 
         <div
-          className="mt-6"
+          className="mt-4"
           style={{
             background: refShowBg ? refBgCss : 'transparent',
             padding: refShowBg ? '0.35em 0.9em' : 0,

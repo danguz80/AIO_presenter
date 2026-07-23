@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePresenter } from '../../context/usePresenter';
 import { stripChords, parseChordLines, isCommentLine, stripComments, extractInlineComment } from '../../utils/chordUtils';
-import { injectGoogleFont } from '../../utils/fontUtils';
+import { injectGoogleFont, resolveFont } from '../../utils/fontUtils';
 import VirtualRenderer from '../shared/VirtualRenderer';
 import OutputRenderer from '../shared/OutputRenderer';
+import { StageSlideContent } from '../../pages/StagePage';
 import { useTimerDisplay, fmtTimer } from '../../hooks/useTimerDisplay';
 import { Monitor, MonitorOff } from 'lucide-react';
 import { ensureMediaCached } from '../../utils/fsaUtils';
@@ -529,6 +530,19 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
 
   const showNextPanel = showNextSlide && slideData?.type !== 'bible';
 
+  if (slideData?.type === 'bible') {
+    return (
+      <ExactStageBiblePreview
+        stageBgStyle={stageBgStyle}
+        slideData={slideData}
+        isBlank={isBlank}
+        live={live}
+        stageConfig={stageConfig}
+        nextSong={nextSong}
+      />
+    );
+  }
+
   return (
     <div className="w-full h-full flex flex-col select-none overflow-hidden"
       style={{ ...stageBgStyle, fontSize: fontBase ?? '7px' }}>
@@ -625,6 +639,187 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageConfig, nextSong }) {
+  const frameRef = useRef(null);
+  const [frameSize, setFrameSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!frameRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      const { width, height } = entries[0].contentRect;
+      if (width > 0 && height > 0) setFrameSize({ width, height });
+    });
+    ro.observe(frameRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const {
+    showClock = true,
+    showSongTitle = true,
+    showSlideCounter = true,
+    showSectionLabel = true,
+    showSideLabel = true,
+    lyricsColor = '#ffffff',
+    chordsColor = '#fde047',
+    clockColor = '#ef4444',
+    nextColor = '#22c55e',
+    fontSize = 36,
+    fontFamily = 'sans',
+    fontFamilyTitle = 'sans',
+    fontBold = true,
+    fontItalic = false,
+    fontStrokeWidth = 0,
+    fontStrokeColor = '#000000',
+    fontSizeCounter = 14,
+    fontSizeTitle = 16,
+    fontSizeSideLabel = 13,
+    fontSizeClock = 22,
+    fontSizeNextSong = 16,
+    fontSizeChords = 18,
+    showComments = false,
+    commentColor = '#facc15',
+    commentFontFamily = 'sans',
+    commentFontSize = 16,
+  } = stageConfig;
+
+  const hasContent = !isBlank && !!slideData;
+  const showTopBar = showSongTitle || showSlideCounter || showSectionLabel;
+  const slideNum = (stageConfig.slideIndex ?? 0) + 1;
+  const sectionColor = getLabelColor(slideData?.label);
+  const fontStyles = {
+    fontFamily: resolveFont(fontFamily),
+    fontWeight: fontBold ? 'bold' : 'normal',
+    fontStyle: fontItalic ? 'italic' : 'normal',
+  };
+  const titleFontFamily = resolveFont(fontFamilyTitle ?? fontFamily);
+  const sz = (val) => typeof val === 'number' ? `${val}pt` : '16pt';
+
+  const DESIGN_W = 1920;
+  const DESIGN_H = 1080;
+  const scale = frameSize.width > 0 && frameSize.height > 0
+    ? Math.min(frameSize.width / DESIGN_W, frameSize.height / DESIGN_H)
+    : 0;
+  const scaledW = DESIGN_W * scale;
+  const scaledH = DESIGN_H * scale;
+
+  return (
+    <div ref={frameRef} className="w-full h-full relative overflow-hidden">
+      {scale > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            left: `${(frameSize.width - scaledW) / 2}px`,
+            top: `${(frameSize.height - scaledH) / 2}px`,
+            width: `${DESIGN_W}px`,
+            height: `${DESIGN_H}px`,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          <div className="w-full h-full flex flex-col select-none overflow-hidden relative" style={stageBgStyle}>
+            {showTopBar && (
+              <div
+                className="relative flex items-center justify-between px-5 py-2.5 bg-black/70 shrink-0 border-b border-white/10 gap-4"
+                style={{ fontFamily: fontStyles.fontFamily, zIndex: 1 }}
+              >
+                <div className="flex items-center min-w-0 flex-1">
+                  {showSlideCounter && hasContent && stageConfig.totalSlides != null && (
+                    <span className="text-white font-mono font-bold shrink-0 tabular-nums" style={{ fontSize: sz(fontSizeCounter) }}>
+                      {slideNum}/{stageConfig.totalSlides}
+                    </span>
+                  )}
+                  {showSongTitle && hasContent && slideData.songTitle && (
+                    <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
+                      {slideData.songTitle}{slideData.songKey ? ` - ${slideData.songKey}` : ''}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="flex-1 flex flex-col overflow-hidden min-h-0" style={{ position: 'relative', zIndex: 1 }}>
+              <div className="flex overflow-hidden flex-1">
+                {showSideLabel && hasContent && (
+                  <div className="w-14 shrink-0 flex items-center justify-center" style={{ backgroundColor: sectionColor }}>
+                    {slideData.label && (
+                      <span
+                        className="text-white tracking-widest uppercase select-none"
+                        style={{
+                          writingMode: 'vertical-rl',
+                          transform: 'rotate(180deg)',
+                          fontFamily: fontStyles.fontFamily,
+                          fontWeight: fontStyles.fontWeight,
+                          fontSize: sz(fontSizeSideLabel),
+                        }}
+                      >
+                        {slideData.label}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-hidden">
+                  {!hasContent ? (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-white/20 text-2xl font-light">Pantalla vacía</span>
+                    </div>
+                  ) : (
+                    <StageSlideContent
+                      slideData={slideData}
+                      fontSize={fontSize}
+                      fontStyles={fontStyles}
+                      titleFontFamily={titleFontFamily}
+                      lyricsColor={lyricsColor}
+                      chordsColor={chordsColor}
+                      chordsSize={fontSizeChords}
+                      strokeWidth={fontStrokeWidth}
+                      strokeColor={fontStrokeColor}
+                      showComments={showComments}
+                      commentColor={commentColor}
+                      commentFontFamily={commentFontFamily}
+                      commentFontSize={commentFontSize}
+                      stageCfg={stageConfig}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {(showClock || nextSong) && (
+              <div
+                className="shrink-0 bg-black/70 border-t border-white/10 px-5 py-2 flex items-center"
+                style={{ fontFamily: fontStyles.fontFamily, position: 'relative', zIndex: 11 }}
+              >
+                <div className="flex-1" />
+
+                {nextSong && (
+                  <span className="font-bold leading-tight text-center" style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
+                    {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
+                  </span>
+                )}
+
+                <div className="flex-1 flex justify-end">
+                  {showClock && (
+                    <span className="font-mono font-bold tabular-nums" style={{ color: clockColor, fontSize: sz(fontSizeClock) }}>
+                      {new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!live && (
+        <div className="absolute inset-0 flex items-center justify-center text-zinc-600 text-[9px] pointer-events-none">
+          Vacío
+        </div>
+      )}
     </div>
   );
 }
