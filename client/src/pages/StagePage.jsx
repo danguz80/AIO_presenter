@@ -710,6 +710,9 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
     const bibleText = slideData.fullText || slideData.text || '';
     const bibleReference = slideData.fullReference || slideData.reference;
     const useBibleTpl = !!stageCfg?.stageBibleTemplateEnabled;
+    const bibleLineHeight = useBibleTpl
+      ? (stageCfg?.stageBibleLineHeight ?? 1.04)
+      : 1.08;
     const bibleFontFamily = useBibleTpl ? resolveFontFamily(stageCfg?.stageBibleFontFamily ?? 'sans') : fontStyles.fontFamily;
     const bibleColor = useBibleTpl ? (stageCfg?.stageBibleColor ?? '#ffffff') : lyricsColor;
     const bibleRefColor = useBibleTpl ? (stageCfg?.stageBibleRefColor ?? '#cccccc') : `${lyricsColor}99`;
@@ -742,7 +745,6 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
       : lineCount <= 5 ? 'clamp(1.5rem, 3.6vw, 3.2rem)'
       : lineCount <= 8 ? 'clamp(1.1rem, 2.6vw, 2.4rem)'
       : 'clamp(0.85rem, 2vw, 1.8rem)';
-    const bibleLineHeight = useBibleTpl ? 1.04 : 1.08;
 
     return (
       <div

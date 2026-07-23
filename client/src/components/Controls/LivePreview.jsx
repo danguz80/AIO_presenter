@@ -908,6 +908,7 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, show
     const bibleText = slideData.fullText || slideData.text;
     const bibleRef = slideData.fullReference || slideData.reference;
     const bibleColor = useBibleTpl ? (stageConfig?.stageBibleColor ?? '#ffffff') : lyricsColor;
+    const bibleLineHeight = useBibleTpl ? (stageConfig?.stageBibleLineHeight ?? 1.04) : 1.08;
     const refColor = useBibleTpl ? (stageConfig?.stageBibleRefColor ?? '#cccccc') : '#94a3b8';
     const versionColor = useBibleTpl ? (stageConfig?.stageBibleVersionColor ?? '#999999') : '#7c869a';
 
@@ -923,7 +924,7 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, show
 
     return (
       <div className="px-1 overflow-hidden w-full" style={{ textAlign: alignX }}>
-        <p className="whitespace-pre-line line-clamp-5" style={{ color: bibleColor, fontSize: '0.95em', lineHeight: 1.25 }}>
+        <p className="whitespace-pre-line line-clamp-5" style={{ color: bibleColor, fontSize: '0.95em', lineHeight: bibleLineHeight }}>
           {bibleText}
         </p>
         <div

@@ -96,6 +96,7 @@ const DEFAULT_STAGE_CONFIG = {
   stageBibleTemplateEnabled: false,
   stageBibleFontFamily:      'sans',
   stageBibleFontSize:        48,
+  stageBibleLineHeight:      1.04,
   stageBibleColor:           '#ffffff',
   stageBibleAlignment:       'center',
   stageBibleAlignmentY:      'center',

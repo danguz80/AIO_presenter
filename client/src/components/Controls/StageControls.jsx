@@ -127,6 +127,7 @@ export default function StageControls({ defaultOpen = false }) {
     stageBibleTemplateEnabled = false,
     stageBibleFontFamily      = 'sans',
     stageBibleFontSize        = 48,
+    stageBibleLineHeight      = 1.04,
     stageBibleColor           = '#ffffff',
     stageBibleAlignment       = 'center',
     stageBibleAlignmentY      = 'center',
@@ -429,6 +430,21 @@ export default function StageControls({ defaultOpen = false }) {
                 </div>
 
                 <SizeRow label="Tamaño texto bíblico" value={stageBibleFontSize} onChange={v => update({ stageBibleFontSize: v })} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-zinc-300 shrink-0">Interlineado</span>
+                  <div className="flex items-center gap-2 flex-1">
+                    <input
+                      type="range"
+                      min={0.85}
+                      max={1.5}
+                      step={0.01}
+                      value={stageBibleLineHeight}
+                      onChange={e => update({ stageBibleLineHeight: Number(e.target.value) })}
+                      className="flex-1 accent-accent"
+                    />
+                    <span className="text-xs text-zinc-400 w-10 text-right">{stageBibleLineHeight.toFixed(2)}</span>
+                  </div>
+                </div>
                 <ColorRow label="Color texto bíblico" value={stageBibleColor} onChange={v => update({ stageBibleColor: v })} />
 
                 <div className="flex items-center justify-between gap-2">
