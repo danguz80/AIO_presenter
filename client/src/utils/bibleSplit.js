@@ -31,47 +31,40 @@ function wrapWords(words, charsPerLine) {
   return lines;
 }
 
-function chooseCutLine(lines, maxLines, minFirstLines, minSecondLines) {
-  if (lines.length <= maxLines) return null;
+function estimateLines(text, charsPerLine) {
+  const clean = String(text || '').trim();
+  if (!clean) return 0;
+  const words = clean.split(/\s+/);
+  return wrapWords(words, charsPerLine).length;
+}
 
-  const maxFirst = Math.min(maxLines, lines.length - 1);
-  const minFirst = Math.min(Math.max(2, minFirstLines), maxFirst);
+function scoreBoundary(prefixText, suffixText, prefixLines, suffixLines, maxLines, minFirstLines, minSecondLines) {
   const strongPunctRe = /[.!?;:]["')\]]*$/;
   const softPunctRe = /,["')\]]*$/;
   const weakEndRe = /\b(?:de|del|la|el|y|o|en|que|a|por|para|con|su|sus|un|una|los|las|lo)\b$/i;
   const weakStartRe = /^\s*(?:de|del|la|el|y|o|en|que|a|por|para|con|su|sus|un|una|los|las|lo)\b/i;
 
-  let bestCut = null;
-  let bestScore = -Infinity;
+  if (prefixLines < minFirstLines || suffixLines < minSecondLines) return -Infinity;
+  if (prefixLines > maxLines) return -Infinity;
 
-  for (let i = maxFirst; i >= minFirst; i -= 1) {
-    const current = lines[i - 1].text.trim();
-    const next = lines[i]?.text.trim() || '';
-    const remaining = lines.length - i;
-    if (remaining < minSecondLines) continue;
+  let score = 0;
 
-    let score = 0;
+  if (strongPunctRe.test(prefixText)) score += 140;
+  else if (softPunctRe.test(prefixText)) score += 105;
+  else score += 25;
 
-    if (strongPunctRe.test(current)) score += 120;
-    else if (softPunctRe.test(current)) score += 85;
-    else score += 20;
+  if (weakEndRe.test(prefixText)) score -= 45;
+  if (weakStartRe.test(suffixText)) score -= 30;
 
-    if (weakEndRe.test(current)) score -= 35;
-    if (weakStartRe.test(next)) score -= 18;
+  // Preferir páginas de apertura completas, pero sin sobrecargar la primera.
+  const target = Math.max(minFirstLines, maxLines - 1);
+  score -= Math.abs(prefixLines - target) * 12;
 
-    // Preferir cortes cercanos al máximo permitido, sin volverlo una regla dura.
-    score += i * 4;
+  // Evitar una segunda página demasiado vacía o demasiado cargada.
+  score -= Math.max(0, minSecondLines - suffixLines) * 40;
+  score -= Math.max(0, 2 - Math.min(prefixLines, suffixLines)) * 10;
 
-    // Evitar que la segunda página quede demasiado corta.
-    score -= Math.max(0, 4 - remaining) * 25;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestCut = i;
-    }
-  }
-
-  return bestCut;
+  return score;
 }
 
 // Divide un verso largo en paginas mas legibles:
@@ -80,7 +73,7 @@ function chooseCutLine(lines, maxLines, minFirstLines, minSecondLines) {
 // - Evita segunda pagina demasiado vacia.
 export function splitBibleVerseSmart(text, maxLines, options = {}) {
   const {
-    charsPerLine = 46,
+    charsPerLine = 40,
     minFirstLines = 4,
     minSecondLines = 2,
   } = options;
@@ -89,7 +82,7 @@ export function splitBibleVerseSmart(text, maxLines, options = {}) {
   if (!clean) return [];
   if (!maxLines || maxLines < 2) return [clean];
 
-  const words = clean.split(' ');
+  const words = clean.split(/\s+/);
   const pages = [];
   let offset = 0;
 
@@ -102,16 +95,29 @@ export function splitBibleVerseSmart(text, maxLines, options = {}) {
       break;
     }
 
-    const cutLine = chooseCutLine(lines, maxLines, minFirstLines, minSecondLines);
-    if (!cutLine) {
+    let bestCut = null;
+    let bestScore = -Infinity;
+
+    for (let cutWord = 1; cutWord < remainingWords.length; cutWord += 1) {
+      const prefixText = remainingWords.slice(0, cutWord).join(' ');
+      const suffixWords = remainingWords.slice(cutWord);
+      const suffixText = suffixWords.join(' ');
+      const prefixLines = estimateLines(prefixText, charsPerLine);
+      const suffixLines = estimateLines(suffixText, charsPerLine);
+      const score = scoreBoundary(prefixText, suffixText, prefixLines, suffixLines, maxLines, minFirstLines, minSecondLines);
+      if (score > bestScore) {
+        bestScore = score;
+        bestCut = cutWord;
+      }
+    }
+
+    if (bestCut === null) {
       pages.push(remainingWords.join(' ').trim());
       break;
     }
 
-    const cutWord = lines[cutLine - 1].endWord;
-    const pageWords = remainingWords.slice(0, cutWord + 1);
-    pages.push(pageWords.join(' ').trim());
-    offset += cutWord + 1;
+    pages.push(remainingWords.slice(0, bestCut).join(' ').trim());
+    offset += bestCut;
   }
 
   return pages.filter(Boolean);
