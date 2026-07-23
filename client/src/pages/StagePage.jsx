@@ -707,6 +707,8 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
   }
 
   if (slideData.type === 'bible') {
+    const bibleText = slideData.fullText || slideData.text || '';
+    const bibleReference = slideData.fullReference || slideData.reference;
     const useBibleTpl = !!stageCfg?.stageBibleTemplateEnabled;
     const bibleFontFamily = useBibleTpl ? resolveFontFamily(stageCfg?.stageBibleFontFamily ?? 'sans') : fontStyles.fontFamily;
     const bibleColor = useBibleTpl ? (stageCfg?.stageBibleColor ?? '#ffffff') : lyricsColor;
@@ -731,7 +733,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
       return `rgba(${r},${g},${b},${refBgOpacity})`;
     })();
 
-    const rawText    = slideData.text || '';
+    const rawText    = bibleText;
     // Estimar líneas visuales: usar la mayor entre \n reales y estimado por número de caracteres
     const charLines  = Math.ceil(rawText.length / 46); // ~46 chars por línea a font grande
     const lineCount  = Math.max(rawText.split('\n').filter(l => l.trim()).length, charLines);
@@ -761,7 +763,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
             textShadow: '0 2px 12px rgba(0,0,0,0.7)',
           }}
         >
-          {slideData.text}
+          {bibleText}
         </p>
 
         <div
@@ -773,7 +775,7 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
           }}
         >
           <p className="font-medium" style={{ color: bibleRefColor, fontSize: bibleRefFontSize }}>
-            {slideData.reference}
+            {bibleReference}
           </p>
         </div>
 

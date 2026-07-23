@@ -78,6 +78,7 @@ export default function LivePreview() {
   }, [principalBgMedia?.url, outputCfg.titleBackground?.url, outputCfg.bibleBackground?.url]);
 
   const live = !isBlank && !!slideData;
+  const stageShowNextPanel = (stageConfig?.showNextSlide ?? true) && slideData?.type !== 'bible';
 
   const stageBgStyle = stageConfig.background.type === 'color'
     ? { backgroundColor: stageConfig.background.color }
@@ -395,7 +396,7 @@ export default function LivePreview() {
             const showTm = tm?.running && (!tm.target || tm.target === 'stage' || tm.target === 'both');
             if (!showSm && !showTm) return null;
 
-            const style = { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
+            const style = { position: 'absolute', bottom: 0, left: 0, right: 0, height: stageShowNextPanel ? '50%' : '30%',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               zIndex: 50, pointerEvents: 'none' };
 
@@ -526,6 +527,8 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
   const hasNextChords = nextSlideData?.type === 'song' &&
     parseChordLines(nextSlideData.content || '').some(l => l.some(s => s.chord));
 
+  const showNextPanel = showNextSlide && slideData?.type !== 'bible';
+
   return (
     <div className="w-full h-full flex flex-col select-none overflow-hidden"
       style={{ ...stageBgStyle, fontSize: fontBase ?? '7px' }}>
@@ -550,7 +553,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
 
         {/* Top half — slide actual */}
-        <div className="flex-1 flex overflow-hidden min-h-0">
+        <div className={`flex-1 flex overflow-hidden min-h-0 ${showNextPanel ? 'border-b border-white/10' : ''}`}>
           {showSideLabel && (
             <div className="shrink-0 w-1.5" style={{ backgroundColor: sectionColor }} />
           )}
@@ -566,13 +569,14 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
                 showComments={stageConfig.showComments ?? false}
                 commentColor={stageConfig.commentColor ?? '#facc15'}
                 showLabel={showSectionLabel}
+                stageConfig={stageConfig}
               />
             )}
           </div>
         </div>
 
         {/* Bottom half — siguiente slide / canción */}
-        {showNextSlide && (
+        {showNextPanel && (
           <div className="flex-1 flex overflow-hidden min-h-0 border-t border-white/10"
             style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
             {showSideLabel && (
@@ -589,6 +593,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
                   showComments={stageConfig.showComments ?? false}
                   commentColor={stageConfig.commentColor ?? '#facc15'}
                   showLabel={showSectionLabel}
+                  stageConfig={stageConfig}
                 />
               ) : nextSong ? (
                 <span className="font-semibold truncate max-w-full"
@@ -625,7 +630,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
 }
 
 // ─── Slide content miniatura para StagePreview ────────────────────────────────
-function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, showComments = false, commentColor = '#facc15', showLabel = true }) {
+function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, showComments = false, commentColor = '#facc15', showLabel = true, stageConfig = {} }) {
   if (slideData.type === 'title') {
     return (
       <div className="text-center px-1 overflow-hidden">
@@ -703,12 +708,43 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, show
     );
   }
   if (slideData.type === 'bible') {
+    const useBibleTpl = !!stageConfig?.stageBibleTemplateEnabled;
+    const alignX = useBibleTpl ? (stageConfig?.stageBibleAlignment ?? 'center') : 'center';
+    const bibleText = slideData.fullText || slideData.text;
+    const bibleRef = slideData.fullReference || slideData.reference;
+    const bibleColor = useBibleTpl ? (stageConfig?.stageBibleColor ?? '#ffffff') : lyricsColor;
+    const refColor = useBibleTpl ? (stageConfig?.stageBibleRefColor ?? '#cccccc') : '#94a3b8';
+    const versionColor = useBibleTpl ? (stageConfig?.stageBibleVersionColor ?? '#999999') : '#7c869a';
+
+    const refShowBg = useBibleTpl ? (stageConfig?.stageBibleRefShowBg ?? false) : false;
+    const refBgColor = useBibleTpl ? (stageConfig?.stageBibleRefBgColor ?? '#000000') : '#000000';
+    const refBgOpacity = useBibleTpl ? (stageConfig?.stageBibleRefBgOpacity ?? 0.6) : 0.6;
+    const hex = String(refBgColor || '#000000').replace('#', '');
+    const isHex = /^[0-9a-fA-F]{6}$/.test(hex);
+    const n = isHex ? parseInt(hex, 16) : 0;
+    const bg = isHex
+      ? `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${refBgOpacity})`
+      : `rgba(0,0,0,${refBgOpacity})`;
+
     return (
-      <div className="text-center px-1 overflow-hidden">
-        <p className="whitespace-pre-line line-clamp-3" style={{ color: lyricsColor, fontSize: '1em', lineHeight: 1.25 }}>
-          {slideData.text}
+      <div className="px-1 overflow-hidden w-full" style={{ textAlign: alignX }}>
+        <p className="whitespace-pre-line line-clamp-5" style={{ color: bibleColor, fontSize: '0.95em', lineHeight: 1.25 }}>
+          {bibleText}
         </p>
-        <p style={{ fontSize: '0.75em', color: '#94a3b8', marginTop: '1px' }}>{slideData.reference}</p>
+        <div
+          style={{
+            marginTop: '2px',
+            display: 'inline-block',
+            background: refShowBg ? bg : 'transparent',
+            borderRadius: refShowBg ? '0.3em' : 0,
+            padding: refShowBg ? '0.08em 0.45em' : 0,
+          }}
+        >
+          <p style={{ fontSize: '0.72em', color: refColor }}>{bibleRef}</p>
+        </div>
+        {slideData.version && (
+          <p style={{ fontSize: '0.62em', color: versionColor, marginTop: '1px' }}>{slideData.version}</p>
+        )}
       </div>
     );
   }

@@ -3,6 +3,7 @@ import { Search, Send, BookOpen, X, Upload, Loader2, Trash2, Clock } from 'lucid
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
+import { splitBibleVerseSmart } from '../../utils/bibleSplit';
 
 // ─── Modos de vista ───────────────────────────────────────────────────────────
 const MODE_BROWSE  = 'browse';
@@ -290,28 +291,14 @@ export default function BibleBrowser() {
     const maxLines     = maxLinesRef.current;
     const charsPerLine = 46;
 
-    const splitText = (text) => {
-      if (!maxLines) return [text];
-      const estLines = Math.max(
-        text.split('\n').filter(l => l.trim()).length,
-        Math.ceil(text.length / charsPerLine)
-      );
-      if (estLines <= maxLines) return [text];
-      const words = text.split(/\s+/);
-      const pages = []; let cur = '';
-      for (const w of words) {
-        const t = cur ? `${cur} ${w}` : w;
-        if (Math.ceil(t.length / charsPerLine) > maxLines && cur) {
-          pages.push(cur.trim()); cur = w;
-        } else { cur = t; }
-      }
-      if (cur.trim()) pages.push(cur.trim());
-      return pages.length ? pages : [text];
-    };
-
     const baseRef = `${v.book_name} ${v.chapter}:${v.verse}`;
-    const pages   = splitText(v.text);
-    const total   = pages.length;
+    const pages = splitBibleVerseSmart(v.text, maxLines, {
+      charsPerLine,
+      minFirstLines: 4,
+      minSecondLines: 2,
+    });
+    const safePages = pages.length ? pages : [v.text];
+    const total   = safePages.length;
     const pageRef = (i) => total > 1 ? `${baseRef} (${i + 1}/${total})` : baseRef;
     const nextVSD = nextV ? { type: 'bible', text: nextV.text, reference: `${nextV.book_name} ${nextV.chapter}:${nextV.verse}` } : null;
 
@@ -319,22 +306,26 @@ export default function BibleBrowser() {
       type:      'bible',
       slideData: {
         type:      'bible',
-        text:      pages[0],
+        text:      safePages[0],
+        fullText:  v.text,
         reference: pageRef(0),
+        fullReference: baseRef,
         version:   v.version,
       },
-      nextSlideData: total > 1
-        ? { type: 'bible', text: pages[1], reference: pageRef(1) }
+      nextSlideData: total > 1 && safePages[1]
+        ? { type: 'bible', text: safePages[1], fullText: v.text, reference: pageRef(1), fullReference: baseRef, version: v.version }
         : nextVSD,
     });
 
     // Guardar páginas 2..N en la cola
-    pageQueueRef.current = pages.slice(1).map((text, i) => ({
+    pageQueueRef.current = safePages.slice(1).map((text, i) => ({
       text,
+      fullText: v.text,
       reference: pageRef(i + 1),
+      fullReference: baseRef,
       version: v.version,
       nextSlideData: i + 2 < total
-        ? { type: 'bible', text: pages[i + 2], reference: pageRef(i + 2) }
+        ? { type: 'bible', text: safePages[i + 2], fullText: v.text, reference: pageRef(i + 2), fullReference: baseRef, version: v.version }
         : nextVSD,
     }));
 
@@ -357,7 +348,14 @@ export default function BibleBrowser() {
       pageQueueRef.current = rest;
       actions.showSlide({
         type: 'bible',
-        slideData: { type: 'bible', text: page.text, reference: page.reference, version: page.version },
+        slideData: {
+          type: 'bible',
+          text: page.text,
+          fullText: page.fullText,
+          reference: page.reference,
+          fullReference: page.fullReference,
+          version: page.version,
+        },
         nextSlideData: page.nextSlideData || null,
       });
       return;
@@ -392,7 +390,14 @@ export default function BibleBrowser() {
           pageQueueRef.current = rest;
           actions.showSlide({
             type: 'bible',
-            slideData: { type: 'bible', text: page.text, reference: page.reference, version: page.version },
+            slideData: {
+              type: 'bible',
+              text: page.text,
+              fullText: page.fullText,
+              reference: page.reference,
+              fullReference: page.fullReference,
+              version: page.version,
+            },
             nextSlideData: page.nextSlideData || null,
           });
           return prev; // no avanzar el índice

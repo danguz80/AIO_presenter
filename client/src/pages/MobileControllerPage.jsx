@@ -13,6 +13,7 @@ import { StagePreview } from '../components/Controls/LivePreview';
 import OrgSwitcher     from '../components/shared/OrgSwitcher';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
+import { splitBibleVerseSmart } from '../utils/bibleSplit';
 import useVolumeKeys from '../hooks/useVolumeKeys';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
 import { APP_VERSION } from '../version';
@@ -48,29 +49,6 @@ function norm(str) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // elimina diacríticos
     .toLowerCase();
-}
-
-// ─── Utilidad: dividir versos bíblicos largos ───────────────────────────────
-// Divide un versículo en páginas según el máximo de líneas configurado (mismo algoritmo
-// que BibleBrowser.jsx de escritorio). Devuelve array de strings o null si no hay split.
-function splitBibleVerse(text, maxLines) {
-  if (!maxLines || !text) return null;
-  const charsPerLine = 46;
-  const estLines = Math.max(
-    text.split('\n').filter(l => l.trim()).length,
-    Math.ceil(text.length / charsPerLine)
-  );
-  if (estLines <= maxLines) return null;
-  const words = text.split(/\s+/);
-  const pages = []; let cur = '';
-  for (const w of words) {
-    const t = cur ? `${cur} ${w}` : w;
-    if (Math.ceil(t.length / charsPerLine) > maxLines && cur) {
-      pages.push(cur.trim()); cur = w;
-    } else { cur = t; }
-  }
-  if (cur.trim()) pages.push(cur.trim());
-  return pages.length > 1 ? pages : null;
 }
 
 // ─── Parsear contenido de diapo: comentarios + acordes-solo ──────────────────
@@ -516,7 +494,14 @@ export default function MobileControllerPage() {
     finally { setBibleSearching(false); }
   }, []);
 
-  const makeVerseSD = (text, ref, version) => ({ type: 'bible', text, reference: ref, version });
+  const makeVerseSD = (text, ref, version, fullText = null, fullReference = null) => ({
+    type: 'bible',
+    text,
+    reference: ref,
+    version,
+    ...(fullText ? { fullText } : {}),
+    ...(fullReference ? { fullReference } : {}),
+  });
 
   const sendVerse = (verse, list = []) => {
     setActiveVerse(verse);
@@ -529,27 +514,32 @@ export default function MobileControllerPage() {
     });
     const i    = list.findIndex(v => v.id === verse.id);
     const next = i >= 0 && i < list.length - 1 ? list[i + 1] : null;
-    const nextSD = next ? makeVerseSD(next.text, `${next.book_name} ${next.chapter}:${next.verse}`, next.version) : null;
+    const nextBaseRef = next ? `${next.book_name} ${next.chapter}:${next.verse}` : null;
+    const nextSD = next ? makeVerseSD(next.text, nextBaseRef, next.version, next.text, nextBaseRef) : null;
 
     // Usar bibleMaxLines del outputConfig (mismo criterio que escritorio)
     const maxLines = state.outputConfig?.bibleMaxLines ?? 0;
-    const pages = splitBibleVerse(verse.text || '', maxLines);
+    const pages = splitBibleVerseSmart(verse.text || '', maxLines, {
+      charsPerLine: 46,
+      minFirstLines: 4,
+      minSecondLines: 2,
+    });
 
-    if (pages) {
+    if (pages.length > 1) {
       const total = pages.length;
       const pageRef = (n) => total > 1 ? `${baseRef} (${n + 1}/${total})` : baseRef;
       // activeSplit: { verse, pages, pageIdx, list }
       setActiveSplit({ verse, pages, pageIdx: 0, list });
       actions.showSlide({
         type: 'bible',
-        slideData:     makeVerseSD(pages[0], pageRef(0), verse.version),
-        nextSlideData: makeVerseSD(pages[1], pageRef(1), verse.version),
+        slideData:     makeVerseSD(pages[0], pageRef(0), verse.version, verse.text, baseRef),
+        nextSlideData: makeVerseSD(pages[1], pageRef(1), verse.version, verse.text, baseRef),
       });
     } else {
       setActiveSplit(null);
       actions.showSlide({
         type: 'bible',
-        slideData:     makeVerseSD(verse.text, baseRef, verse.version),
+        slideData:     makeVerseSD(verse.text, baseRef, verse.version, verse.text, baseRef),
         nextSlideData: nextSD,
       });
     }
@@ -745,8 +735,8 @@ export default function MobileControllerPage() {
           setFlash('prev'); setTimeout(() => setFlash(null), 200);
           actions.showSlide({
             type: 'bible',
-            slideData:     makeVerseSD(pages[newIdx], pageRef(newIdx), sv.version),
-            nextSlideData: makeVerseSD(pages[newIdx + 1], pageRef(newIdx + 1), sv.version),
+            slideData:     makeVerseSD(pages[newIdx], pageRef(newIdx), sv.version, sv.text, `${sv.book_name} ${sv.chapter}:${sv.verse}`),
+            nextSlideData: makeVerseSD(pages[newIdx + 1], pageRef(newIdx + 1), sv.version, sv.text, `${sv.book_name} ${sv.chapter}:${sv.verse}`),
           });
           return;
         }
@@ -788,9 +778,9 @@ export default function MobileControllerPage() {
           const nx  = si >= 0 && si < list.length - 1 ? list[si + 1] : null;
           actions.showSlide({
             type: 'bible',
-            slideData:     makeVerseSD(pages[newIdx], pageRef(newIdx), sv.version),
+            slideData:     makeVerseSD(pages[newIdx], pageRef(newIdx), sv.version, sv.text, `${sv.book_name} ${sv.chapter}:${sv.verse}`),
             nextSlideData: newIdx < total - 1
-              ? makeVerseSD(pages[newIdx + 1], pageRef(newIdx + 1), sv.version)
+              ? makeVerseSD(pages[newIdx + 1], pageRef(newIdx + 1), sv.version, sv.text, `${sv.book_name} ${sv.chapter}:${sv.verse}`)
               : (nx ? makeVerseSD(nx.text, `${nx.book_name} ${nx.chapter}:${nx.verse}`, nx.version) : null),
           });
           setFlash('next'); setTimeout(() => setFlash(null), 200);
