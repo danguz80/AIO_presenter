@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Send, BookOpen, X, Upload, Loader2, Trash2 } from 'lucide-react';
+import { Search, Send, BookOpen, X, Upload, Loader2, Trash2, Clock } from 'lucide-react';
 import { usePresenter } from '../../context/usePresenter';
 import api from '../../hooks/useApi';
 import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
@@ -7,6 +7,7 @@ import { openKeyRelayReceiver } from '../../hooks/useKeyboardRelay';
 // ─── Modos de vista ───────────────────────────────────────────────────────────
 const MODE_BROWSE  = 'browse';
 const MODE_SEARCH  = 'search';
+const MODE_HISTORY = 'history';
 
 export default function BibleBrowser() {
   const { state, actions } = usePresenter();
@@ -32,6 +33,7 @@ export default function BibleBrowser() {
   const [searchQuery,   setSearchQuery]   = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searching,     setSearching]     = useState(false);
+  const [verseHistory,  setVerseHistory]  = useState([]); // historial reciente proyectado
 
   // ── Importar nueva versión ────────────────────────────────────────────────
   const [showImport,    setShowImport]    = useState(false);
@@ -284,6 +286,12 @@ export default function BibleBrowser() {
         ? { type: 'bible', text: pages[i + 2], reference: pageRef(i + 2) }
         : nextVSD,
     }));
+
+    // Historial local: mover el versículo al tope (sin duplicar por id)
+    setVerseHistory(prev => {
+      const entry = { ...v, ref: `${v.book_name} ${v.chapter}:${v.verse}`, ts: Date.now() };
+      return [entry, ...prev.filter(h => h.id !== v.id)].slice(0, 80);
+    });
   }, [actions]); // maxLinesRef siempre fresco, no necesita dep
 
   // ─── Navegación desde móvil (via socket) ─────────────────────────────────
@@ -551,6 +559,17 @@ export default function BibleBrowser() {
           )}
         </div>
         <button
+          onClick={() => setMode(m => m === MODE_HISTORY ? MODE_BROWSE : MODE_HISTORY)}
+          title="Historial de versículos"
+          className={`p-1.5 rounded border transition-colors shrink-0 ${
+            mode === MODE_HISTORY
+              ? 'bg-accent/20 border-accent/40 text-accent'
+              : 'bg-surface-700 border-surface-600 text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Clock size={13} />
+        </button>
+        <button
           onClick={doSearch}
           disabled={searchQuery.trim().length < 3 || searching}
           className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/80 disabled:opacity-40 disabled:cursor-not-allowed font-medium shrink-0"
@@ -560,7 +579,25 @@ export default function BibleBrowser() {
       </div>
 
       {/* ── Cuerpo principal ─────────────────────────────────────────────── */}
-      {mode === MODE_SEARCH ? (
+      {mode === MODE_HISTORY ? (
+        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+          {(() => {
+            const cutoff = Date.now() - 30 * 60 * 1000;
+            const recent = verseHistory.filter(h => h.ts >= cutoff);
+            if (recent.length === 0) {
+              return <p className="text-zinc-500 text-xs text-center py-8">Sin versículos proyectados en los últimos 30 min</p>;
+            }
+            return recent.map(h => (
+              <div key={`${h.id}-${h.ts}`} className="relative">
+                <VerseCard verse={h} onSend={() => sendVerse(h)} showRef />
+                <span className="absolute top-1.5 right-2 text-[10px] text-zinc-500 pointer-events-none">
+                  {new Date(h.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ));
+          })()}
+        </div>
+      ) : mode === MODE_SEARCH ? (
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {searching && <p className="text-zinc-500 text-xs text-center py-8">Buscando…</p>}
           {!searching && searchResults.length === 0 && searchQuery.length >= 3 && (
