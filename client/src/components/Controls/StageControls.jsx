@@ -103,6 +103,8 @@ export default function StageControls({ defaultOpen = false }) {
   const {
     showClock, showNextSlide, showSongTitle, showSlideCounter,
     showSectionLabel, showSideLabel,
+    showNextSongBpm = true,
+    showNextSongTimeSig = true,
     lyricsColor, nextLyricsColor, chordsColor, clockColor, nextColor,
     fontFamily, fontBold, fontItalic,
     fontSizeCounter    = 14,
@@ -261,6 +263,8 @@ export default function StageControls({ defaultOpen = false }) {
             <ToggleRow icon={<AlignLeft size={12} />}  label="Etiqueta lateral"  value={showSideLabel    ?? true}  onChange={v => update({ showSideLabel: v })} />
             <ToggleRow icon={<Rows2 size={12} />}      label="Siguiente slide"   value={showNextSlide    ?? true}  onChange={v => update({ showNextSlide: v })} />
             <ToggleRow icon={<Clock size={12} />}      label="Reloj"             value={showClock        ?? true}  onChange={v => update({ showClock: v })} />
+            <ToggleRow icon={<Tag size={12} />}        label="BPM sig. canción"  value={showNextSongBpm  ?? true}  onChange={v => update({ showNextSongBpm: v })} />
+            <ToggleRow icon={<Tag size={12} />}        label="Compás sig. canción" value={showNextSongTimeSig ?? true}  onChange={v => update({ showNextSongTimeSig: v })} />
             <ToggleRow icon={<Film size={12} />}       label="Reproducir video"  value={showVideo        ?? true}  onChange={v => update({ showVideo: v })} />
           </SubSection>
 

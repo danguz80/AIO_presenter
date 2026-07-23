@@ -11,6 +11,18 @@ import { ensureMediaCached } from '../../utils/fsaUtils';
 
 import { getLabelColor } from '../../utils/labelColors';
 
+function getSongKey(song) {
+  return song?.songKey ?? song?.song_key ?? null;
+}
+
+function getNextSongMeta(song, { showBpm = true, showTimeSig = true } = {}) {
+  if (!song) return '';
+  const parts = [];
+  if (showBpm && song.bpm) parts.push(`${song.bpm} BPM`);
+  if (showTimeSig && song.time_sig) parts.push(song.time_sig);
+  return parts.join(' • ');
+}
+
 export default function LivePreview() {
   const { state } = usePresenter();
   const { liveState, stageConfig, virtualConfig, schedule, eventPlays, reservasMode } = state;
@@ -469,6 +481,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
     chordsColor = '#fde047',
     showSideLabel = true, showSongTitle = true, showSlideCounter = true,
     showClock = true, showNextSlide = true, showSectionLabel = true,
+    showNextSongBpm = true, showNextSongTimeSig = true,
     slideIndex, totalSlides,
   } = stageConfig;
 
@@ -529,6 +542,9 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
     parseChordLines(nextSlideData.content || '').some(l => l.some(s => s.chord));
 
   const showNextPanel = showNextSlide && slideData?.type !== 'bible';
+  const currentSongKey = getSongKey(slideData);
+  const nextSongKey = getSongKey(nextSong);
+  const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
 
   if (slideData?.type === 'bible') {
     return (
@@ -558,7 +574,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
         {showSongTitle && live && slideData?.songTitle && (
           <span className="absolute left-1/2 -translate-x-1/2 font-bold truncate max-w-[70%]"
             style={{ color: lyricsColor, fontSize: '1em' }}>
-            {slideData.songTitle}{slideData.songKey ? ` - ${slideData.songKey}` : ''}
+            {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
           </span>
         )}
       </div>
@@ -610,10 +626,17 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
                   stageConfig={stageConfig}
                 />
               ) : nextSong ? (
-                <span className="font-semibold truncate max-w-full"
-                  style={{ color: '#22c55e', fontSize: '0.9em' }}>
-                  {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
-                </span>
+                <div className="flex flex-col items-center max-w-full">
+                  <span className="font-semibold truncate max-w-full"
+                    style={{ color: '#22c55e', fontSize: '0.9em' }}>
+                    {nextSong.title}{nextSongKey ? ` - ${nextSongKey}` : ''}
+                  </span>
+                  {nextSongMeta && (
+                    <span className="truncate max-w-full" style={{ color: '#22c55ebb', fontSize: '0.72em' }}>
+                      {nextSongMeta}
+                    </span>
+                  )}
+                </div>
               ) : (
                 <span style={{ color: '#ffffff30', fontSize: '0.8em' }}>— fin —</span>
               )}
@@ -627,10 +650,17 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
         style={{ minHeight: '1.7em' }}>
         <div className="flex-1" />
         {nextSong && (
-          <span className="font-semibold truncate max-w-[70%] text-center"
-            style={{ color: '#22c55e', fontSize: '0.8em' }}>
-            {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
-          </span>
+          <div className="flex flex-col items-center max-w-[70%] text-center">
+            <span className="font-semibold truncate max-w-full"
+              style={{ color: '#22c55e', fontSize: '0.8em' }}>
+              {nextSong.title}{nextSongKey ? ` - ${nextSongKey}` : ''}
+            </span>
+            {nextSongMeta && (
+              <span className="truncate max-w-full" style={{ color: '#22c55ebb', fontSize: '0.62em' }}>
+                {nextSongMeta}
+              </span>
+            )}
+          </div>
         )}
         <div className="flex-1" />
         {showClock && (
@@ -663,6 +693,8 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
     showSlideCounter = true,
     showSectionLabel = true,
     showSideLabel = true,
+    showNextSongBpm = true,
+    showNextSongTimeSig = true,
     lyricsColor = '#ffffff',
     chordsColor = '#fde047',
     clockColor = '#ef4444',
@@ -697,6 +729,9 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
   };
   const titleFontFamily = resolveFont(fontFamilyTitle ?? fontFamily);
   const sz = (val) => typeof val === 'number' ? `${val}pt` : '16pt';
+  const currentSongKey = getSongKey(slideData);
+  const nextSongKey = getSongKey(nextSong);
+  const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
 
   const DESIGN_W = 1920;
   const DESIGN_H = 1080;
@@ -734,7 +769,7 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
                   )}
                   {showSongTitle && hasContent && slideData.songTitle && (
                     <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
-                      {slideData.songTitle}{slideData.songKey ? ` - ${slideData.songKey}` : ''}
+                      {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
                     </span>
                   )}
                 </div>
@@ -797,9 +832,16 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
                 <div className="flex-1" />
 
                 {nextSong && (
-                  <span className="font-bold leading-tight text-center" style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
-                    {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
-                  </span>
+                  <div className="flex flex-col items-center text-center">
+                    <span className="font-bold leading-tight" style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
+                      {nextSong.title}{nextSongKey ? ` - ${nextSongKey}` : ''}
+                    </span>
+                    {nextSongMeta && (
+                      <span style={{ color: `${nextColor}bb`, fontSize: sz(Math.max(10, (fontSizeNextSong ?? 16) - 3)) }}>
+                        {nextSongMeta}
+                      </span>
+                    )}
+                  </div>
                 )}
 
                 <div className="flex-1 flex justify-end">

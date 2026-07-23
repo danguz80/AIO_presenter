@@ -12,6 +12,8 @@ const DEFAULT_STAGE_CONFIG = {
   showSlideCounter: true,
   showSectionLabel: true,
   showSideLabel:    true,
+  showNextSongBpm:  true,
+  showNextSongTimeSig: true,
   lyricsColor:  '#ffffff',
   nextLyricsColor: '#ffffff',
   chordsColor:  '#fde047',

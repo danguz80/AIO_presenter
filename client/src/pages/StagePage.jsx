@@ -34,6 +34,18 @@ function injectGoogleFont(name) {
   document.head.appendChild(link);
 }
 
+function getSongKey(song) {
+  return song?.songKey ?? song?.song_key ?? null;
+}
+
+function getNextSongMeta(song, { showBpm = true, showTimeSig = true } = {}) {
+  if (!song) return '';
+  const parts = [];
+  if (showBpm && song.bpm) parts.push(`${song.bpm} BPM`);
+  if (showTimeSig && song.time_sig) parts.push(song.time_sig);
+  return parts.join(' • ');
+}
+
 export default function StagePage() {
   const { state } = usePresenter();
   const { liveState, stageConfig, schedule, eventPlays, reservasMode } = state;
@@ -101,6 +113,8 @@ export default function StagePage() {
     showSlideCounter = true,
     showSectionLabel = true,
     showSideLabel    = true,
+    showNextSongBpm  = true,
+    showNextSongTimeSig = true,
     lyricsColor  = '#ffffff',
     nextLyricsColor = '#ffffff',
     chordsColor  = '#fde047',
@@ -238,6 +252,9 @@ export default function StagePage() {
   })();
 
   const showTopBar = showSongTitle || showSlideCounter || showSectionLabel;
+  const currentSongKey = getSongKey(slideData);
+  const nextSongKey = getSongKey(nextSong);
+  const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
 
   return (
     <div
@@ -268,7 +285,7 @@ export default function StagePage() {
           )}
           {showSongTitle && hasContent && slideData.songTitle && (
             <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
-              {slideData.songTitle}{slideData.songKey ? ` - ${slideData.songKey}` : ''}
+              {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
             </span>
           )}
         </div>
@@ -388,8 +405,13 @@ export default function StagePage() {
                     className="text-3xl font-bold leading-tight"
                     style={{ color: nextColor, fontFamily: titleFontFamily }}
                   >
-                    {nextSong.title}{nextSong.song_key ? ` — ${nextSong.song_key}` : ''}
+                    {nextSong.title}{nextSongKey ? ` — ${nextSongKey}` : ''}
                   </span>
+                  {nextSongMeta && (
+                    <span className="text-sm" style={{ color: `${nextColor}bb` }}>
+                      {nextSongMeta}
+                    </span>
+                  )}
                   {nextSong.author && (
                     <span className="text-base" style={{ color: `${nextColor}77` }}>
                       {nextSong.author}
@@ -460,10 +482,17 @@ export default function StagePage() {
           <div className="flex-1" />
 
           {nextSong && (
-            <span className="font-bold leading-tight text-center"
-              style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
-              {nextSong.title}{nextSong.song_key ? ` - ${nextSong.song_key}` : ''}
-            </span>
+            <div className="flex flex-col items-center text-center">
+              <span className="font-bold leading-tight"
+                style={{ color: nextColor, fontFamily: titleFontFamily, fontSize: sz(fontSizeNextSong) }}>
+                {nextSong.title}{nextSongKey ? ` - ${nextSongKey}` : ''}
+              </span>
+              {nextSongMeta && (
+                <span style={{ color: `${nextColor}bb`, fontSize: sz(Math.max(10, (fontSizeNextSong ?? 16) - 3)) }}>
+                  {nextSongMeta}
+                </span>
+              )}
+            </div>
           )}
 
           <div className="flex-1 flex justify-end">
