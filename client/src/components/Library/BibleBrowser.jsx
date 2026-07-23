@@ -34,6 +34,7 @@ export default function BibleBrowser() {
   const [searchResults, setSearchResults] = useState([]);
   const [searching,     setSearching]     = useState(false);
   const [verseHistory,  setVerseHistory]  = useState([]); // historial reciente proyectado
+  const [pendingHistoryVerse, setPendingHistoryVerse] = useState(null);
 
   // ── Importar nueva versión ────────────────────────────────────────────────
   const [showImport,    setShowImport]    = useState(false);
@@ -228,6 +229,56 @@ export default function BibleBrowser() {
   const handleSearchKey = (e) => {
     if (e.key === 'Enter') doSearch();
   };
+
+  // ─── Navegar desde historial al contexto del capítulo ───────────────────
+  const navigateToVerseInContext = useCallback((histVerse) => {
+    if (!histVerse) return;
+    const targetVersion = versions.find(v =>
+      String(v.abbreviation || '').toLowerCase() === String(histVerse.version || '').toLowerCase()
+    );
+
+    // Si el historial apunta a otra versión, cambiar versión y reintentar cuando carguen libros.
+    if (targetVersion && String(targetVersion.id) !== String(versionId)) {
+      setPendingHistoryVerse(histVerse);
+      setMode(MODE_BROWSE);
+      setVersionId(String(targetVersion.id));
+      return;
+    }
+
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const foundBook = books.find(b => norm(b.name) === norm(histVerse.book_name) || norm(b.abbrev) === norm(histVerse.book_name));
+    if (!foundBook) {
+      setPendingHistoryVerse(histVerse);
+      setMode(MODE_BROWSE);
+      return;
+    }
+
+    setMode(MODE_BROWSE);
+    setBook(foundBook);
+    setPendingHighlight(null);
+    setPendingChapter(Number(histVerse.chapter));
+    setPendingVerse(Number(histVerse.verse));
+  }, [books, versions, versionId]);
+
+  // Reintenta la navegación del historial cuando ya cambió versión/cargaron libros.
+  useEffect(() => {
+    if (!pendingHistoryVerse) return;
+    const targetVersion = versions.find(v =>
+      String(v.abbreviation || '').toLowerCase() === String(pendingHistoryVerse.version || '').toLowerCase()
+    );
+    if (targetVersion && String(targetVersion.id) !== String(versionId)) return;
+
+    const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const foundBook = books.find(b => norm(b.name) === norm(pendingHistoryVerse.book_name) || norm(b.abbrev) === norm(pendingHistoryVerse.book_name));
+    if (!foundBook) return;
+
+    setMode(MODE_BROWSE);
+    setBook(foundBook);
+    setPendingHighlight(null);
+    setPendingChapter(Number(pendingHistoryVerse.chapter));
+    setPendingVerse(Number(pendingHistoryVerse.verse));
+    setPendingHistoryVerse(null);
+  }, [pendingHistoryVerse, versions, versionId, books]);
 
   // ─── Cola de páginas para versículos largos ───────────────────────────────
   const pageQueueRef  = useRef([]); // { text, reference, version, nextSlideData }[]
@@ -589,7 +640,7 @@ export default function BibleBrowser() {
             }
             return recent.map(h => (
               <div key={`${h.id}-${h.ts}`} className="relative">
-                <VerseCard verse={h} onSend={() => sendVerse(h)} showRef />
+                <VerseCard verse={h} onSend={navigateToVerseInContext} showRef />
                 <span className="absolute top-1.5 right-2 text-[10px] text-zinc-500 pointer-events-none">
                   {new Date(h.ts).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' })}
                 </span>
