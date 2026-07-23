@@ -36,25 +36,42 @@ function chooseCutLine(lines, maxLines, minFirstLines, minSecondLines) {
 
   const maxFirst = Math.min(maxLines, lines.length - 1);
   const minFirst = Math.min(Math.max(2, minFirstLines), maxFirst);
-  const punctRe = /[.!?;:]["')\]]*$/;
+  const strongPunctRe = /[.!?;:]["')\]]*$/;
+  const softPunctRe = /,["')\]]*$/;
+  const weakEndRe = /\b(?:de|del|la|el|y|o|en|que|a|por|para|con|su|sus|un|una|los|las|lo)\b$/i;
+  const weakStartRe = /^\s*(?:de|del|la|el|y|o|en|que|a|por|para|con|su|sus|un|una|los|las|lo)\b/i;
 
-  let chosen = maxFirst;
+  let bestCut = null;
+  let bestScore = -Infinity;
 
-  // Preferir corte al cierre de frase dentro de la ventana visible.
   for (let i = maxFirst; i >= minFirst; i -= 1) {
-    if (punctRe.test(lines[i - 1].text.trim())) {
-      chosen = i;
-      break;
+    const current = lines[i - 1].text.trim();
+    const next = lines[i]?.text.trim() || '';
+    const remaining = lines.length - i;
+    if (remaining < minSecondLines) continue;
+
+    let score = 0;
+
+    if (strongPunctRe.test(current)) score += 120;
+    else if (softPunctRe.test(current)) score += 85;
+    else score += 20;
+
+    if (weakEndRe.test(current)) score -= 35;
+    if (weakStartRe.test(next)) score -= 18;
+
+    // Preferir cortes cercanos al máximo permitido, sin volverlo una regla dura.
+    score += i * 4;
+
+    // Evitar que la segunda página quede demasiado corta.
+    score -= Math.max(0, 4 - remaining) * 25;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestCut = i;
     }
   }
 
-  const remaining = lines.length - chosen;
-  if (remaining < minSecondLines) {
-    const balanced = Math.max(minFirst, lines.length - minSecondLines);
-    chosen = Math.min(maxFirst, balanced);
-  }
-
-  return chosen;
+  return bestCut;
 }
 
 // Divide un verso largo en paginas mas legibles:

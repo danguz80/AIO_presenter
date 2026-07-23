@@ -3,6 +3,7 @@ import { usePresenter } from '../../context/usePresenter';
 import { ChevronDown, ChevronUp, Monitor, Save, BookOpen, X, Check, LayoutTemplate, Film, Image } from 'lucide-react';
 import GoogleFontPicker from '../shared/GoogleFontPicker';
 import { resolveFont } from '../../utils/fontUtils';
+import { splitBibleVerseSmart } from '../../utils/bibleSplit';
 import api from '../../hooks/useApi';
 import {
   FSA_SUPPORTED, listFolders as fsaListFolders, listMediaFiles,
@@ -372,6 +373,10 @@ export default function OutputControls({ defaultOpen = false }) {
   const bibleRefFontSize     = outputConfig?.bibleRefFontSize     ?? 24;
   const bibleVersionPosition = outputConfig?.bibleVersionPosition ?? 'inline-right';
   const bibleMaxLines        = outputConfig?.bibleMaxLines        ?? 0;
+  const bibleSplitSample = 'Guarda los preceptos de Jehová tu Dios, andando en sus caminos, y observando sus estatutos y mandamientos, sus decretos y sus testimonios, de la manera que está escrito en la ley de Moisés, para que prosperes en todo lo que hagas y en todo aquello que emprendas;';
+  const bibleSplitPreview = bibleMaxLines > 0
+    ? splitBibleVerseSmart(bibleSplitSample, bibleMaxLines, { minFirstLines: 4, minSecondLines: 2 })
+    : [bibleSplitSample];
 
   // fontSize: 'auto' o número
   const fontSizeIsAuto = !outputConfig?.fontSize || outputConfig.fontSize === 'auto';
@@ -859,7 +864,7 @@ export default function OutputControls({ defaultOpen = false }) {
                   </div>
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-zinc-300">Máx. líneas por diap.</span>
+                      <span className="text-xs text-zinc-300">Líneas objetivo por diapo</span>
                       <span className="text-xs text-zinc-400">
                         {bibleMaxLines === 0 ? 'Auto (sin límite)' : `${bibleMaxLines} líneas`}
                       </span>
@@ -867,6 +872,25 @@ export default function OutputControls({ defaultOpen = false }) {
                     <input type="range" min={0} max={8} step={1} value={bibleMaxLines}
                       onChange={e => update({ bibleMaxLines: Number(e.target.value) })}
                       className="w-full accent-accent" />
+                    <p className="text-[10px] text-zinc-500 leading-snug">
+                      El corte busca una pausa natural y usa este número como referencia, no como una regla rígida.
+                    </p>
+                    {bibleMaxLines > 0 && (
+                      <div className="mt-2 rounded-lg border border-surface-600 bg-surface-700/50 p-2 space-y-1">
+                        <div className="flex items-center justify-between text-[10px] text-zinc-500 uppercase tracking-wide">
+                          <span>Vista previa</span>
+                          <span>{bibleSplitPreview.length} parte{bibleSplitPreview.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {bibleSplitPreview.map((part, idx) => (
+                            <div key={idx} className={`rounded px-2 py-1.5 text-xs leading-snug ${idx === 0 ? 'bg-accent/10 text-zinc-200' : 'bg-black/20 text-zinc-400'}`}>
+                              <span className="font-semibold text-[10px] uppercase tracking-wide mr-1">{idx + 1}/{bibleSplitPreview.length}</span>
+                              {part}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
