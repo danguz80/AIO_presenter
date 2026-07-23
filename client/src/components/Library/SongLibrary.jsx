@@ -200,6 +200,18 @@ export default function SongLibrary() {
     lastClickedIdx.current = null;
   };
 
+  const invertSelection = () => {
+    if (!state.songs?.length) return;
+    setSelectedIds(prev => {
+      const next = new Set();
+      for (const song of state.songs) {
+        if (!prev.has(song.id)) next.add(song.id);
+      }
+      return next;
+    });
+    lastClickedIdx.current = null;
+  };
+
   const handleDelete = async (e, id) => {
     e.stopPropagation();
     if (!isAdmin) return;
@@ -265,14 +277,24 @@ export default function SongLibrary() {
 
       {/* Búsqueda */}
       <div className="px-3 py-2 border-b border-surface-700">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
-          <input
-            className="input pl-8"
-            placeholder="Buscar canción..."
-            value={search}
-            onChange={e => handleSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              className="input pl-8"
+              placeholder="Buscar canción..."
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+            />
+          </div>
+          <button
+            onClick={invertSelection}
+            disabled={!state.songs.length}
+            className="btn-ghost py-1 px-2 text-xs whitespace-nowrap disabled:opacity-40 disabled:cursor-not-allowed"
+            title="Invertir selección"
+          >
+            Invertir selección
+          </button>
         </div>
       </div>
 
