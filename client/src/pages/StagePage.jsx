@@ -171,6 +171,7 @@ export default function StagePage() {
 
   const hasBgMedia  = !isBlank && !!backgroundMedia;
   const hasContent   = !isBlank && !!slideData && (slideData.type !== 'media' || !hasBgMedia);
+  const showNextPanel = showNextSlide && slideData?.type !== 'bible';
   const label        = slideData?.label;
 
   // Mantener el último label para que el color de la barra persista entre slides del mismo grupo
@@ -278,7 +279,7 @@ export default function StagePage() {
       <div className="flex-1 flex flex-col overflow-hidden min-h-0" style={{ position: 'relative', zIndex: 1 }}>
 
         {/* MITAD SUPERIOR: slide actual */}
-        <div className={`flex overflow-hidden ${showNextSlide ? 'flex-1 border-b border-white/10' : 'flex-1'}`}>
+        <div className={`flex overflow-hidden ${showNextPanel ? 'flex-1 border-b border-white/10' : 'flex-1'}`}>
 
           {/* Franja lateral de etiqueta */}
           {showSideLabel && hasContent && (
@@ -332,7 +333,7 @@ export default function StagePage() {
         </div>
 
         {/* MITAD INFERIOR: siguiente slide / siguiente canción */}
-        {showNextSlide && (
+        {showNextPanel && (
           <div className="flex-1 flex overflow-hidden bg-black/25">
 
             {/* Franja lateral de etiqueta del siguiente slide */}
@@ -415,7 +416,7 @@ export default function StagePage() {
 
         // Si hay área de siguiente slide, el overlay la ocupa exactamente.
         // Si no existe esa área, mostramos una banda fija en la parte inferior.
-        const style = showNextSlide
+        const style = showNextPanel
           ? { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%', zIndex: 10 }
           : { position: 'absolute', bottom: 0, left: 0, right: 0, height: '30%', zIndex: 10 };
 
