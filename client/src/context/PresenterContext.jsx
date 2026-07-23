@@ -32,6 +32,19 @@ const DEFAULT_STAGE_CONFIG = {
   fontSizeNextSong:   16,
   fontSizeNextLyrics: 32,
   fontSizeChords:     18,
+  // Plantilla bíblica especial para escenario
+  stageBibleTemplateEnabled: false,
+  stageBibleFontFamily:      'sans',
+  stageBibleFontSize:        48,
+  stageBibleColor:           '#ffffff',
+  stageBibleAlignment:       'center',
+  stageBibleAlignmentY:      'center',
+  stageBibleRefColor:        '#cccccc',
+  stageBibleRefFontSize:     24,
+  stageBibleRefShowBg:       false,
+  stageBibleRefBgColor:      '#000000',
+  stageBibleRefBgOpacity:    0.6,
+  stageBibleVersionColor:    '#999999',
   customFonts: [],
 };
 

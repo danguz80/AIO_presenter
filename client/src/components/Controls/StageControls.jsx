@@ -124,6 +124,18 @@ export default function StageControls({ defaultOpen = false }) {
     commentFontFamily   = 'sans',
     commentFontSize     = 16,
     showVideo           = true,
+    stageBibleTemplateEnabled = false,
+    stageBibleFontFamily      = 'sans',
+    stageBibleFontSize        = 48,
+    stageBibleColor           = '#ffffff',
+    stageBibleAlignment       = 'center',
+    stageBibleAlignmentY      = 'center',
+    stageBibleRefColor        = '#cccccc',
+    stageBibleRefFontSize     = 24,
+    stageBibleRefShowBg       = false,
+    stageBibleRefBgColor      = '#000000',
+    stageBibleRefBgOpacity    = 0.6,
+    stageBibleVersionColor    = '#999999',
   } = stageConfig;
 
   const addFont = () => {
@@ -388,6 +400,94 @@ export default function StageControls({ defaultOpen = false }) {
                     ))}
                   </select>
                 </div>
+              </>
+            )}
+          </SubSection>
+
+          {/* PLANTILLA BÍBLICA (ESCENARIO) */}
+          <SubSection title="Plantilla Biblia (Escenario)">
+            <ToggleRow
+              icon={<BookOpen size={12} />}
+              label="Activar plantilla bíblica"
+              value={stageBibleTemplateEnabled}
+              onChange={v => update({ stageBibleTemplateEnabled: v })}
+            />
+
+            {stageBibleTemplateEnabled && (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-zinc-300 shrink-0">Fuente bíblica</span>
+                  <select
+                    value={stageBibleFontFamily}
+                    onChange={e => update({ stageBibleFontFamily: e.target.value })}
+                    className="bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-1.5 py-1 focus:outline-none focus:border-accent"
+                  >
+                    {allFontFamilies.map(f => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <SizeRow label="Tamaño texto bíblico" value={stageBibleFontSize} onChange={v => update({ stageBibleFontSize: v })} />
+                <ColorRow label="Color texto bíblico" value={stageBibleColor} onChange={v => update({ stageBibleColor: v })} />
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-zinc-300 shrink-0">Alineación X</span>
+                  <select
+                    value={stageBibleAlignment}
+                    onChange={e => update({ stageBibleAlignment: e.target.value })}
+                    className="bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-1.5 py-1 focus:outline-none focus:border-accent"
+                  >
+                    <option value="left">Izquierda</option>
+                    <option value="center">Centro</option>
+                    <option value="right">Derecha</option>
+                  </select>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-zinc-300 shrink-0">Alineación Y</span>
+                  <select
+                    value={stageBibleAlignmentY}
+                    onChange={e => update({ stageBibleAlignmentY: e.target.value })}
+                    className="bg-surface-600 border border-surface-500 text-xs text-zinc-200 rounded px-1.5 py-1 focus:outline-none focus:border-accent"
+                  >
+                    <option value="top">Arriba</option>
+                    <option value="center">Centro</option>
+                    <option value="bottom">Abajo</option>
+                  </select>
+                </div>
+
+                <SizeRow label="Tamaño referencia" value={stageBibleRefFontSize} onChange={v => update({ stageBibleRefFontSize: v })} />
+                <ColorRow label="Color referencia" value={stageBibleRefColor} onChange={v => update({ stageBibleRefColor: v })} />
+                <ColorRow label="Color versión" value={stageBibleVersionColor} onChange={v => update({ stageBibleVersionColor: v })} />
+
+                <ToggleRow
+                  icon={null}
+                  label="Fondo referencia"
+                  value={stageBibleRefShowBg}
+                  onChange={v => update({ stageBibleRefShowBg: v })}
+                />
+
+                {stageBibleRefShowBg && (
+                  <>
+                    <ColorRow label="Color fondo ref." value={stageBibleRefBgColor} onChange={v => update({ stageBibleRefBgColor: v })} />
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-zinc-300 shrink-0">Opacidad fondo</span>
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          step={5}
+                          value={Math.round((stageBibleRefBgOpacity ?? 0.6) * 100)}
+                          onChange={e => update({ stageBibleRefBgOpacity: Number(e.target.value) / 100 })}
+                          className="flex-1 accent-accent"
+                        />
+                        <span className="text-xs text-zinc-400 w-10 text-right">{Math.round((stageBibleRefBgOpacity ?? 0.6) * 100)}%</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </SubSection>

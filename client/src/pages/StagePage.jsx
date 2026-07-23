@@ -126,6 +126,18 @@ export default function StagePage() {
     commentFontFamily  = 'sans',
     commentFontSize    = 16,
     showVideo          = true,
+    stageBibleTemplateEnabled = false,
+    stageBibleFontFamily      = 'sans',
+    stageBibleFontSize        = 48,
+    stageBibleColor           = '#ffffff',
+    stageBibleAlignment       = 'center',
+    stageBibleAlignmentY      = 'center',
+    stageBibleRefColor        = '#cccccc',
+    stageBibleRefFontSize     = 24,
+    stageBibleRefShowBg       = false,
+    stageBibleRefBgColor      = '#000000',
+    stageBibleRefBgOpacity    = 0.6,
+    stageBibleVersionColor    = '#999999',
   } = stageConfig;
 
   // ── Inyectar Google Fonts (aquí, después del destructuring) ──────────────
@@ -313,6 +325,7 @@ export default function StagePage() {
                 commentFontFamily={commentFontFamily}
                 commentFontSize={commentFontSize}
                 showVideo={showVideo}
+                stageCfg={stageConfig}
               />
             )}
           </div>
@@ -360,6 +373,7 @@ export default function StagePage() {
                   commentFontFamily={commentFontFamily}
                   commentFontSize={commentFontSize}
                   showVideo={showVideo}
+                  stageCfg={stageConfig}
                 />
               ) : nextSong ? (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-10 text-center">
@@ -539,7 +553,7 @@ function StageTitleSlide({ titleFF, artistFF, titleColor, artistColor, titleSize
   );
 }
 
-function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true }) {
+function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true, stageCfg = {} }) {
   const stroke = strokeWidth > 0
     ? `${Array.from({ length: 4 }, (_, i) => {
         const angle = i * 90;
@@ -692,6 +706,30 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
   }
 
   if (slideData.type === 'bible') {
+    const useBibleTpl = !!stageCfg?.stageBibleTemplateEnabled;
+    const bibleFontFamily = useBibleTpl ? resolveFontFamily(stageCfg?.stageBibleFontFamily ?? 'sans') : fontStyles.fontFamily;
+    const bibleColor = useBibleTpl ? (stageCfg?.stageBibleColor ?? '#ffffff') : lyricsColor;
+    const bibleRefColor = useBibleTpl ? (stageCfg?.stageBibleRefColor ?? '#cccccc') : `${lyricsColor}99`;
+    const bibleVersionColor = useBibleTpl ? (stageCfg?.stageBibleVersionColor ?? '#999999') : `${lyricsColor}55`;
+    const bibleFontSize = useBibleTpl ? `${stageCfg?.stageBibleFontSize ?? 48}pt` : null;
+    const bibleRefFontSize = useBibleTpl ? `${stageCfg?.stageBibleRefFontSize ?? 24}pt` : '1.25rem';
+    const alignX = useBibleTpl ? (stageCfg?.stageBibleAlignment ?? 'center') : 'center';
+    const alignY = useBibleTpl ? (stageCfg?.stageBibleAlignmentY ?? 'center') : 'center';
+    const refShowBg = useBibleTpl ? (stageCfg?.stageBibleRefShowBg ?? false) : false;
+    const refBgColor = useBibleTpl ? (stageCfg?.stageBibleRefBgColor ?? '#000000') : '#000000';
+    const refBgOpacity = useBibleTpl ? (stageCfg?.stageBibleRefBgOpacity ?? 0.6) : 0.6;
+
+    const refBgCss = (() => {
+      const hex = String(refBgColor || '#000000');
+      const m = hex.match(/^#([0-9a-fA-F]{6})$/);
+      if (!m) return `rgba(0,0,0,${refBgOpacity})`;
+      const v = m[1];
+      const r = parseInt(v.slice(0, 2), 16);
+      const g = parseInt(v.slice(2, 4), 16);
+      const b = parseInt(v.slice(4, 6), 16);
+      return `rgba(${r},${g},${b},${refBgOpacity})`;
+    })();
+
     const rawText    = slideData.text || '';
     // Estimar líneas visuales: usar la mayor entre \n reales y estimado por número de caracteres
     const charLines  = Math.ceil(rawText.length / 46); // ~46 chars por línea a font grande
@@ -702,31 +740,44 @@ function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, o
       : lineCount <= 8 ? 'clamp(1.1rem, 2.6vw, 2.4rem)'
       : 'clamp(0.85rem, 2vw, 1.8rem)';
 
-    const sizeMap = {
-      small:  'clamp(0.9rem, 2vw, 1.6rem)',
-      medium: 'clamp(1.4rem, 3vw, 2.6rem)',
-      large:  'clamp(2rem, 4.5vw, 4rem)',
-      auto:   autoSize,
-    };
-
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center px-16 text-center">
+      <div
+        className="w-full h-full flex flex-col px-16"
+        style={{
+          justifyContent: alignY === 'top' ? 'flex-start' : alignY === 'bottom' ? 'flex-end' : 'center',
+          alignItems: alignX === 'left' ? 'flex-start' : alignX === 'right' ? 'flex-end' : 'center',
+          textAlign: alignX,
+        }}
+      >
         <p
           className="leading-relaxed whitespace-pre-line w-full"
           style={{
-            fontSize: autoSize,
-            color: lyricsColor,
+            fontSize: bibleFontSize || autoSize,
+            color: bibleColor,
+            fontFamily: bibleFontFamily,
+            fontWeight: fontStyles.fontWeight,
+            fontStyle: fontStyles.fontStyle,
             textShadow: '0 2px 12px rgba(0,0,0,0.7)',
-            ...fontStyles,
           }}
         >
           {slideData.text}
         </p>
-        <p className="text-xl mt-6 font-medium" style={{ color: `${lyricsColor}99` }}>
-          {slideData.reference}
-        </p>
+
+        <div
+          className="mt-6"
+          style={{
+            background: refShowBg ? refBgCss : 'transparent',
+            padding: refShowBg ? '0.35em 0.9em' : 0,
+            borderRadius: refShowBg ? '0.4em' : 0,
+          }}
+        >
+          <p className="font-medium" style={{ color: bibleRefColor, fontSize: bibleRefFontSize }}>
+            {slideData.reference}
+          </p>
+        </div>
+
         {slideData.version && (
-          <p className="text-sm mt-1" style={{ color: `${lyricsColor}55` }}>
+          <p className="text-sm mt-1" style={{ color: bibleVersionColor }}>
             {slideData.version}
           </p>
         )}
