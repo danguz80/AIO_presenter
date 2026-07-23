@@ -390,6 +390,21 @@ async function saveOrgSetting(orgId, key, value) {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_song_play_history_org_date ON song_play_history(organization_id, played_on DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_song_play_history_org_song ON song_play_history(organization_id, song_id, played_on DESC)`);
+    // Backfill inicial: importar canciones ya marcadas como tocadas antes de esta feature.
+    // Es idempotente por UNIQUE(organization_id, song_id, played_on).
+    await pool.query(`
+      INSERT INTO song_play_history (organization_id, song_id, played_on, source, created_at)
+      SELECT
+        e.organization_id,
+        esp.song_id,
+        COALESCE(esp.occurrence_date, e.date, DATE(esp.played_at), CURRENT_DATE) AS played_on,
+        CASE WHEN COALESCE(esp.manual, false) THEN 'manual' ELSE 'auto' END AS source,
+        COALESCE(esp.played_at, NOW()) AS created_at
+      FROM event_song_plays esp
+      JOIN events e ON e.id = esp.event_id
+      WHERE e.organization_id IS NOT NULL
+      ON CONFLICT (organization_id, song_id, played_on) DO NOTHING
+    `);
     // Cambiar trial de 7 a 30 días para nuevas orgs
     await pool.query(`ALTER TABLE organizations ALTER COLUMN trial_ends SET DEFAULT (CURRENT_DATE + 30)`);
     // Extender orgs en trial que aún no han vencido (o que vencieron muy reciente)
