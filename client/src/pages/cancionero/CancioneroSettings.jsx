@@ -8,6 +8,7 @@ import {
   CreditCard, Smartphone, AlertCircle, ExternalLink,
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
+import SongHistoryPanel from '../../components/shared/SongHistoryPanel';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -1747,6 +1748,14 @@ export default function CancioneroSettings() {
           subtitle={orgs.find(o => o.id === Number(localStorage.getItem('aio_org_id')))?.name || 'Gestionar organización'}
         >
           <OrgSection orgs={orgs} />
+        </SectionCard>
+
+        <SectionCard
+          icon={Clock}
+          title="Historial de canciones"
+          subtitle="Fechas en que cada canción fue marcada como tocada"
+        >
+          <SongHistoryPanel />
         </SectionCard>
       </div>
 

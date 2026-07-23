@@ -8,6 +8,7 @@ import DisplaysPanel   from './DisplaysPanel';
 import ThemePanel      from './ThemePanel';
 import SyncPanel       from './SyncPanel';
 import GeneralPanel    from './GeneralPanel';
+import SongHistoryPanel from '../shared/SongHistoryPanel';
 
 export default function SettingsPanel({ mobileUrl, onClose }) {
   const [showQR,      setShowQR]      = useState(false);
@@ -16,6 +17,7 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
   const [showTema,    setShowTema]    = useState(false);
   const [showSync,    setShowSync]    = useState(false);
   const [showPlan,    setShowPlan]    = useState(false);
+  const [showSongHistory, setShowSongHistory] = useState(false);
 
   // Info de plan de la org
   const [org,          setOrg]          = useState(null);
@@ -290,6 +292,25 @@ export default function SettingsPanel({ mobileUrl, onClose }) {
             {showSync && (
               <div className="px-4 pb-4">
                 <SyncPanel />
+              </div>
+            )}
+          </div>
+
+          {/* Sección: Historial de canciones (colapsable) */}
+          <div className="border-b border-surface-700">
+            <button
+              onClick={() => setShowSongHistory(v => !v)}
+              className="flex items-center justify-between w-full px-4 py-3 text-left hover:bg-surface-700/50 transition-colors"
+            >
+              <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Historial de canciones</span>
+              <ChevronDown
+                size={14}
+                className={`text-zinc-500 transition-transform duration-200 ${showSongHistory ? 'rotate-180' : ''}`}
+              />
+            </button>
+            {showSongHistory && (
+              <div className="px-4 pb-4">
+                <SongHistoryPanel />
               </div>
             )}
           </div>

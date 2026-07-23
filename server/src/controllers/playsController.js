@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { addSongHistoryEntry } = require('./songHistoryController');
 
 // GET /api/events/:id/plays?occurrence_date=YYYY-MM-DD
 // Devuelve las canciones marcadas como tocadas para un evento/ocurrencia
@@ -32,6 +33,17 @@ async function upsertPlay(req, res) {
     const { song_id, occurrence_date = null, slides_shown = 0, total_slides = 0, manual = false } = req.body;
     if (!song_id) return res.status(400).json({ error: 'song_id requerido' });
 
+    const orgId = req.user?.orgId || null;
+    let playedOn = occurrence_date || null;
+    if (!playedOn) {
+      const evRes = await pool.query(
+        'SELECT date FROM events WHERE id = $1 AND organization_id = $2',
+        [id, orgId]
+      );
+      playedOn = evRes.rows[0]?.date ? String(evRes.rows[0].date).slice(0, 10) : null;
+    }
+    if (!playedOn) playedOn = new Date().toISOString().slice(0, 10);
+
     const { rows } = await pool.query(
       `INSERT INTO event_song_plays (event_id, occurrence_date, song_id, played_at, slides_shown, total_slides, manual)
        VALUES ($1, $2, $3, NOW(), $4, $5, $6)
@@ -43,6 +55,15 @@ async function upsertPlay(req, res) {
        RETURNING *`,
       [id, occurrence_date, song_id, slides_shown, total_slides, manual]
     );
+
+    await addSongHistoryEntry({
+      orgId,
+      songId: song_id,
+      playedOn,
+      source: manual ? 'manual' : 'auto',
+      userId: req.user?.userId || null,
+    });
+
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error('[Plays] upsertPlay:', err.message);

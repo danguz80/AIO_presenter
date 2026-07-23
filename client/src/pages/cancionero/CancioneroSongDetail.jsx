@@ -10,6 +10,7 @@ import SongFormModal from '../../components/Library/SongFormModal';
 import AnnotationCanvas from '../../components/cancionero/AnnotationCanvas';
 import CancioneroNavbar from './CancioneroNavbar';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
+import SongRecentPlays from '../../components/shared/SongRecentPlays';
 
 const API = import.meta.env.VITE_API_URL || '';
 const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
@@ -1010,6 +1011,7 @@ export default function CancioneroSongDetail() {
               )
               : song?.author && <p className="text-xs text-white/40 truncate">{song.author}</p>
             }
+            <SongRecentPlays songId={song?.id} limit={3} compact />
           </div>
           {/* Prev / next dentro del evento */}
           {songList && (

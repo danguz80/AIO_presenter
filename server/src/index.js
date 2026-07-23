@@ -17,6 +17,7 @@ const mediaRouter  = require('./routes/media');
 const eventsRouter          = require('./routes/events');
 const eventTemplatesRouter  = require('./routes/eventTemplates');
 const playsRouter           = require('./routes/plays');
+const songHistoryRouter     = require('./routes/songHistory');
 const authRouter   = require('./routes/auth');
 const syncRouter   = require('./routes/sync');
 const bandConfigsRouter  = require('./routes/bandConfigs');
@@ -374,6 +375,21 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS paypal_plan_type VARCHAR(20)`);
     await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(20) DEFAULT 'trial'`);
     await pool.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS max_members INTEGER DEFAULT 5`);
+    // ─── Historial de canciones tocadas por organización ───────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS song_play_history (
+        id              BIGSERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        song_id         INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,
+        played_on       DATE NOT NULL,
+        source          VARCHAR(20) NOT NULL DEFAULT 'auto',
+        created_by      INTEGER REFERENCES sync_users(id) ON DELETE SET NULL,
+        created_at      TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (organization_id, song_id, played_on)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_song_play_history_org_date ON song_play_history(organization_id, played_on DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_song_play_history_org_song ON song_play_history(organization_id, song_id, played_on DESC)`);
     // Cambiar trial de 7 a 30 días para nuevas orgs
     await pool.query(`ALTER TABLE organizations ALTER COLUMN trial_ends SET DEFAULT (CURRENT_DATE + 30)`);
     // Extender orgs en trial que aún no han vencido (o que vencieron muy reciente)
@@ -870,6 +886,7 @@ app.use('/api/media',           mediaRouter);  // media tiene su propio requireA
 app.use('/api/events',          requireAuth, requireActivePlan, eventsRouter);
 app.use('/api/event-templates', requireAuth, requireActivePlan, eventTemplatesRouter);
 app.use('/api/events',          requireAuth, requireActivePlan, playsRouter); // plays nested
+app.use('/api/song-history',    requireAuth, requireActivePlan, songHistoryRouter);
 app.use('/auth',      authRouter);
 app.use('/api/sync',  syncRouter);
 app.use('/api/band-configs',  requireAuth, requireActivePlan, bandConfigsRouter);

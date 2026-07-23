@@ -6,6 +6,7 @@ import { stripChords, stripComments, isCommentLine, extractInlineComment } from 
 import { resolveFont, injectGoogleFont } from '../../utils/fontUtils';
 import { getLabelColor } from '../../utils/labelColors';
 import OutputRenderer from '../shared/OutputRenderer';
+import SongRecentPlays from '../shared/SongRecentPlays';
 import { ensureMediaCached } from '../../utils/fsaUtils';
 
 // Cache global de thumbnails de video — compartida con OutputRenderer
@@ -648,6 +649,7 @@ export default function SongDetail() {
           {selectedSong.author && (
             <p className="text-xs text-zinc-400">{selectedSong.author}</p>
           )}
+          <SongRecentPlays songId={selectedSong.id} limit={3} />
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {undoCount > 0 && (
