@@ -77,12 +77,34 @@ async function deletePlay(req, res) {
   try {
     const { id, song_id } = req.params;
     const { occurrence_date } = req.query;
+    const orgId = req.user?.orgId || null;
+
+    let playedOn = occurrence_date || null;
+    if (!playedOn) {
+      const evRes = await pool.query(
+        'SELECT date FROM events WHERE id = $1 AND organization_id = $2',
+        [id, orgId]
+      );
+      playedOn = evRes.rows[0]?.date ? String(evRes.rows[0].date).slice(0, 10) : null;
+    }
+
     await pool.query(
       `DELETE FROM event_song_plays
        WHERE event_id = $1 AND song_id = $2
          AND (($3::date IS NULL AND occurrence_date IS NULL) OR occurrence_date = $3::date)`,
       [id, song_id, occurrence_date || null]
     );
+
+    // Mantener historial consistente con el desmarcado desde el listado.
+    // Borra la misma fecha que se eliminaría manualmente con la "x".
+    if (playedOn && orgId) {
+      await pool.query(
+        `DELETE FROM song_play_history
+         WHERE organization_id = $1 AND song_id = $2 AND played_on = $3::date`,
+        [orgId, song_id, playedOn]
+      );
+    }
+
     res.json({ ok: true });
   } catch (err) {
     console.error('[Plays] deletePlay:', err.message);
