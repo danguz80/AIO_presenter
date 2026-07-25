@@ -4,7 +4,9 @@ import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X, Plus } from 'lucid
 import CancioneroNavbar from './CancioneroNavbar';
 import SongFormModal from '../../components/Library/SongFormModal';
 import DemoPackBanner from '../../components/shared/DemoPackBanner';
+import EventPickerModal from '../../components/shared/EventPickerModal';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
+import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -32,6 +34,12 @@ export default function CancioneroSongs() {
   const [query, setQuery]       = useState('');
   const [newSongOpen, setNewSongOpen] = useState(false);
   const [showBanner, setShowBanner]   = useState(false);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [eventPickerOpen, setEventPickerOpen] = useState(false);
+  const [eventPickerLoading, setEventPickerLoading] = useState(false);
+  const [eventPickerEvents, setEventPickerEvents] = useState([]);
+  const [eventTargetSong, setEventTargetSong] = useState(null);
+  const [eventActionMsg, setEventActionMsg] = useState('');
 
   const loadSongs = () => {
     setLoading(true);
@@ -52,6 +60,107 @@ export default function CancioneroSongs() {
     const q = query.toLowerCase();
     return !q || s.title?.toLowerCase().includes(q) || s.author?.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q));
   });
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    if (!eventActionMsg) return;
+    const t = setTimeout(() => setEventActionMsg(''), 2400);
+    return () => clearTimeout(t);
+  }, [eventActionMsg]);
+
+  const openContextMenu = (event, song) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setEventTargetSong(song);
+    setContextMenu({ x: event.clientX, y: event.clientY, song });
+  };
+
+  const openEventPicker = async () => {
+    setEventTargetSong(contextMenu?.song || null);
+    setContextMenu(null);
+    setEventPickerOpen(true);
+    setEventPickerLoading(true);
+    try {
+      const list = await fetchEventsAround({ apiBase: API, pastDays: 180, futureDays: 180 });
+      setEventPickerEvents(list);
+    } catch (err) {
+      console.error(err);
+      setEventActionMsg('No se pudieron cargar eventos');
+    } finally {
+      setEventPickerLoading(false);
+    }
+  };
+
+  const loadOpenEventRef = () => {
+    try {
+      const raw = localStorage.getItem('aio_open_event_ref');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.id) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+
+  const addToOpenEvent = async () => {
+    const song = contextMenu?.song;
+    const ref = loadOpenEventRef();
+    if (!song || !ref) {
+      setEventActionMsg('No hay evento abierto en modo Cancionero');
+      setContextMenu(null);
+      return;
+    }
+
+    try {
+      const today = String(ref.occurrence_date || new Date().toISOString().slice(0, 10));
+      const list = await fetchEventsAround({ apiBase: API, pastDays: 730, futureDays: 730 });
+      const match = list.find((ev) => {
+        const evDate = String(ev.occurrence_date || ev.date).slice(0, 10);
+        if (String(ev.id) !== String(ref.id)) return false;
+        if (!ref.occurrence_date) return true;
+        return evDate === today;
+      });
+      if (!match) throw new Error('Evento abierto no encontrado');
+      const result = await addSongToEvent({ event: match, song, apiBase: API });
+      if (result.duplicate) setEventActionMsg(`"${song.title}" ya estaba en ese evento`);
+      else setEventActionMsg(`"${song.title}" agregada al evento abierto`);
+    } catch (err) {
+      console.error(err);
+      setEventActionMsg('No se pudo agregar al evento abierto');
+    } finally {
+      setContextMenu(null);
+    }
+  };
+
+  const addToPickedEvent = async (eventItem) => {
+    const song = eventTargetSong || contextMenu?.song;
+    if (!song) return;
+    try {
+      const result = await addSongToEvent({ event: eventItem, song, apiBase: API });
+      if (result.duplicate) setEventActionMsg(`"${song.title}" ya estaba en ese evento`);
+      else setEventActionMsg(`"${song.title}" agregada a "${eventItem.title}"`);
+    } catch (err) {
+      console.error(err);
+      setEventActionMsg('No se pudo agregar la canción al evento');
+    } finally {
+      setEventPickerOpen(false);
+      setContextMenu(null);
+      setEventTargetSong(null);
+    }
+  };
 
   return (
     <div className="h-screen bg-[#0f1a2e] text-white flex flex-col overflow-hidden">
@@ -95,6 +204,11 @@ export default function CancioneroSongs() {
 
       {/* Content */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        {eventActionMsg && (
+          <div className="mx-4 mt-3 px-3 py-2 text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+            {eventActionMsg}
+          </div>
+        )}
         {/* Banner pack de inicio — visible cuando no hay canciones */}
         {!loading && showBanner && !query && (
           <div className="pt-4">
@@ -118,6 +232,7 @@ export default function CancioneroSongs() {
             {filtered.map(song => (
               <li key={song.id}>
                 <button
+                  onContextMenu={(e) => openContextMenu(e, song)}
                   onClick={() => navigate(`/cancionero/canciones/${song.id}`)}
                   className="group w-full flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 text-left transition-colors"
                 >
@@ -152,6 +267,41 @@ export default function CancioneroSongs() {
             loadSongs();
             if (saved?.id) navigate(`/cancionero/canciones/${saved.id}`);
           }}
+        />
+      )}
+
+      {contextMenu && (
+        <div
+          className="fixed z-[95] min-w-[240px] bg-[#15233e] border border-white/15 rounded-xl shadow-2xl overflow-hidden"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 border-b border-white/10">
+            <p className="text-xs text-white/50">Canción</p>
+            <p className="text-sm text-white font-medium truncate">{contextMenu.song?.title}</p>
+          </div>
+          <button
+            onClick={addToOpenEvent}
+            className="w-full text-left px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+          >
+            Agregar al evento abierto
+          </button>
+          <button
+            onClick={openEventPicker}
+            className="w-full text-left px-3 py-2 text-sm text-white/90 hover:bg-white/10"
+          >
+            Elegir evento por fecha...
+          </button>
+        </div>
+      )}
+
+      {eventPickerOpen && (
+        <EventPickerModal
+          title="Agregar canción a evento"
+          events={eventPickerEvents}
+          loading={eventPickerLoading}
+          onClose={() => setEventPickerOpen(false)}
+          onPick={addToPickedEvent}
         />
       )}
     </div>

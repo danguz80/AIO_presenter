@@ -1,9 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { usePresenter }  from '../../context/usePresenter';
+import { useScheduleAdd } from '../../context/ScheduleAddContext';
 import SongFormModal     from './SongFormModal';
 import ImportModal       from './ImportModal';
 import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check, Clock } from 'lucide-react';
 import api from '../../hooks/useApi';
+import EventPickerModal from '../shared/EventPickerModal';
+import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // ─── Modal de asignación de etiquetas ────────────────────────────────────────
 function LabelPickerModal({ selectedSongs, allTags, onClose, onApply, onRefreshTags }) {
@@ -145,6 +150,13 @@ export default function SongLibrary() {
   // Label picker
   const [showLabelPicker, setShowLabelPicker] = useState(false);
   const [draggingSongId, setDraggingSongId] = useState(null);
+  const [contextMenu, setContextMenu] = useState(null);
+  const [eventPickerOpen, setEventPickerOpen] = useState(false);
+  const [eventPickerLoading, setEventPickerLoading] = useState(false);
+  const [eventPickerEvents, setEventPickerEvents] = useState([]);
+  const [eventTargetSong, setEventTargetSong] = useState(null);
+  const [eventActionMsg, setEventActionMsg] = useState('');
+  const { fn: addToOpenEventFn } = useScheduleAdd() ?? {};
 
   // Cargar todas las etiquetas al montar
   useEffect(() => {
@@ -247,6 +259,87 @@ export default function SongLibrary() {
 
   const selectedSongs = state.songs.filter(s => selectedIds.has(s.id));
 
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [contextMenu]);
+
+  const openContextMenu = useCallback((event, song) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setEventTargetSong(song);
+    setContextMenu({ x: event.clientX, y: event.clientY, song });
+  }, []);
+
+  const openEventPicker = useCallback(async () => {
+    setEventTargetSong(contextMenu?.song || null);
+    setContextMenu(null);
+    setEventPickerOpen(true);
+    setEventPickerLoading(true);
+    try {
+      const list = await fetchEventsAround({ apiBase: API_BASE, pastDays: 180, futureDays: 180 });
+      setEventPickerEvents(list);
+    } catch (err) {
+      console.error(err);
+      setEventActionMsg('No se pudieron cargar eventos');
+    } finally {
+      setEventPickerLoading(false);
+    }
+  }, [contextMenu]);
+
+  const addToOpenEvent = useCallback(async () => {
+    const song = contextMenu?.song;
+    if (!song) return;
+    if (!addToOpenEventFn) {
+      setEventActionMsg('No hay evento abierto en el panel de eventos');
+      setContextMenu(null);
+      return;
+    }
+    try {
+      await addToOpenEventFn({ kind: 'song', song });
+      setEventActionMsg(`"${song.title}" agregada al evento abierto`);
+    } catch (err) {
+      console.error(err);
+      setEventActionMsg('No se pudo agregar al evento abierto');
+    } finally {
+      setContextMenu(null);
+    }
+  }, [contextMenu, addToOpenEventFn]);
+
+  const addToPickedEvent = useCallback(async (eventItem) => {
+    const song = eventTargetSong || contextMenu?.song;
+    if (!song) return;
+    try {
+      const result = await addSongToEvent({ event: eventItem, song, apiBase: API_BASE });
+      if (result.duplicate) {
+        setEventActionMsg(`"${song.title}" ya estaba en ese evento`);
+      } else {
+        setEventActionMsg(`"${song.title}" agregada a "${eventItem.title}"`);
+      }
+    } catch (err) {
+      console.error(err);
+      setEventActionMsg('No se pudo agregar la canción al evento');
+    } finally {
+      setEventPickerOpen(false);
+      setContextMenu(null);
+      setEventTargetSong(null);
+    }
+  }, [eventTargetSong, contextMenu]);
+
+  useEffect(() => {
+    if (!eventActionMsg) return;
+    const t = setTimeout(() => setEventActionMsg(''), 2400);
+    return () => clearTimeout(t);
+  }, [eventActionMsg]);
+
   return (
     <>
       {/* Header */}
@@ -335,6 +428,12 @@ export default function SongLibrary() {
         </div>
       )}
 
+      {eventActionMsg && (
+        <div className="px-3 py-2 text-xs text-emerald-300 bg-emerald-500/10 border-b border-emerald-500/20">
+          {eventActionMsg}
+        </div>
+      )}
+
       {/* Lista de canciones */}
       <div className="flex-1 overflow-y-auto">
         {state.songs.length === 0 ? (
@@ -352,6 +451,7 @@ export default function SongLibrary() {
                 <li
                   key={song.id}
                   draggable={selectedIds.size === 0}
+                  onContextMenu={(e) => openContextMenu(e, song)}
                   onDragStart={(e) => {
                     if (selectedIds.size > 0) {
                       e.preventDefault();
@@ -475,6 +575,44 @@ export default function SongLibrary() {
       )}
 
       {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+
+      {contextMenu && (
+        <div
+          className="fixed z-[95] min-w-[230px] bg-surface-800 border border-surface-600 rounded-xl shadow-2xl overflow-hidden"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 border-b border-surface-700">
+            <p className="text-xs text-zinc-400">Canción</p>
+            <p className="text-sm text-zinc-100 font-medium truncate">{contextMenu.song?.title}</p>
+          </div>
+          <button
+            onClick={addToOpenEvent}
+            className={`w-full text-left px-3 py-2 text-sm transition-colors ${
+              addToOpenEventFn ? 'hover:bg-surface-700 text-zinc-100' : 'text-zinc-500 cursor-not-allowed'
+            }`}
+            disabled={!addToOpenEventFn}
+          >
+            Agregar al evento abierto
+          </button>
+          <button
+            onClick={openEventPicker}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-surface-700 text-zinc-100"
+          >
+            Elegir evento por fecha...
+          </button>
+        </div>
+      )}
+
+      {eventPickerOpen && (
+        <EventPickerModal
+          title="Agregar canción a evento"
+          events={eventPickerEvents}
+          loading={eventPickerLoading}
+          onClose={() => setEventPickerOpen(false)}
+          onPick={addToPickedEvent}
+        />
+      )}
     </>
   );
 }

@@ -644,10 +644,6 @@ function EventsPanel() {
     finally { setSaving(false); }
   }, [selectedEv, saveItemsToApi, applyNewItems, activeTemplate]); // eslint-disable-line
 
-  useEffect(() => {
-    setScheduleAddFn?.(selectedEv ? addMediaItem : null);
-  }, [selectedEv, addMediaItem]); // eslint-disable-line
-
   const addSong = async (song) => {
     if (!selectedEv || !song?.id) return;
     const alreadyInEvent = (selectedEv.songs || []).some(
@@ -665,6 +661,26 @@ function EventsPanel() {
     } catch (e) { console.error(e); }
     finally { setSaving(false); }
   };
+
+  const addToSelectedEvent = useCallback(async (payload) => {
+    if (!selectedEv || !payload) return;
+    const normalizedSong = payload?.kind === 'song'
+      ? payload.song
+      : (payload?.id && payload?.title ? payload : null);
+    if (normalizedSong?.id) {
+      await addSong(normalizedSong);
+      return;
+    }
+
+    const normalizedMedia = payload?.kind === 'media' ? payload.file : payload;
+    if (normalizedMedia?.name) {
+      await addMediaItem(normalizedMedia);
+    }
+  }, [selectedEv, addSong, addMediaItem]);
+
+  useEffect(() => {
+    setScheduleAddFn?.(selectedEv ? addToSelectedEvent : null);
+  }, [selectedEv, addToSelectedEvent]); // eslint-disable-line
 
   const addSeparator = async () => {
     if (!sepLabel.trim()) return;

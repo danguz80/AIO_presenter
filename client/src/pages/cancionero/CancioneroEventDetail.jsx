@@ -716,6 +716,15 @@ export default function CancioneroEventDetail() {
 
   useEffect(() => { loadEvent(); }, [id, occurrenceDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!event?.id) return;
+    const payload = {
+      id: event.id,
+      occurrence_date: event.is_recurring ? toDateStr(event.occurrence_date ?? event.date) : null,
+    };
+    localStorage.setItem('aio_open_event_ref', JSON.stringify(payload));
+  }, [event]);
+
   // Cargar spotify_client_id de la org
   useEffect(() => {
     fetch(`${API}/auth/org`, { headers: authHeaders() })
