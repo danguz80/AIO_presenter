@@ -233,6 +233,12 @@ function formatDate(dateStr) {
   const d = new Date(toDateStr(dateStr) + 'T12:00:00');
   return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
+function calendarDayDiffFromToday(dateStr) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const target = new Date(toDateStr(dateStr) + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
 function norm(str) {
   return (str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
@@ -897,9 +903,8 @@ export default function CancioneroEventDetail() {
 
   const songList = songs.map(s => ({ id: s.song_id, title: s.title ?? '' }));
 
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const evDate = new Date(toDateStr(event.date) + 'T12:00:00');
-  const diffDays = Math.round((evDate - today) / 86400000);
+  const eventDateForBadge = event.occurrence_date ?? event.date;
+  const diffDays = calendarDayDiffFromToday(eventDateForBadge);
   const isPast = diffDays < 0;
 
   return (
