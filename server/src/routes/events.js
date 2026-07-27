@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const zlib = require('zlib');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
 const {
   getEvents,
@@ -34,83 +35,63 @@ function parseTimeSig(value) {
   return { num, den: validDen };
 }
 
-function encodeVlq(value) {
-  let v = Math.max(0, value | 0);
-  const bytes = [v & 0x7f];
-  while ((v >>= 7) > 0) bytes.unshift((v & 0x7f) | 0x80);
-  return Buffer.from(bytes);
+function escapeXml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
-function buildTrackChunk(events) {
-  const chunks = [];
-  let lastTick = 0;
-  for (const ev of events) {
-    const delta = Math.max(0, ev.tick - lastTick);
-    lastTick = ev.tick;
-    chunks.push(encodeVlq(delta));
-    chunks.push(ev.data);
-  }
-  const endOfTrack = Buffer.concat([encodeVlq(0), Buffer.from([0xff, 0x2f, 0x00])]);
-  const trackData = Buffer.concat([...chunks, endOfTrack]);
-
-  const trackHeader = Buffer.alloc(8);
-  trackHeader.write('MTrk', 0, 'ascii');
-  trackHeader.writeUInt32BE(trackData.length, 4);
-  return Buffer.concat([trackHeader, trackData]);
+function normalizeAbletonVersion(value) {
+  const raw = String(value || '11.3').trim();
+  const parts = raw.match(/\d+/g) || ['11', '3'];
+  const major = parts[0] || '11';
+  const minor = parts[1] || '3';
+  const patch = parts[2] || '0';
+  return `${major}.${minor}.${patch}`;
 }
 
-function buildMidi(globalEvents, songTracks = [], ticksPerQuarter = 480) {
-  const header = Buffer.alloc(14);
-  header.write('MThd', 0, 'ascii');
-  header.writeUInt32BE(6, 4);
-  header.writeUInt16BE(1, 8); // format 1
-  header.writeUInt16BE(1 + songTracks.length, 10);
-  header.writeUInt16BE(ticksPerQuarter, 12);
-
-  const globalTrack = buildTrackChunk(globalEvents);
-  const otherTracks = songTracks.map((evs) => buildTrackChunk(evs));
-
-  return Buffer.concat([header, globalTrack, ...otherTracks]);
+function sanitizeFileName(value) {
+  return String(value || 'evento')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9-_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 50) || 'evento';
 }
 
-function tempoMeta(bpm) {
-  const safeBpm = Math.max(20, Math.min(400, Number(bpm) || 120));
-  const usPerQuarter = Math.round(60000000 / safeBpm);
-  return Buffer.from([
-    0xff, 0x51, 0x03,
-    (usPerQuarter >> 16) & 0xff,
-    (usPerQuarter >> 8) & 0xff,
-    usPerQuarter & 0xff,
-  ]);
-}
+function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
+  const creator = `Ableton Live ${normalizeAbletonVersion(creatorVersion)}`;
+  const sceneXml = songs.map((song, index) => {
+    const title = escapeXml(song.title || `Cancion ${index + 1}`);
+    const bpm = Number(song.bpm) || 120;
+    const { num, den } = parseTimeSig(song.time_sig);
+    return `\n      <scene index="${index}" name="${title}" tempo="${bpm}" time_signature="${num}/${den}">\n        <clipslot index="0">\n          <clip name="${title}" tempo="${bpm}" time_signature="${num}/${den}" />\n        </clipslot>\n      </scene>`;
+  }).join('');
 
-function timeSigMeta(num, den) {
-  const denPow = Math.log2(den);
-  const nn = Math.max(1, Math.min(32, num | 0));
-  const dd = Number.isFinite(denPow) ? Math.max(0, Math.min(7, denPow | 0)) : 2;
-  return Buffer.from([0xff, 0x58, 0x04, nn, dd, 24, 8]);
-}
+  const warningsXml = warnings.length
+    ? `\n    <warnings>${warnings.map((warning) => `<warning>${escapeXml(warning)}</warning>`).join('')}</warnings>`
+    : '';
 
-function markerMeta(text) {
-  const raw = Buffer.from(String(text || 'Cancion'), 'utf8');
-  const payload = raw.length > 120 ? raw.subarray(0, 120) : raw;
-  return Buffer.concat([Buffer.from([0xff, 0x06]), encodeVlq(payload.length), payload]);
-}
+  const trackXml = songs.map((song, index) => {
+    const title = escapeXml(song.title || `Cancion ${index + 1}`);
+    const bpm = Number(song.bpm) || 120;
+    const { num, den } = parseTimeSig(song.time_sig);
+    return `\n      <miditrack index="${index}">\n        <name value="${title}" />\n        <devicechain>\n          <mixer />\n          <clipslots>\n            <clipslot index="${index}">\n              <clip name="${title}" tempo="${bpm}" time_signature="${num}/${den}" />\n            </clipslot>\n          </clipslots>\n        </devicechain>\n      </miditrack>`;
+  }).join('');
 
-function trackNameMeta(text) {
-  const raw = Buffer.from(String(text || 'AIO Presenter Export'), 'utf8');
-  const payload = raw.length > 120 ? raw.subarray(0, 120) : raw;
-  return Buffer.concat([Buffer.from([0xff, 0x03]), encodeVlq(payload.length), payload]);
+  const eventTitle = escapeXml(event.title || 'Evento');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<ableton creator="${creator}" major_version="11" minor_version="3" schema_change_count="0" revision="1">\n  <liveset>\n    <name value="${eventTitle}" />\n    <mastertrack>\n      <tempo>\n        <manual value="120" />\n      </tempo>\n      <time_signature>\n        <manual numerator="4" denominator="4" />\n      </time_signature>\n    </mastertrack>\n    <tracks>${trackXml}\n    </tracks>\n    <scenes>${sceneXml}\n    </scenes>${warningsXml}\n  </liveset>\n</ableton>`;
 }
 
 // GET /api/events/:id/ableton-session?occurrence_date=YYYY-MM-DD&bars=4
-// Exporta un MIDI con cambios de tempo/compas por cancion, importable en Ableton Live.
+// Exporta un ALS gzip XML con escenas por canción, utilizable en Ableton Live.
 router.get('/:id/ableton-session', requireAuth, async (req, res) => {
   const pool = require('../config/database');
   const orgId = req.user.orgId;
   const eventId = Number(req.params.id);
   const occurrenceDate = req.query.occurrence_date ? toDateStr(req.query.occurrence_date) : null;
-  const barsPerSong = Math.max(1, Math.min(64, Number(req.query.bars) || 4));
 
   if (!Number.isFinite(eventId)) return res.status(400).json({ error: 'ID de evento invalido' });
 
@@ -123,6 +104,14 @@ router.get('/:id/ableton-session', requireAuth, async (req, res) => {
     );
     if (!evRows.length) return res.status(404).json({ error: 'Evento no encontrado' });
     const ev = evRows[0];
+
+    const { rows: userRows } = await pool.query(
+      `SELECT COALESCE(ableton_version, '11.3') AS ableton_version
+         FROM sync_users
+        WHERE id = $1 AND organization_id = $2`,
+      [req.user.userId, orgId]
+    );
+    const creatorVersion = userRows[0]?.ableton_version || '11.3';
 
     const querySongs = async (occDateOrNull) => {
       const q = occDateOrNull
@@ -160,50 +149,28 @@ router.get('/:id/ableton-session', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'El evento no tiene canciones para exportar' });
     }
 
-    const tpq = 480;
-    const events = [];
-    const songTracks = [];
-    let tick = 0;
-    events.push({ tick: 0, data: trackNameMeta(`AIO Session - ${ev.title || 'Evento'}`) });
+    const warnings = songItems
+      .filter((song) => !Number(song.bpm) || !String(song.time_sig || '').trim())
+      .map((song) => `"${song.title || 'Cancion'}" usara 120 BPM y 4/4 por defecto`);
 
-    for (let idx = 0; idx < songItems.length; idx++) {
-      const song = songItems[idx];
-      const bpm = Number(song.bpm) || 120;
-      const { num, den } = parseTimeSig(song.time_sig);
-      const title = `${idx + 1}. ${song.title || 'Cancion'} (${bpm} BPM ${num}/${den})`;
-
-      events.push({ tick, data: markerMeta(title) });
-      events.push({ tick, data: tempoMeta(bpm) });
-      events.push({ tick, data: timeSigMeta(num, den) });
-
-      // Un track por canción (nombre = título). Un note corto evita que DAWs oculten el track vacío.
-      const channel = idx % 16;
-      const pitch = 60 + (idx % 12);
-      songTracks.push([
-        { tick: 0, data: trackNameMeta(song.title || `Cancion ${idx + 1}`) },
-        { tick: 0, data: tempoMeta(bpm) },
-        { tick: 0, data: timeSigMeta(num, den) },
-        { tick: 0, data: Buffer.from([0x90 + channel, pitch, 0x32]) },
-        { tick: tpq / 2, data: Buffer.from([0x80 + channel, pitch, 0x00]) },
-      ]);
-
-      const quarterPerBar = (num * 4) / den;
-      const ticksPerBar = Math.round(quarterPerBar * tpq);
-      tick += ticksPerBar * barsPerSong;
-    }
-
-    const midi = buildMidi(events, songTracks, tpq);
+    const xml = buildAbletonAlsXml({
+      event: ev,
+      songs: songItems,
+      creatorVersion,
+      warnings,
+    });
+    const als = zlib.gzipSync(Buffer.from(xml, 'utf8'));
     const datePart = toDateStr(occurrenceDate || ev.date) || 'evento';
-    const safeTitle = String(ev.title || 'evento')
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9-_]+/g, '_')
-      .replace(/^_+|_+$/g, '')
-      .slice(0, 50) || 'evento';
-    const fileName = `aio_${safeTitle}_${datePart}_ableton.mid`;
+    const safeTitle = sanitizeFileName(ev.title || 'evento');
+    const fileName = `aio_${safeTitle}_${datePart}_ableton.als`;
 
-    res.setHeader('Content-Type', 'audio/midi');
+    if (warnings.length) {
+      res.setHeader('X-AIO-Ableton-Warnings', encodeURIComponent(warnings.join(' | ')));
+    }
+    res.setHeader('Access-Control-Expose-Headers', 'X-AIO-Ableton-Warnings, Content-Disposition');
+    res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    return res.send(midi);
+    return res.send(als);
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Error exportando a Ableton' });
   }

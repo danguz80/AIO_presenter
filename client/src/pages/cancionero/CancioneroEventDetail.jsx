@@ -839,6 +839,10 @@ export default function CancioneroEventDetail() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || `HTTP ${res.status}`);
       }
+      const warningHeader = res.headers.get('X-AIO-Ableton-Warnings');
+      if (warningHeader) {
+        alert(decodeURIComponent(warningHeader));
+      }
       const blob = await res.blob();
       const link = document.createElement('a');
       const blobUrl = URL.createObjectURL(blob);
@@ -849,7 +853,7 @@ export default function CancioneroEventDetail() {
         .replace(/^_+|_+$/g, '')
         .slice(0, 50) || 'evento';
       link.href = blobUrl;
-      link.download = `aio_${safeTitle}_${datePart}_ableton.mid`;
+      link.download = `aio_${safeTitle}_${datePart}_ableton.als`;
       document.body.appendChild(link);
       link.click();
       link.remove();
