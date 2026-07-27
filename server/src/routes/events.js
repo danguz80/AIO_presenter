@@ -82,7 +82,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   }).join('');
 
   const eventTitle = escapeXml(event.title || 'Evento');
-  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<Ableton Creator="${creator}" MajorVersion="11" MinorVersion="3" SchemaChangeCount="0" Revision="1">\n  <liveset>\n    <name value="${eventTitle}" />\n    <mastertrack>\n      <tempo>\n        <manual value="120" />\n      </tempo>\n      <time_signature>\n        <manual numerator="4" denominator="4" />\n      </time_signature>\n    </mastertrack>\n    <tracks>${trackXml}\n    </tracks>\n    <scenes>${sceneXml}\n    </scenes>${warningsXml}\n  </liveset>\n</Ableton>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<Ableton Creator="${creator}" MajorVersion="5" MinorVersion="0" SchemaChangeCount="0" Revision="1">\n  <liveset>\n    <name value="${eventTitle}" />\n    <mastertrack>\n      <tempo>\n        <manual value="120" />\n      </tempo>\n      <time_signature>\n        <manual numerator="4" denominator="4" />\n      </time_signature>\n    </mastertrack>\n    <tracks>${trackXml}\n    </tracks>\n    <scenes>${sceneXml}\n    </scenes>${warningsXml}\n  </liveset>\n</Ableton>`;
 }
 
 // GET /api/events/:id/ableton-session?occurrence_date=YYYY-MM-DD&bars=4
