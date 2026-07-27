@@ -72,6 +72,9 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push('<?xml version="1.0" encoding="UTF-8" standalone="no"?>');
   lines.push(`<Ableton MajorVersion="5" MinorVersion="${minorVersion}" SchemaChangeCount="7" Creator="${creator}" Revision="">`);
   lines.push('  <LiveSet>');
+  // NextPointeeId must be greater than every Id attribute used in the document.
+  // We use a fixed high value to avoid collisions regardless of song count.
+  lines.push('    <NextPointeeId Value="10000" />');
   lines.push(`    <Name Value="${escapeXml(event.title || 'Evento')}" />`);
 
   // MasterTrack: global tempo fallback (each scene overrides it per-clip)
