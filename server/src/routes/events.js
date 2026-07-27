@@ -64,13 +64,13 @@ function sanitizeFileName(value) {
 function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   const ver = normalizeAbletonVersion(creatorVersion); // e.g. "11.3.0"
   const creator = `Ableton Live ${ver}`;
-  // MinorVersion is the DOCUMENT FORMAT version, NOT the Live application version.
-  // Live 10 and 11 use "10.0.2" as the schema minor version.
-  const minorVersion = '10.0.2';
+  // MinorVersion is the DOCUMENT FORMAT version extracted from real Live 11.3 files.
+  // Real format: "11.0_11300" for Live 11.3.x (major_minor_build).
+  const minorVersion = '11.0_11300';
 
   const lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8" standalone="no"?>');
-  lines.push(`<Ableton Creator="${creator}" MajorVersion="5" MinorVersion="${minorVersion}" SchemaChangeCount="3" Revision="">`);
+  lines.push(`<Ableton MajorVersion="5" MinorVersion="${minorVersion}" SchemaChangeCount="7" Creator="${creator}" Revision="">`);
   lines.push('  <LiveSet>');
   lines.push(`    <Name Value="${escapeXml(event.title || 'Evento')}" />`);
 
