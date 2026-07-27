@@ -671,6 +671,7 @@ export default function CancioneroEventDetail() {
   const [deleting,     setDeleting]    = useState(false);
   const [publishing,   setPublishing]  = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [exportingAbleton, setExportingAbleton] = useState(false);
   const [spotifyLoading, setSpotifyLoading] = useState(false);
   const [orgSpotifyClientId, setOrgSpotifyClientId] = useState(null);
   const [spotifyPlaylistUrl, setSpotifyPlaylistUrl] = useState(
@@ -823,6 +824,42 @@ export default function CancioneroEventDetail() {
       const activeBandConfig = bandConfigs.find(c => c.id === event.band_config_id) ?? null;
       await generateSetlistPDF(event, enriched, occurrenceDate, spotifyPlaylistUrl, activeBandConfig);
     } finally { setGeneratingPdf(false); }
+  };
+
+  const handleExportAbleton = async () => {
+    setExportingAbleton(true);
+    try {
+      const token = localStorage.getItem('aio_sync_token');
+      const params = new URLSearchParams();
+      if (event?.is_recurring && occurrenceDate) params.set('occurrence_date', occurrenceDate);
+      const query = params.toString();
+      const url = `${API}/api/events/${id}/ableton-session${query ? `?${query}` : ''}`;
+      const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      const blobUrl = URL.createObjectURL(blob);
+      const datePart = String(event?.occurrence_date || event?.date || '').slice(0, 10) || 'evento';
+      const safeTitle = String(event?.title || 'evento')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9-_]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50) || 'evento';
+      link.href = blobUrl;
+      link.download = `aio_${safeTitle}_${datePart}_ableton.mid`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('[Ableton export]:', err);
+      alert('No se pudo exportar para Ableton. Verifica que el evento tenga canciones con BPM/compas.');
+    } finally {
+      setExportingAbleton(false);
+    }
   };
 
   // ─── Spotify PKCE ────────────────────────────────────────────────────────────
@@ -1107,6 +1144,15 @@ export default function CancioneroEventDetail() {
                 >
                   {generatingPdf ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
                   PDF
+                </button>
+                <button
+                  onClick={handleExportAbleton}
+                  disabled={exportingAbleton}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#94a3b8]/10 hover:bg-[#94a3b8]/20 border border-[#94a3b8]/30 text-xs text-[#cbd5e1] hover:text-white transition-colors disabled:opacity-50"
+                  title="Exportar para Ableton Live (MIDI con tempo y compas por cancion)"
+                >
+                  {exportingAbleton ? <Loader2 size={12} className="animate-spin" /> : <Music size={12} />}
+                  Ableton
                 </button>
                 {isAdmin && (
                 <button
