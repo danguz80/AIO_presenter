@@ -310,6 +310,7 @@ export default function CancioneroEvents() {
   // Renderiza una tarjeta de evento (próximo o pasado)
   const renderEvent = (ev, isPast = false) => {
     const evDate = toDateStr(ev.occurrence_date ?? ev.date);
+    const eventKey = `${ev.id}-${evDate}`;
     const songs = (ev.songs ?? []).filter(s => s.item_type !== 'separator' && s.song_id);
 
     // Detectar conflicto: asignado en banda + fecha bloqueada
@@ -331,7 +332,7 @@ export default function CancioneroEvents() {
 
     return (
       <div
-        key={key}
+        key={eventKey}
         className={`rounded-2xl border-2 overflow-hidden transition-all ${
           hasConflict
             ? 'border-red-500/60 bg-red-500/10 animate-pulse'
