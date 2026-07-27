@@ -64,9 +64,9 @@ function sanitizeFileName(value) {
 function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   const ver = normalizeAbletonVersion(creatorVersion); // e.g. "11.3.0"
   const creator = `Ableton Live ${ver}`;
-  // MinorVersion must match the compound schema version Live uses for this release
-  // For Live 11.x the internal value follows the pattern "11.x.0"
-  const minorVersion = ver;
+  // MinorVersion is the DOCUMENT FORMAT version, NOT the Live application version.
+  // Live 10 and 11 use "10.0.2" as the schema minor version.
+  const minorVersion = '10.0.2';
 
   const lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8" standalone="no"?>');
