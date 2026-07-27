@@ -1,5 +1,5 @@
 // ─── Versión de la aplicación ───────────────────────────────────────────────
-// Regla: incrementar en 0.01 con cada conjunto de cambios.
-// Incrementar en 0.10 solo cuando el usuario lo solicite explícitamente.
-// Ejemplo: 1.00 → 1.01 → 1.02 → ... → 1.09 → 1.10 (cuando se pida)
-export const APP_VERSION = '1.27';
+// Regla actual: usar formato 1.2.N.
+// En cada actualización, incrementar solo N (+1).
+// El segundo dígito (2) solo cambia cuando el usuario lo solicite explícitamente.
+export const APP_VERSION = '1.2.9';

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, Loader2, History, AlertTriangle, Download } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Clock, Music2, ChevronDown, ChevronUp, ChevronRight, Loader2, History, AlertTriangle, Download } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
 
@@ -58,7 +58,6 @@ export default function CancioneroEvents() {
   const [events,      setEvents]      = useState([]);
   const [pastEvents,  setPastEvents]  = useState([]);
   const [loading,     setLoading]     = useState(true);
-  const [expanded,    setExpanded]    = useState({});
   const [monthOpen,   setMonthOpen]   = useState({});
   const [pastOpen,    setPastOpen]    = useState(false);
   const [showCreate,  setShowCreate]  = useState(false);
@@ -116,15 +115,10 @@ export default function CancioneroEvents() {
         const blockedArr = Array.isArray(blocked) ? blocked : [];
         setMyBlockedDates(blockedArr.filter(b => Number(b.user_id) === myUserId).map(b => b.date?.slice(0, 10)));
       }
-      if (visibleUp.length > 0) {
-        const firstDate = toDateStr(visibleUp[0].occurrence_date ?? visibleUp[0].date);
-        setExpanded({ [`${visibleUp[0].id}-${firstDate}`]: true });
-      }
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
 
-  const toggle = (key) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
   const toggleMonth = (key) => setMonthOpen(prev => ({ ...prev, [key]: !prev[key] }));
 
   const futureByMonth = useMemo(() => {
@@ -316,10 +310,7 @@ export default function CancioneroEvents() {
   // Renderiza una tarjeta de evento (próximo o pasado)
   const renderEvent = (ev, isPast = false) => {
     const evDate = toDateStr(ev.occurrence_date ?? ev.date);
-    const key = `${ev.id}-${evDate}`;
-    const isOpen = !!expanded[key];
     const songs = (ev.songs ?? []).filter(s => s.item_type !== 'separator' && s.song_id);
-    const items = (ev.songs ?? []).sort((a, b) => a.position - b.position);
 
     // Detectar conflicto: asignado en banda + fecha bloqueada
     const isBlocked = myBlockedDates.includes(evDate);
@@ -352,7 +343,7 @@ export default function CancioneroEvents() {
         }`}
       >
         <button
-          onClick={() => toggle(key)}
+          onClick={() => navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } })}
           className="w-full flex items-start gap-4 p-4 text-left"
         >
           {/* Date badge */}
@@ -392,19 +383,6 @@ export default function CancioneroEvents() {
                   Borrador
                 </span>
               )}
-              {/* Botón ir al dashboard del evento */}
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); navigate(`/cancionero/eventos/${ev.id}`, { state: { occurrence_date: ev.occurrence_date ?? null } }); }}
-                className={`shrink-0 text-[10px] border px-1.5 py-0.5 rounded transition-colors ${
-                  hasConflict
-                    ? 'border-red-400/40 text-red-300/60 hover:text-red-200 hover:border-red-400/70'
-                    : 'border-white/10 hover:border-blue-400/40 text-white/25 hover:text-blue-300'
-                }`}
-                title="Ver dashboard del evento"
-              >
-                Ver →
-              </button>
             </div>
             <p className={`text-xs mt-0.5 capitalize ${
               hasConflict ? 'text-red-300/60' : 'text-white/40'
@@ -430,60 +408,9 @@ export default function CancioneroEvents() {
           </div>
 
           <div className="flex-shrink-0 self-center text-white/30">
-            {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            <ChevronRight size={18} />
           </div>
         </button>
-
-        {isOpen && items.length > 0 && (
-          <div className="border-t border-white/10 px-4 pb-3 pt-2">
-            {ev.description && (
-              <p className="text-xs text-white/40 mb-3 italic">{ev.description}</p>
-            )}
-            <ul className="space-y-1">
-              {items.map((item, idx) => {
-                if (item.item_type === 'separator') {
-                  return (
-                    <li key={item.id ?? idx} className="pt-2 pb-0.5">
-                      <span
-                        className="text-[10px] font-bold uppercase tracking-widest"
-                        style={{ color: item.separator_color ?? '#94a3b8' }}
-                      >
-                        {item.separator_label ?? '─'}
-                      </span>
-                    </li>
-                  );
-                }
-                return (
-                  <li key={item.id ?? idx}>
-                    <button
-                      onClick={() => {
-                        if (!item.song_id) return;
-                        // Pasar la lista de canciones del evento para navegación prev/next
-                        const songList = items
-                          .filter(i => i.item_type !== 'separator' && i.song_id)
-                          .map(i => ({ id: i.song_id, title: i.title ?? '' }));
-                        navigate(`/cancionero/canciones/${item.song_id}`, {
-                          state: { songList, eventTitle: ev.title, eventId: ev.id },
-                        });
-                      }}
-                      className="group w-full flex items-center gap-2.5 py-1.5 text-left hover:bg-white/5 rounded-lg px-2 -mx-2 transition-colors"
-                    >
-                      <Music2 size={13} className="text-yellow-400/60 flex-shrink-0" />
-                      <span className="flex-1 text-sm text-white/80 truncate">{item.title ?? '—'}</span>
-                      {item.author && <span className="text-xs text-white/30 truncate max-w-[100px]">{item.author}</span>}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        {isOpen && items.length === 0 && (
-          <div className="border-t border-white/10 px-4 py-3">
-            <p className="text-xs text-white/30 text-center">Sin canciones asignadas</p>
-          </div>
-        )}
       </div>
     );
   };

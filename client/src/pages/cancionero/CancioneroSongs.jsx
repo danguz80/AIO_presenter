@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X, Plus } from 'lucide-react';
+import { ArrowLeft, Search, Music2, ChevronRight, Loader2, X, Plus, Tag } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 import SongFormModal from '../../components/Library/SongFormModal';
 import DemoPackBanner from '../../components/shared/DemoPackBanner';
@@ -11,6 +11,12 @@ import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions'
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
   return { Authorization: `Bearer ${localStorage.getItem('aio_sync_token')}` };
+}
+function norm(str) {
+  return String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 export default function CancioneroSongs() {
@@ -40,6 +46,7 @@ export default function CancioneroSongs() {
   const [eventPickerEvents, setEventPickerEvents] = useState([]);
   const [eventTargetSong, setEventTargetSong] = useState(null);
   const [eventActionMsg, setEventActionMsg] = useState('');
+  const [activeTagFilter, setActiveTagFilter] = useState(null);
 
   const loadSongs = () => {
     setLoading(true);
@@ -56,9 +63,22 @@ export default function CancioneroSongs() {
 
   useEffect(() => { loadSongs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const availableTags = useMemo(() => {
+    const set = new Set();
+    for (const s of songs) {
+      for (const t of (s.tags || [])) {
+        const clean = String(t || '').trim();
+        if (clean) set.add(clean);
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [songs]);
+
   const filtered = songs.filter(s => {
-    const q = query.toLowerCase();
-    return !q || s.title?.toLowerCase().includes(q) || s.author?.toLowerCase().includes(q) || s.tags?.some(t => t.toLowerCase().includes(q));
+    const q = norm(query);
+    const textMatch = !q || norm(s.title).includes(q) || norm(s.author).includes(q) || (s.tags || []).some(t => norm(t).includes(q));
+    const tagMatch = !activeTagFilter || (s.tags || []).some(t => norm(t) === norm(activeTagFilter));
+    return textMatch && tagMatch;
   });
 
   useEffect(() => {
@@ -199,6 +219,26 @@ export default function CancioneroSongs() {
               </button>
             )}
           </div>
+          {availableTags.length > 0 && (
+            <div className="mt-2.5 flex gap-1.5 overflow-x-auto pb-0.5">
+              {availableTags.map(tag => {
+                const active = activeTagFilter === tag;
+                return (
+                  <button
+                    key={tag}
+                    onClick={() => setActiveTagFilter(active ? null : tag)}
+                    className={`shrink-0 flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors ${
+                      active
+                        ? 'bg-yellow-500/25 border-yellow-400/50 text-yellow-200'
+                        : 'bg-white/5 border-white/15 text-white/60 hover:text-white/80 hover:border-white/30'
+                    }`}
+                  >
+                    <Tag size={10} /> {tag}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </header>
 
@@ -225,7 +265,7 @@ export default function CancioneroSongs() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-16 text-white/30">
             <Music2 size={40} />
-            <p className="text-sm">{query ? 'Sin resultados para tu búsqueda' : 'No hay canciones'}</p>
+            <p className="text-sm">{(query || activeTagFilter) ? 'Sin resultados para tu búsqueda/filtro' : 'No hay canciones'}</p>
           </div>
         ) : (
           <ul className="divide-y divide-white/5">

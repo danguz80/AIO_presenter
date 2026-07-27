@@ -22,7 +22,7 @@ import {
   Wifi, WifiOff, Music, Music2, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
   CalendarDays, BookOpen, Clock,
   Pencil, Trash2, Plus, Check, ChevronUp, ChevronDown, LayoutTemplate, SkipForward, Minus,
-  CheckCircle2, Circle, MonitorPlay, MessageSquare,
+  CheckCircle2, Circle, MonitorPlay, MessageSquare, Tag,
 } from 'lucide-react';
 
 const BUILD_VERSION = APP_VERSION;
@@ -249,6 +249,7 @@ export default function MobileControllerPage() {
   const [activeSongSlideIndex, setActiveSongSlideIndex] = useState(null); // -1 = título
   const [loadingSong,      setLoadingSong]      = useState(false);
   const [songSearch,       setSongSearch]       = useState('');
+  const [activeSongTagFilter, setActiveSongTagFilter] = useState(null);
 
   const [cfgIp,    setCfgIp]    = useState(getSavedIp);
   const [cfgPort,  setCfgPort]  = useState(getSavedPort);
@@ -1125,8 +1126,21 @@ export default function MobileControllerPage() {
 
   const filteredSongs = (songs || []).filter(s => {
     const q = norm(songSearch);
-    return norm(s.title).includes(q) || norm(s.artist).includes(q);
+    const textMatch = !q || norm(s.title).includes(q) || norm(s.artist).includes(q) || (s.tags || []).some(t => norm(t).includes(q));
+    const tagMatch = !activeSongTagFilter || (s.tags || []).some(t => norm(t) === norm(activeSongTagFilter));
+    return textMatch && tagMatch;
   });
+
+  const mobileSongTags = useMemo(() => {
+    const set = new Set();
+    for (const s of (songs || [])) {
+      for (const t of (s.tags || [])) {
+        const clean = String(t || '').trim();
+        if (clean) set.add(clean);
+      }
+    }
+    return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [songs]);
 
   return (
     <div
@@ -1580,10 +1594,30 @@ export default function MobileControllerPage() {
                       </button>
                     )}
                   </div>
+                  {mobileSongTags.length > 0 && (
+                    <div className="mt-2 flex gap-1.5 overflow-x-auto pb-0.5">
+                      {mobileSongTags.map(tag => {
+                        const active = activeSongTagFilter === tag;
+                        return (
+                          <button
+                            key={tag}
+                            onPointerDown={() => setActiveSongTagFilter(active ? null : tag)}
+                            className={`shrink-0 flex items-center gap-1 text-[11px] px-2 py-1 rounded-full border transition-colors ${
+                              active
+                                ? 'bg-accent/20 border-accent/50 text-accent'
+                                : 'bg-surface-800 border-surface-600 text-zinc-500'
+                            }`}
+                          >
+                            <Tag size={10} /> {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               {/* ── Lista de canciones ── */}
-              {(!songDetail || songSearch) && !songEditMode && (
+              {(!songDetail || songSearch || activeSongTagFilter) && !songEditMode && (
                 <div className="px-4 pb-4 pt-3 space-y-1.5">
                   {loadingSong && (
                     <div className="flex justify-center pt-8">
@@ -1592,7 +1626,7 @@ export default function MobileControllerPage() {
                   )}
                   {!loadingSong && filteredSongs.length === 0 && (
                     <p className="text-center text-zinc-600 text-sm pt-10">
-                      {(songs || []).length === 0 ? 'Sin canciones en la biblioteca' : 'Sin resultados'}
+                      {(songs || []).length === 0 ? 'Sin canciones en la biblioteca' : 'Sin resultados para tu búsqueda/filtro'}
                     </p>
                   )}
                   {filteredSongs.map(song => (
