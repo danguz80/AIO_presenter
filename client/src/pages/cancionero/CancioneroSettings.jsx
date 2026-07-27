@@ -39,15 +39,21 @@ function dateStr(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
 function ProfileSection({ user, onSaved }) {
   const navigate = useNavigate();
   const [instruments, setInstruments] = useState(user?.instruments || []);
+  const [abletonVersion, setAbletonVersion] = useState(user?.ableton_version || '11.3');
   const [savedInstruments, setSavedInstruments] = useState(user?.instruments || []);
+  const [savedAbletonVersion, setSavedAbletonVersion] = useState(user?.ableton_version || '11.3');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setInstruments(user?.instruments || []);
     setSavedInstruments(user?.instruments || []);
+    setAbletonVersion(user?.ableton_version || '11.3');
+    setSavedAbletonVersion(user?.ableton_version || '11.3');
   }, [user]);
 
-  const isDirty = JSON.stringify([...instruments].sort()) !== JSON.stringify([...savedInstruments].sort());
+  const instrumentsDirty = JSON.stringify([...instruments].sort()) !== JSON.stringify([...savedInstruments].sort());
+  const abletonDirty = String(abletonVersion || '11.3').trim() !== String(savedAbletonVersion || '11.3').trim();
+  const isDirty = instrumentsDirty || abletonDirty;
 
   const toggle = (inst) =>
     setInstruments(prev =>
@@ -60,12 +66,13 @@ function ProfileSection({ user, onSaved }) {
       const res = await fetch(`${API}/auth/me`, {
         method: 'PATCH',
         headers: authHeaders(),
-        body: JSON.stringify({ instruments }),
+        body: JSON.stringify({ instruments, ableton_version: abletonVersion }),
       });
       if (res.ok) {
         const updated = await res.json();
         onSaved?.(updated);
         setSavedInstruments(updated.instruments || instruments);
+        setSavedAbletonVersion(updated.ableton_version || abletonVersion);
       }
     } finally {
       setSaving(false);
@@ -118,6 +125,25 @@ function ProfileSection({ user, onSaved }) {
               </button>
             );
           })}
+        </div>
+      </div>
+
+      {/* Integración Ableton */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-widest text-white/35 mb-2">
+          Ableton Live
+        </p>
+        <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+          <label className="text-xs text-white/50 block mb-1">Versión de Ableton (por usuario)</label>
+          <input
+            value={abletonVersion}
+            onChange={(e) => setAbletonVersion(e.target.value)}
+            placeholder="Ej: 11.3"
+            className="w-full bg-[#0f1a2e] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-yellow-400/40"
+          />
+          <p className="text-[11px] text-white/35 mt-2">
+            Esta versión se usa para la exportación de sesión para Ableton desde tus eventos.
+          </p>
         </div>
       </div>
 

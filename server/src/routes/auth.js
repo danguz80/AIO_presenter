@@ -508,7 +508,7 @@ router.get('/google/callback', async (req, res) => {
 router.get('/me', requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
-      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, can_pull, sync_direction, drive_folder_id, organization_id, instruments FROM sync_users WHERE id = $1',
+      'SELECT id, email, display_name, avatar_url, is_admin, can_push, can_push_all, can_pull, sync_direction, drive_folder_id, organization_id, instruments, COALESCE(ableton_version, \'11.3\') AS ableton_version FROM sync_users WHERE id = $1',
       [req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -521,13 +521,14 @@ router.get('/me', requireAuth, async (req, res) => {
 /** PATCH /auth/me — actualizar perfil del usuario (instrumentos, etc.) */
 router.patch('/me', requireAuth, async (req, res) => {
   try {
-    const { instruments } = req.body;
+    const { instruments, ableton_version } = req.body;
+    const normalizedAbletonVersion = String(ableton_version || '11.3').trim().slice(0, 20) || '11.3';
     const { rows } = await pool.query(
       `UPDATE sync_users
-         SET instruments = $1, updated_at = NOW()
-       WHERE id = $2
-       RETURNING id, email, display_name, avatar_url, is_admin, organization_id, instruments`,
-      [instruments || [], req.user.userId]
+         SET instruments = $1, ableton_version = $2, updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, email, display_name, avatar_url, is_admin, organization_id, instruments, COALESCE(ableton_version, '11.3') AS ableton_version`,
+      [instruments || [], normalizedAbletonVersion, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(rows[0]);

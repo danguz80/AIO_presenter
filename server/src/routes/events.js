@@ -41,7 +41,7 @@ function encodeVlq(value) {
   return Buffer.from(bytes);
 }
 
-function buildMidi(events, ticksPerQuarter = 480) {
+function buildTrackChunk(events) {
   const chunks = [];
   let lastTick = 0;
   for (const ev of events) {
@@ -53,18 +53,24 @@ function buildMidi(events, ticksPerQuarter = 480) {
   const endOfTrack = Buffer.concat([encodeVlq(0), Buffer.from([0xff, 0x2f, 0x00])]);
   const trackData = Buffer.concat([...chunks, endOfTrack]);
 
-  const header = Buffer.alloc(14);
-  header.write('MThd', 0, 'ascii');
-  header.writeUInt32BE(6, 4);
-  header.writeUInt16BE(0, 8); // format 0
-  header.writeUInt16BE(1, 10); // one track
-  header.writeUInt16BE(ticksPerQuarter, 12);
-
   const trackHeader = Buffer.alloc(8);
   trackHeader.write('MTrk', 0, 'ascii');
   trackHeader.writeUInt32BE(trackData.length, 4);
+  return Buffer.concat([trackHeader, trackData]);
+}
 
-  return Buffer.concat([header, trackHeader, trackData]);
+function buildMidi(globalEvents, songTracks = [], ticksPerQuarter = 480) {
+  const header = Buffer.alloc(14);
+  header.write('MThd', 0, 'ascii');
+  header.writeUInt32BE(6, 4);
+  header.writeUInt16BE(1, 8); // format 1
+  header.writeUInt16BE(1 + songTracks.length, 10);
+  header.writeUInt16BE(ticksPerQuarter, 12);
+
+  const globalTrack = buildTrackChunk(globalEvents);
+  const otherTracks = songTracks.map((evs) => buildTrackChunk(evs));
+
+  return Buffer.concat([header, globalTrack, ...otherTracks]);
 }
 
 function tempoMeta(bpm) {
@@ -156,6 +162,7 @@ router.get('/:id/ableton-session', requireAuth, async (req, res) => {
 
     const tpq = 480;
     const events = [];
+    const songTracks = [];
     let tick = 0;
     events.push({ tick: 0, data: trackNameMeta(`AIO Session - ${ev.title || 'Evento'}`) });
 
@@ -169,12 +176,23 @@ router.get('/:id/ableton-session', requireAuth, async (req, res) => {
       events.push({ tick, data: tempoMeta(bpm) });
       events.push({ tick, data: timeSigMeta(num, den) });
 
+      // Un track por canción (nombre = título). Un note corto evita que DAWs oculten el track vacío.
+      const channel = idx % 16;
+      const pitch = 60 + (idx % 12);
+      songTracks.push([
+        { tick: 0, data: trackNameMeta(song.title || `Cancion ${idx + 1}`) },
+        { tick: 0, data: tempoMeta(bpm) },
+        { tick: 0, data: timeSigMeta(num, den) },
+        { tick: 0, data: Buffer.from([0x90 + channel, pitch, 0x32]) },
+        { tick: tpq / 2, data: Buffer.from([0x80 + channel, pitch, 0x00]) },
+      ]);
+
       const quarterPerBar = (num * 4) / den;
       const ticksPerBar = Math.round(quarterPerBar * tpq);
       tick += ticksPerBar * barsPerSong;
     }
 
-    const midi = buildMidi(events, tpq);
+    const midi = buildMidi(events, songTracks, tpq);
     const datePart = toDateStr(occurrenceDate || ev.date) || 'evento';
     const safeTitle = String(ev.title || 'evento')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')

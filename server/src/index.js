@@ -328,6 +328,7 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);
     // ─── Cancionero: instrumentos, configuraciones de banda, fechas bloqueadas ─
     await pool.query(`ALTER TABLE sync_users ADD COLUMN IF NOT EXISTS instruments TEXT[] DEFAULT '{}'`);
+    await pool.query(`ALTER TABLE sync_users ADD COLUMN IF NOT EXISTS ableton_version TEXT DEFAULT '11.3'`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS band_configs (
         id              SERIAL PRIMARY KEY,
