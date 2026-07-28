@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import CancioneroNavbar from './CancioneroNavbar';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
+import { readApiError } from '../../utils/responseErrorUtils.mjs';
 
 // ─── Abreviaciones de sección ─────────────────────────────────────────────────
 const SECTION_ABBR = {
@@ -836,8 +837,8 @@ export default function CancioneroEventDetail() {
       const url = `${API}/api/events/${id}/ableton-session${query ? `?${query}` : ''}`;
       const res = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `HTTP ${res.status}`);
+        const message = await readApiError(res);
+        throw new Error(message);
       }
       const warningHeader = res.headers.get('X-AIO-Ableton-Warnings');
       if (warningHeader) {
@@ -860,7 +861,8 @@ export default function CancioneroEventDetail() {
       URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error('[Ableton export]:', err);
-      alert('No se pudo exportar para Ableton. Verifica que el evento tenga canciones con BPM/compas.');
+      const detail = err?.message ? String(err.message) : 'No se pudo exportar para Ableton.';
+      alert(`No se pudo exportar para Ableton. ${detail}`);
     } finally {
       setExportingAbleton(false);
     }
