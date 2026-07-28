@@ -82,9 +82,11 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push('    <NextPointeeId Value="10000" />');
   lines.push(`    <Name Value="${escapeXml(event.title || 'Evento')}" />`);
 
-  // MasterTrack
+  // MasterTrack - estructura mínima pero válida
   lines.push('    <MasterTrack>');
   lines.push('      <LomId Value="0" />');
+  lines.push('      <IsContentSelectedInDocument Value="false" />');
+  lines.push('      <PreferredContentViewMode Value="0" />');
   lines.push('      <Tempo>');
   lines.push('        <LomId Value="0" />');
   lines.push('        <Manual Value="120" />');
@@ -100,217 +102,78 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push(`          <RemoteableTimeSignature Id="${getNextId()}"><Numerator Value="4" /><Denominator Value="4" /></RemoteableTimeSignature>`);
   lines.push('        </TimeSignatures>');
   lines.push('      </TimeSignature>');
+  lines.push('      <DeviceChain>');
+  lines.push('        <Mixer>');
+  lines.push(`          <LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${getNextId()}" /><ModulationTarget Id="${getNextId()}" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ControllerTargets /><Volume><LomId Value="0" /><Manual Value="1" /><MidiControllerRange><Min Value="0.0003162277571" /><Max Value="1.99526238" /></MidiControllerRange><AutomationTarget Id="${getNextId()}" /><ModulationTarget Id="${getNextId()}" /></Volume><Pan><LomId Value="0" /><Manual Value="0" /><MidiControllerRange><Min Value="-1" /><Max Value="1" /></MidiControllerRange><AutomationTarget Id="${getNextId()}" /><ModulationTarget Id="${getNextId()}" /></Pan><SpeakerOn><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${getNextId()}" /><ModulationTarget Id="${getNextId()}" /></SpeakerOn><SoloSink Value="false" /><PanMode Value="0" /><CrossFadeState><LomId Value="0" /><Manual Value="1" /><AutomationTarget Id="${getNextId()}" /><ModulationTarget Id="${getNextId()}" /></CrossFadeState><SendInfos /><ReceiveInfos /><ClipSendDelays /><HasUnlimitedSends Value="false" />`);
+  lines.push('        </Mixer>');
+  lines.push('        <MainSequencer>');
+  lines.push(`          <LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${getNextId()}" /><ModulationTarget Id="${getNextId()}" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ControllerTargets />`);
+  lines.push('        </MainSequencer>');
+  lines.push('        <DevicesChain>');
+  lines.push('          <Devices />');
+  lines.push('          <SignalModulations />');
+  lines.push('        </DevicesChain>');
+  lines.push('      </DeviceChain>');
   lines.push('    </MasterTrack>');
 
-  // Tracks
+  // Tracks - una por canción
   lines.push('    <Tracks>');
   songs.forEach((song, trackIdx) => {
     const title = escapeXml(song.title || `Cancion ${trackIdx + 1}`);
-    const { num, den } = parseTimeSig(song.time_sig);
-
-    // Pre-allocate all IDs for this track
     const trackId = getNextId();
-    const autmix = getNextId();
-    const modmix = getNextId();
-    const ptrmix = getNextId();
-    const autvol = getNextId();
-    const modvol = getNextId();
-    const autpan = getNextId();
-    const modpan = getNextId();
-    const autspr = getNextId();
-    const modspr = getNextId();
-    const autcfs = getNextId();
-    const modcfs = getNextId();
-    const autseq = getNextId();
-    const modseq = getNextId();
-    const ptrseq = getNextId();
-    const ptrfzq = getNextId();
 
     lines.push(`      <MidiTrack Id="${trackId}">`);
     lines.push(`        <LomId Value="0" />`);
     lines.push(`        <IsContentSelectedInDocument Value="false" />`);
     lines.push(`        <PreferredContentViewMode Value="0" />`);
-    lines.push(`        <TrackDelay><Value Value="0" /><IsValueSampleBased Value="false" /></TrackDelay>`);
-    lines.push(`        <Name><EffectiveName Value="${title}" /><UserName Value="" /><Annotation Value="" /><MemorizedFirstClipName Value="" /></Name>`);
+    lines.push(`        <Name><EffectiveName Value="${title}" /></Name>`);
     lines.push(`        <ColorIndex Value="0" />`);
-    lines.push(`        <AutomationEnvelopes><Envelopes /></AutomationEnvelopes>`);
     lines.push(`        <TrackGroupId Value="-1" />`);
-    lines.push(`        <TrackUnfolded Value="true" />`);
-    lines.push(`        <DevicesListWrapper LomId="0" />`);
     
-    // ClipSlotList at Track level (IMPORTANT: not in MainSequencer)
+    // ClipSlotList - debe haber exactamente N slots (uno por scene)
     lines.push(`        <ClipSlotList>`);
-    songs.forEach((_, slotIdx) => {
+    songs.forEach((s, slotIdx) => {
       const clipSlotId = getNextId();
-      const hasClip = slotIdx === trackIdx;
-      
       lines.push(`          <ClipSlot Id="${clipSlotId}">`);
-      lines.push(`            <Value>`);
       
-      if (hasClip) {
+      // Solo el slot que corresponde a esta canción tiene un clip
+      if (slotIdx === trackIdx) {
         const midiClipId = getNextId();
-        const tsId = getNextId();
-        const fa1Id = getNextId();
-        const fa2Id = getNextId();
-        const clipTitle = escapeXml(song.title || `Cancion ${slotIdx + 1}`);
-        
+        lines.push(`            <Value>`);
         lines.push(`              <MidiClip Id="${midiClipId}" Time="0">`);
         lines.push(`                <LomId Value="0" />`);
-        lines.push(`                <LomIdView Value="0" />`);
         lines.push(`                <CurrentStart Value="0" />`);
         lines.push(`                <CurrentEnd Value="8" />`);
-        lines.push(`                <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><StartRelative Value="0" /><LoopOn Value="true" /><OutMarker Value="8" /><HiddenLoopStart Value="0" /><HiddenLoopEnd Value="8" /></Loop>`);
-        lines.push(`                <Name Value="${clipTitle}" />`);
-        lines.push(`                <Annotation Value="" />`);
-        lines.push(`                <Color Value="-1" />`);
-        lines.push(`                <LaunchMode Value="0" />`);
-        lines.push(`                <LaunchQuantisation Value="0" />`);
-        lines.push(`                <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${num}" /><Denominator Value="${den}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
-        lines.push(`                <Envelopes><Envelopes /></Envelopes>`);
-        lines.push(`                <ScrollerTimePreserver><LeftTime Value="0" /><RightTime Value="16" /></ScrollerTimePreserver>`);
-        lines.push(`                <TimeSelection><AnchorTime Value="0" /><OtherTime Value="0" /></TimeSelection>`);
-        lines.push(`                <Legato Value="false" />`);
-        lines.push(`                <Ram Value="false" />`);
-        lines.push(`                <SnapToGrid Value="true" />`);
-        lines.push(`                <Disabled Value="false" />`);
-        lines.push(`                <VelocityAmount Value="0" />`);
-        lines.push(`                <FollowAction><FillDuration Value="0.25" /><IsLinked Value="true" /><LoopIterations Value="1" /><Type Value="0" /><DurationUnit Value="2" /><FollowActionA><FollowAction Id="${fa1Id}"><IsEnabled Value="false" /><Chance Value="100" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionA><FollowActionB><FollowAction Id="${fa2Id}"><IsEnabled Value="false" /><Chance Value="0" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionB></FollowAction>`);
-        lines.push(`                <Grid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></Grid>`);
-        lines.push(`                <FreezeStart Value="0" />`);
-        lines.push(`                <FreezeEnd Value="0" />`);
-        lines.push(`                <IsWarped Value="false" />`);
-        lines.push(`                <NoteEditorFoldInZoom Value="-1" />`);
-        lines.push(`                <NoteEditorFoldInScroll Value="0" />`);
-        lines.push(`                <NoteEditorFoldOutZoom Value="-1" />`);
-        lines.push(`                <NoteEditorFoldOutScroll Value="0" />`);
-        lines.push(`                <NoteEditorFoldScaleZoom Value="-1" />`);
-        lines.push(`                <NoteEditorFoldScaleScroll Value="0" />`);
-        lines.push(`                <ScaleInformation><RootNote Value="0" /><Name Value="Major" /></ScaleInformation>`);
-        lines.push(`                <IsInKey Value="false" />`);
-        lines.push(`                <NoteSpellingPreference Value="3" />`);
-        lines.push(`                <PreferFlatRootNote Value="false" />`);
-        lines.push(`                <ExpressionGrid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></ExpressionGrid>`);
-        lines.push(`                <Notes><KeyTracks /><PerNoteEventStore><EventLists /></PerNoteEventStore><NoteIdCounter Value="0" /></Notes>`);
-        lines.push(`                <PerNoteEventLookAheadAmount Value="-1" />`);
-        lines.push(`                <BankSelectCoarse Value="-1" />`);
-        lines.push(`                <BankSelectFine Value="-1" />`);
-        lines.push(`                <ProgramChange Value="-1" />`);
-        lines.push(`                <NoteEditorKeyboardFoldStartNote Value="36" />`);
-        lines.push(`                <NoteEditorKeyboardFoldEndNote Value="72" />`);
+        lines.push(`                <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><LoopOn Value="true" /></Loop>`);
+        lines.push(`                <Name Value="${escapeXml(s.title || `Cancion ${slotIdx + 1}`)}" />`);
+        lines.push(`                <Notes><KeyTracks /><PerNoteEventStore><EventLists /></PerNoteEventStore></Notes>`);
         lines.push(`              </MidiClip>`);
+        lines.push(`            </Value>`);
+      } else {
+        lines.push(`            <Value />`);
       }
-      
-      lines.push(`            </Value>`);
       lines.push(`            <HideSourceChain Value="false" />`);
       lines.push(`          </ClipSlot>`);
     });
     lines.push(`        </ClipSlotList>`);
-
-    lines.push(`        <ViewData Value="{}" />`);
-    lines.push(`        <TakeLanes><TakeLanes /><IsExpanded Value="true" /></TakeLanes>`);
-    lines.push(`        <LinkedTrackGroupId Value="-1" />`);
-    lines.push(`        <SavedPlayingSlot Value="-1" />`);
-    lines.push(`        <SavedPlayingOffset Value="0" />`);
-    lines.push(`        <Freeze Value="false" />`);
-    lines.push(`        <VelocityDetail Value="0" />`);
-    lines.push(`        <NeedArrangerRefreeze Value="true" />`);
-    lines.push(`        <PostProcessFreezeClips Value="0" />`);
+    
     lines.push(`        <DeviceChain>`);
-    lines.push(`          <AutomationLanes><AutomationLanes /><IsExpanded Value="false" /></AutomationLanes>`);
-    lines.push(`          <ClipEnvelopeChooserViewState><SelectedDevice Value="0" /><SelectedEnvelope Value="0" /><PreferModulationVisible Value="false" /></ClipEnvelopeChooserViewState>`);
-    lines.push(`          <AudioInputRouting><Target Value="AudioIn/External/S0" /><UpperDisplayString Value="Ext. In" /><LowerDisplayString Value="1" /><MpeSettings><ZoneType Value="0" /><FirstNoteChannel Value="1" /><LastNoteChannel Value="16" /></MpeSettings></AudioInputRouting>`);
-    lines.push(`          <MidiInputRouting><Target Value="MidiIn/External.All/-1" /><UpperDisplayString Value="Ext: All Ins" /><LowerDisplayString Value="" /><MpeSettings><ZoneType Value="0" /><FirstNoteChannel Value="1" /><LastNoteChannel Value="16" /></MpeSettings></MidiInputRouting>`);
-    lines.push(`          <AudioOutputRouting><Target Value="AudioOut/Master" /><UpperDisplayString Value="Master" /><LowerDisplayString Value="" /><MpeSettings><ZoneType Value="0" /><FirstNoteChannel Value="1" /><LastNoteChannel Value="16" /></MpeSettings></AudioOutputRouting>`);
-    lines.push(`          <MidiOutputRouting><Target Value="MidiOut/None" /><UpperDisplayString Value="None" /><LowerDisplayString Value="" /><MpeSettings><ZoneType Value="0" /><FirstNoteChannel Value="1" /><LastNoteChannel Value="16" /></MpeSettings></MidiOutputRouting>`);
-    lines.push(`          <Mixer>`);
-    lines.push(`            <LomId Value="0" />`);
-    lines.push(`            <LomIdView Value="0" />`);
-    lines.push(`            <IsExpanded Value="true" />`);
-    lines.push(`            <On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${autmix}" /><ModulationTarget Id="${modmix}" /></On>`);
-    lines.push(`            <ModulationSourceCount Value="0" />`);
-    lines.push(`            <ParametersListWrapper LomId="0" />`);
-    lines.push(`            <Pointee Id="${ptrmix}" />`);
-    lines.push(`            <LastSelectedTimeableIndex Value="0" />`);
-    lines.push(`            <LastSelectedClipEnvelopeIndex Value="0" />`);
-    lines.push(`            <LastPresetRef><Value /></LastPresetRef>`);
-    lines.push(`            <LockedScripts />`);
-    lines.push(`            <IsFolded Value="false" />`);
-    lines.push(`            <ShouldShowPresetName Value="true" />`);
-    lines.push(`            <UserName Value="" />`);
-    lines.push(`            <Annotation Value="" />`);
-    lines.push(`            <SourceContext><Value /></SourceContext>`);
-    lines.push(`            <ControllerTargets />`);
-    lines.push(`            <Volume><LomId Value="0" /><Manual Value="1" /><MidiControllerRange><Min Value="0.0003162277571" /><Max Value="1.99526238" /></MidiControllerRange><AutomationTarget Id="${autvol}" /><ModulationTarget Id="${modvol}" /></Volume>`);
-    lines.push(`            <Pan><LomId Value="0" /><Manual Value="0" /><MidiControllerRange><Min Value="-1" /><Max Value="1" /></MidiControllerRange><AutomationTarget Id="${autpan}" /><ModulationTarget Id="${modpan}" /></Pan>`);
-    lines.push(`            <SpeakerOn><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${autspr}" /><ModulationTarget Id="${modspr}" /></SpeakerOn>`);
-    lines.push(`            <SoloSink Value="false" />`);
-    lines.push(`            <PanMode Value="0" />`);
-    lines.push(`            <CrossFadeState><LomId Value="0" /><Manual Value="1" /><AutomationTarget Id="${autcfs}" /><ModulationTarget Id="${modcfs}" /></CrossFadeState>`);
-    lines.push(`            <SendInfos />`);
-    lines.push(`            <ReceiveInfos />`);
-    lines.push(`            <ClipSendDelays />`);
-    lines.push(`            <HasUnlimitedSends Value="false" />`);
-    lines.push(`          </Mixer>`);
-    lines.push(`          <MainSequencer>`);
-    lines.push(`            <LomId Value="0" />`);
-    lines.push(`            <LomIdView Value="0" />`);
-    lines.push(`            <IsExpanded Value="true" />`);
-    lines.push(`            <On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${autseq}" /><ModulationTarget Id="${modseq}" /></On>`);
-    lines.push(`            <ModulationSourceCount Value="0" />`);
-    lines.push(`            <ParametersListWrapper LomId="0" />`);
-    lines.push(`            <Pointee Id="${ptrseq}" />`);
-    lines.push(`            <LastSelectedTimeableIndex Value="0" />`);
-    lines.push(`            <LastSelectedClipEnvelopeIndex Value="0" />`);
-    lines.push(`            <LastPresetRef><Value /></LastPresetRef>`);
-    lines.push(`            <LockedScripts />`);
-    lines.push(`            <IsFolded Value="false" />`);
-    lines.push(`            <ShouldShowPresetName Value="true" />`);
-    lines.push(`            <UserName Value="" />`);
-    lines.push(`            <Annotation Value="" />`);
-    lines.push(`            <SourceContext><Value /></SourceContext>`);
-    lines.push(`            <ControllerTargets />`);
-    lines.push(`            <ClipTimeable><ArrangerAutomation><Events /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></ArrangerAutomation></ClipTimeable>`);
-    lines.push(`            <MonitoringEnum Value="1" />`);
-    lines.push(`            <VoiceCount Value="6" />`);
-    lines.push(`            <InstrumentChain><Devices /><SignalModulations /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></InstrumentChain>`);
-    lines.push(`            <NoteEditorPlayingClipStartNode Value="-1" />`);
-    lines.push(`            <MidiInputFilterType Value="0" />`);
-    lines.push(`          </MainSequencer>`);
-    lines.push(`          <FreezeSequencer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${ptrfzq}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ControllerTargets /><ClipTimeable><ArrangerAutomation><Events /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></ArrangerAutomation></ClipTimeable><MonitoringEnum Value="1" /><VoiceCount Value="0" /></FreezeSequencer>`);
-    lines.push(`          <DevicesChain><Devices /><SignalModulations /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></DevicesChain>`);
+    lines.push(`          <Mixer><LomId Value="0" /><On><LomId Value="0" /><Manual Value="true" /></On></Mixer>`);
     lines.push(`        </DeviceChain>`);
-    lines.push(`        <ReWireSlaveMidiTargetId Value="-1" />`);
-    lines.push(`        <PitchNote Value="60" />`);
-    lines.push(`        <PitchOctave Value="0" />`);
-    lines.push(`        <TrackIsMuted Value="false" />`);
-    lines.push(`        <TrackIsSoloed Value="false" />`);
-    lines.push(`        <DevicesGroupExpanded Value="true" />`);
-    lines.push(`        <MidiPitchDisplayMode Value="0" />`);
     lines.push(`      </MidiTrack>`);
   });
   lines.push('    </Tracks>');
 
-  // Scenes
+  // Scenes - una por canción
   lines.push('    <Scenes>');
   songs.forEach((song, idx) => {
     const title = escapeXml(song.title || `Cancion ${idx + 1}`);
     const bpm = Number(song.bpm) || 120;
-    const { num, den } = parseTimeSig(song.time_sig);
     const sceneId = getNextId();
-    const tsId = getNextId();
-    const controlTargetId = getNextId();
     
     lines.push(`      <Scene Id="${sceneId}">`);
     lines.push(`        <Name Value="${title}" />`);
-    lines.push(`        <Annotation Value="" />`);
-    lines.push(`        <Color Value="-1" />`);
     lines.push(`        <Tempo Value="${bpm}" />`);
-    lines.push(`        <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${num}" /><Denominator Value="${den}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
-    lines.push(`        <IsTempoEnabled Value="true" />`);
-    lines.push(`        <IsTimeSignatureEnabled Value="true" />`);
-    lines.push(`        <ClipSlotsListWrapper LomId="0" />`);
-    lines.push(`        <SceneActivationTarget><RemoteableControlTarget Id="${controlTargetId}" /></SceneActivationTarget>`);
-    lines.push(`        <IsManualViewMode Value="false" />`);
     lines.push(`      </Scene>`);
   });
   lines.push('    </Scenes>');
