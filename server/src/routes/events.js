@@ -170,6 +170,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`                  </Value>`);
     lines.push(`                </ClipSlot>`);
     lines.push(`                <HasStop Value="true" />`);
+    lines.push(`                <NeedRefreeze Value="true" />`);
     lines.push(`              </ClipSlot>`);
   }
   lines.push(`            </ClipSlotList>`);
@@ -177,8 +178,37 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push(`            <MonitoringEnum Value="1" />`);
   lines.push(`          </MainSequencer>`);
   
-  // FreezeSequencer con 1 ClipSlot
-  lines.push(`          <FreezeSequencer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ClipSlotList><ClipSlot Id="${getNextId()}"><LomId Value="0" /><ClipSlot><Value /></ClipSlot><HasStop Value="true" /></ClipSlot></ClipSlotList><MonitoringEnum Value="1" /></FreezeSequencer>`);
+  // FreezeSequencer con N ClipSlots (igual número que MainSequencer)
+  lines.push(`          <FreezeSequencer>`);
+  lines.push(`            <LomId Value="0" />`);
+  lines.push(`            <LomIdView Value="0" />`);
+  lines.push(`            <IsExpanded Value="true" />`);
+  lines.push(`            <On><LomId Value="0" /><Manual Value="true" /></On>`);
+  lines.push(`            <ModulationSourceCount Value="0" />`);
+  lines.push(`            <ParametersListWrapper LomId="0" />`);
+  lines.push(`            <Pointee Id="${getNextId()}" />`);
+  lines.push(`            <LastSelectedTimeableIndex Value="0" />`);
+  lines.push(`            <LastSelectedClipEnvelopeIndex Value="0" />`);
+  lines.push(`            <LastPresetRef><Value /></LastPresetRef>`);
+  lines.push(`            <LockedScripts />`);
+  lines.push(`            <IsFolded Value="false" />`);
+  lines.push(`            <ShouldShowPresetName Value="true" />`);
+  lines.push(`            <UserName Value="" />`);
+  lines.push(`            <Annotation Value="" />`);
+  lines.push(`            <SourceContext><Value /></SourceContext>`);
+  lines.push(`            <ClipSlotList>`);
+  // N ClipSlots en FreezeSequencer (igual que MainSequencer)
+  for (let i = 0; i < numSongs; i++) {
+    lines.push(`              <ClipSlot Id="${getNextId()}">`);
+    lines.push(`                <LomId Value="0" />`);
+    lines.push(`                <ClipSlot><Value /></ClipSlot>`);
+    lines.push(`                <HasStop Value="true" />`);
+    lines.push(`                <NeedRefreeze Value="true" />`);
+    lines.push(`              </ClipSlot>`);
+  }
+  lines.push(`            </ClipSlotList>`);
+  lines.push(`            <MonitoringEnum Value="1" />`);
+  lines.push(`          </FreezeSequencer>`);
   
   // DeviceChain vacío
   lines.push(`          <DeviceChain><Devices /><SignalModulations /></DeviceChain>`);
