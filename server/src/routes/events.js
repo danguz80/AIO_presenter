@@ -82,119 +82,110 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push(`    <LomId Value="0" />`);
   lines.push(`    <LomIdView Value="0" />`);
 
-  // CRITICAL: Build the correct Ableton structure
-  // - N tracks = 1 per song
-  // - N scenes = 1 per song
-  // - Each track's MainSequencer has N ClipSlots (one per scene)
-  // - Only track[i] has an active clip in slot[i]; all others are empty
+  // ESTRUCTURA CORRECTA DE ABLETON:
+  // - 1 MIDI TRACK ÚNICA
+  // - N SCENES (una por canción, cada una con su propio BPM/compás)
+  // - MainSequencer de la pista tiene N ClipSlots (uno por scene)
+  // - Slot[i] contiene MidiClip con la canción i
   
   const numSongs = songs.length;
 
-  // Tracks - una por canción
+  // TRACKS - SOLO UNA PISTA MIDI
   lines.push('    <Tracks>');
-  songs.forEach((song, trackIdx) => {
-    const title = escapeXml(song.title || `Cancion ${trackIdx + 1}`);
-    const trackId = getNextId();
-
-    lines.push(`      <MidiTrack Id="${trackId}">`);
-    lines.push(`        <LomId Value="0" />`);
-    lines.push(`        <LomIdView Value="0" />`);
-    lines.push(`        <IsContentSelectedInDocument Value="false" />`);
-    lines.push(`        <PreferredContentViewMode Value="0" />`);
-    lines.push(`        <TrackDelay><Value Value="0" /><IsValueSampleBased Value="false" /></TrackDelay>`);
-    lines.push(`        <Name><EffectiveName Value="${title}" /><UserName Value="" /><Annotation Value="" /><MemorizedFirstClipName Value="" /></Name>`);
-    lines.push(`        <Color Value="0" />`);
-    lines.push(`        <AutomationEnvelopes><Envelopes /></AutomationEnvelopes>`);
-    lines.push(`        <TrackGroupId Value="-1" />`);
-    lines.push(`        <TrackUnfolded Value="true" />`);
-    lines.push(`        <DevicesListWrapper LomId="0" />`);
-    lines.push(`        <ClipSlotsListWrapper LomId="0" />`);
-    lines.push(`        <ViewData Value="{}" />`);
-    lines.push(`        <TakeLanes><TakeLanes /><IsExpanded Value="true" /></TakeLanes>`);
-    lines.push(`        <LinkedTrackGroupId Value="-1" />`);
-    lines.push(`        <SavedPlayingSlot Value="0" />`);
-    lines.push(`        <SavedPlayingOffset Value="0" />`);
-    lines.push(`        <Freeze Value="false" />`);
-    lines.push(`        <VelocityDetail Value="0" />`);
-    lines.push(`        <NeedArrangerRefreeze Value="true" />`);
-    lines.push(`        <PostProcessFreezeClips Value="0" />`);
+  
+  const trackId = getNextId();
+  lines.push(`      <MidiTrack Id="${trackId}">`);
+  lines.push(`        <LomId Value="0" />`);
+  lines.push(`        <LomIdView Value="0" />`);
+  lines.push(`        <IsContentSelectedInDocument Value="false" />`);
+  lines.push(`        <PreferredContentViewMode Value="0" />`);
+  lines.push(`        <TrackDelay><Value Value="0" /><IsValueSampleBased Value="false" /></TrackDelay>`);
+  lines.push(`        <Name><EffectiveName Value="Instrumentos" /><UserName Value="" /><Annotation Value="" /><MemorizedFirstClipName Value="" /></Name>`);
+  lines.push(`        <Color Value="0" />`);
+  lines.push(`        <AutomationEnvelopes><Envelopes /></AutomationEnvelopes>`);
+  lines.push(`        <TrackGroupId Value="-1" />`);
+  lines.push(`        <TrackUnfolded Value="true" />`);
+  lines.push(`        <DevicesListWrapper LomId="0" />`);
+  lines.push(`        <ClipSlotsListWrapper LomId="0" />`);
+  lines.push(`        <ViewData Value="{}" />`);
+  lines.push(`        <TakeLanes><TakeLanes /><IsExpanded Value="true" /></TakeLanes>`);
+  lines.push(`        <LinkedTrackGroupId Value="-1" />`);
+  lines.push(`        <SavedPlayingSlot Value="0" />`);
+  lines.push(`        <SavedPlayingOffset Value="0" />`);
+  lines.push(`        <Freeze Value="false" />`);
+  lines.push(`        <VelocityDetail Value="0" />`);
+  lines.push(`        <NeedArrangerRefreeze Value="true" />`);
+  lines.push(`        <PostProcessFreezeClips Value="0" />`);
+  
+  // DeviceChain con MainSequencer
+  lines.push(`        <DeviceChain>`);
+  lines.push(`          <AutomationLanes><AutomationLanes /><IsExpanded Value="false" /></AutomationLanes>`);
+  lines.push(`          <ClipEnvelopeChooserViewState><SelectedDevice Value="0" /><SelectedEnvelope Value="0" /><PreferModulationVisible Value="false" /></ClipEnvelopeChooserViewState>`);
+  lines.push(`          <AudioInputRouting><Target Value="MidiIn/External.All/-1" /><UpperDisplayString Value="Ext: All Ins" /><LowerDisplayString Value="" /></AudioInputRouting>`);
+  lines.push(`          <MidiInputRouting><Target Value="MidiIn/External.All/-1" /><UpperDisplayString Value="Ext: All Ins" /><LowerDisplayString Value="" /></MidiInputRouting>`);
+  lines.push(`          <AudioOutputRouting><Target Value="AudioOut/Master" /><UpperDisplayString Value="Master" /><LowerDisplayString Value="" /></AudioOutputRouting>`);
+  lines.push(`          <MidiOutputRouting><Target Value="MidiOut/None" /><UpperDisplayString Value="None" /><LowerDisplayString Value="" /></MidiOutputRouting>`);
+  
+  // Mixer
+  lines.push(`          <Mixer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ControllerTargets /><Volume><LomId Value="0" /><Manual Value="1" /></Volume><Pan><LomId Value="0" /><Manual Value="0" /></Pan><SpeakerOn><LomId Value="0" /><Manual Value="true" /></SpeakerOn><SoloSink Value="false" /><PanMode Value="0" /><CrossFadeState><LomId Value="0" /><Manual Value="1" /></CrossFadeState><SendInfos /><ReceiveInfos /><ClipSendDelays /><HasUnlimitedSends Value="false" /></Mixer>`);
+  
+  // MainSequencer con N ClipSlots (uno por escena/canción)
+  lines.push(`          <MainSequencer>`);
+  lines.push(`            <LomId Value="0" />`);
+  lines.push(`            <LomIdView Value="0" />`);
+  lines.push(`            <IsExpanded Value="true" />`);
+  lines.push(`            <On><LomId Value="0" /><Manual Value="true" /></On>`);
+  lines.push(`            <ModulationSourceCount Value="0" />`);
+  lines.push(`            <ParametersListWrapper LomId="0" />`);
+  lines.push(`            <Pointee Id="${getNextId()}" />`);
+  lines.push(`            <LastSelectedTimeableIndex Value="0" />`);
+  lines.push(`            <LastSelectedClipEnvelopeIndex Value="0" />`);
+  lines.push(`            <LastPresetRef><Value /></LastPresetRef>`);
+  lines.push(`            <LockedScripts />`);
+  lines.push(`            <IsFolded Value="false" />`);
+  lines.push(`            <ShouldShowPresetName Value="true" />`);
+  lines.push(`            <UserName Value="" />`);
+  lines.push(`            <Annotation Value="" />`);
+  lines.push(`            <SourceContext><Value /></SourceContext>`);
+  
+  // ClipSlotList con N ClipSlots (uno por canción)
+  lines.push(`            <ClipSlotList>`);
+  for (let i = 0; i < numSongs; i++) {
+    const clipSlotOuterId = getNextId();
+    const song = songs[i];
+    const midiClipId = getNextId();
     
-    // DeviceChain con MainSequencer (donde van los ClipSlots!)
-    lines.push(`        <DeviceChain>`);
-    lines.push(`          <AutomationLanes><AutomationLanes /><IsExpanded Value="false" /></AutomationLanes>`);
-    lines.push(`          <ClipEnvelopeChooserViewState><SelectedDevice Value="0" /><SelectedEnvelope Value="0" /><PreferModulationVisible Value="false" /></ClipEnvelopeChooserViewState>`);
-    lines.push(`          <AudioInputRouting><Target Value="MidiIn/External.All/-1" /><UpperDisplayString Value="Ext: All Ins" /><LowerDisplayString Value="" /></AudioInputRouting>`);
-    lines.push(`          <MidiInputRouting><Target Value="MidiIn/External.All/-1" /><UpperDisplayString Value="Ext: All Ins" /><LowerDisplayString Value="" /></MidiInputRouting>`);
-    lines.push(`          <AudioOutputRouting><Target Value="AudioOut/Master" /><UpperDisplayString Value="Master" /><LowerDisplayString Value="" /></AudioOutputRouting>`);
-    lines.push(`          <MidiOutputRouting><Target Value="MidiOut/None" /><UpperDisplayString Value="None" /><LowerDisplayString Value="" /></MidiOutputRouting>`);
-    
-    // Mixer
-    lines.push(`          <Mixer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ControllerTargets /><Volume><LomId Value="0" /><Manual Value="1" /></Volume><Pan><LomId Value="0" /><Manual Value="0" /></Pan><SpeakerOn><LomId Value="0" /><Manual Value="true" /></SpeakerOn><SoloSink Value="false" /><PanMode Value="0" /><CrossFadeState><LomId Value="0" /><Manual Value="1" /></CrossFadeState><SendInfos /><ReceiveInfos /><ClipSendDelays /><HasUnlimitedSends Value="false" /></Mixer>`);
-    
-    // MainSequencer - AQUÍ están los ClipSlots!
-    lines.push(`          <MainSequencer>`);
-    lines.push(`            <LomId Value="0" />`);
-    lines.push(`            <LomIdView Value="0" />`);
-    lines.push(`            <IsExpanded Value="true" />`);
-    lines.push(`            <On><LomId Value="0" /><Manual Value="true" /></On>`);
-    lines.push(`            <ModulationSourceCount Value="0" />`);
-    lines.push(`            <ParametersListWrapper LomId="0" />`);
-    lines.push(`            <Pointee Id="${getNextId()}" />`);
-    lines.push(`            <LastSelectedTimeableIndex Value="0" />`);
-    lines.push(`            <LastSelectedClipEnvelopeIndex Value="0" />`);
-    lines.push(`            <LastPresetRef><Value /></LastPresetRef>`);
-    lines.push(`            <LockedScripts />`);
-    lines.push(`            <IsFolded Value="false" />`);
-    lines.push(`            <ShouldShowPresetName Value="true" />`);
-    lines.push(`            <UserName Value="" />`);
-    lines.push(`            <Annotation Value="" />`);
-    lines.push(`            <SourceContext><Value /></SourceContext>`);
-    
-    // ClipSlotList - UNA ENTRADA POR CADA SCENE (numSongs)
-    lines.push(`            <ClipSlotList>`);
-    for (let sceneIdx = 0; sceneIdx < numSongs; sceneIdx++) {
-      const clipSlotOuterId = getNextId();
-      lines.push(`              <ClipSlot Id="${clipSlotOuterId}">`);
-      lines.push(`                <LomId Value="0" />`);
-      lines.push(`                <ClipSlot>`);
-      
-      if (sceneIdx === trackIdx) {
-        // Este slot tiene un clip (track matches scene)
-        const midiClipId = getNextId();
-        const songForClip = songs[sceneIdx] || song;
-        lines.push(`                  <Value>`);
-        lines.push(`                    <MidiClip Id="${midiClipId}" Time="0">`);
-        lines.push(`                      <LomId Value="0" />`);
-        lines.push(`                      <CurrentStart Value="0" />`);
-        lines.push(`                      <CurrentEnd Value="8" />`);
-        lines.push(`                      <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><LoopOn Value="true" /></Loop>`);
-        lines.push(`                      <Name Value="${escapeXml(songForClip.title || `Cancion ${sceneIdx + 1}`)}" />`);
-        lines.push(`                      <Notes><KeyTracks /><PerNoteEventStore><EventLists /></PerNoteEventStore></Notes>`);
-        lines.push(`                    </MidiClip>`);
-        lines.push(`                  </Value>`);
-      } else {
-        // Slot vacío
-        lines.push(`                  <Value />`);
-      }
-      
-      lines.push(`                </ClipSlot>`);
-      lines.push(`                <HasStop Value="true" />`);
-      lines.push(`              </ClipSlot>`);
-    }
-    lines.push(`            </ClipSlotList>`);
-    
-    lines.push(`            <MonitoringEnum Value="1" />`);
-    lines.push(`          </MainSequencer>`);
-    
-    // FreezeSequencer - siempre tiene UN ClipSlot
-    lines.push(`          <FreezeSequencer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ClipSlotList><ClipSlot Id="${getNextId()}"><LomId Value="0" /><ClipSlot><Value /></ClipSlot><HasStop Value="true" /></ClipSlot></ClipSlotList><MonitoringEnum Value="1" /></FreezeSequencer>`);
-    
-    // DeviceChain vacío
-    lines.push(`          <DeviceChain><Devices /><SignalModulations /></DeviceChain>`);
-    lines.push(`        </DeviceChain>`);
-    
-    lines.push(`      </MidiTrack>`);
-  });
+    lines.push(`              <ClipSlot Id="${clipSlotOuterId}">`);
+    lines.push(`                <LomId Value="0" />`);
+    lines.push(`                <ClipSlot>`);
+    lines.push(`                  <Value>`);
+    lines.push(`                    <MidiClip Id="${midiClipId}" Time="0">`);
+    lines.push(`                      <LomId Value="0" />`);
+    lines.push(`                      <CurrentStart Value="0" />`);
+    lines.push(`                      <CurrentEnd Value="8" />`);
+    lines.push(`                      <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><LoopOn Value="true" /></Loop>`);
+    lines.push(`                      <Name Value="${escapeXml(song.title || `Cancion ${i + 1}`)}" />`);
+    lines.push(`                      <Notes><KeyTracks /><PerNoteEventStore><EventLists /></PerNoteEventStore></Notes>`);
+    lines.push(`                    </MidiClip>`);
+    lines.push(`                  </Value>`);
+    lines.push(`                </ClipSlot>`);
+    lines.push(`                <HasStop Value="true" />`);
+    lines.push(`              </ClipSlot>`);
+  }
+  lines.push(`            </ClipSlotList>`);
+  
+  lines.push(`            <MonitoringEnum Value="1" />`);
+  lines.push(`          </MainSequencer>`);
+  
+  // FreezeSequencer con 1 ClipSlot
+  lines.push(`          <FreezeSequencer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ClipSlotList><ClipSlot Id="${getNextId()}"><LomId Value="0" /><ClipSlot><Value /></ClipSlot><HasStop Value="true" /></ClipSlot></ClipSlotList><MonitoringEnum Value="1" /></FreezeSequencer>`);
+  
+  // DeviceChain vacío
+  lines.push(`          <DeviceChain><Devices /><SignalModulations /></DeviceChain>`);
+  lines.push(`        </DeviceChain>`);
+  
+  lines.push(`      </MidiTrack>`);
+  
   lines.push('    </Tracks>');
 
   // MasterTrack mínimo
@@ -212,7 +203,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push(`      </DeviceChain>`);
   lines.push('    </MasterTrack>');
 
-  // Scenes - una por canción
+  // SCENES - una por canción con su propio BPM y compás
   lines.push('    <Scenes>');
   songs.forEach((song, idx) => {
     const sceneId = getNextId();
@@ -234,7 +225,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   });
   lines.push('    </Scenes>');
 
-  // Elementos finales - DEBEN estar vacíos
+  // Elementos finales - vacíos
   lines.push('    <PreHearTrack></PreHearTrack>');
   lines.push('    <SendsPre></SendsPre>');
 
