@@ -68,6 +68,9 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   // Real format: "11.0_11300" for Live 11.3.x (major_minor_build).
   const minorVersion = '11.0_11300';
 
+  let nextGlobalId = 1000; // Global ID counter to ensure uniqueness across the document
+  const getNextId = () => nextGlobalId++;
+
   const lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8" standalone="no"?>');
   lines.push(`<Ableton MajorVersion="5" MinorVersion="${minorVersion}" SchemaChangeCount="7" Creator="${creator}" Revision="">`);
@@ -86,12 +89,12 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push('          <Min Value="60" />');
   lines.push('          <Max Value="200" />');
   lines.push('        </MidiControllerRange>');
-  lines.push('        <AutomationTarget Id="0" />');
-  lines.push('        <ModulationTarget Id="1" />');
+  lines.push(`        <AutomationTarget Id="${getNextId()}" />`);
+  lines.push(`        <ModulationTarget Id="${getNextId()}" />`);
   lines.push('      </Tempo>');
   lines.push('      <TimeSignature>');
   lines.push('        <TimeSignatures>');
-  lines.push('          <RemoteableTimeSignature Id="0">');
+  lines.push(`          <RemoteableTimeSignature Id="${getNextId()}">`);
   lines.push('            <Numerator Value="4" />');
   lines.push('            <Denominator Value="4" />');
   lines.push('          </RemoteableTimeSignature>');
@@ -188,11 +191,16 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
       const sBpm = Number(s.bpm) || 120;
       const { num: sNum, den: sDen } = parseTimeSig(s.time_sig);
       const active = si === index ? 'true' : 'false';
-      lines.push(`              <ClipSlot Id="${si}">`);
+      const clipSlotId = getNextId();
+      const midiClipId = getNextId();
+      const tsId = getNextId();
+      const followAction1Id = getNextId();
+      const followAction2Id = getNextId();
+      lines.push(`              <ClipSlot Id="${clipSlotId}">`);
       lines.push(`                <Value>`);
       if (si === index) {
         // Only the matching slot has a clip; others are empty
-        lines.push(`                  <MidiClip Id="${si}" Time="0">`);
+        lines.push(`                  <MidiClip Id="${midiClipId}" Time="0">`);
         lines.push(`                    <LomId Value="0" />`);
         lines.push(`                    <LomIdView Value="0" />`);
         lines.push(`                    <CurrentStart Value="0" />`);
@@ -203,7 +211,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
         lines.push(`                    <Color Value="-1" />`);
         lines.push(`                    <LaunchMode Value="0" />`);
         lines.push(`                    <LaunchQuantisation Value="0" />`);
-        lines.push(`                    <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="0"><Numerator Value="${sNum}" /><Denominator Value="${sDen}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
+        lines.push(`                    <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${sNum}" /><Denominator Value="${sDen}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
         lines.push(`                    <Envelopes><Envelopes /></Envelopes>`);
         lines.push(`                    <ScrollerTimePreserver><LeftTime Value="0" /><RightTime Value="16" /></ScrollerTimePreserver>`);
         lines.push(`                    <TimeSelection><AnchorTime Value="0" /><OtherTime Value="0" /></TimeSelection>`);
@@ -212,7 +220,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
         lines.push(`                    <SnapToGrid Value="true" />`);
         lines.push(`                    <Disabled Value="false" />`);
         lines.push(`                    <VelocityAmount Value="0" />`);
-        lines.push(`                    <FollowAction><FillDuration Value="0.25" /><IsLinked Value="true" /><LoopIterations Value="1" /><Type Value="0" /><DurationUnit Value="2" /><FollowActionA><FollowAction Id="1"><IsEnabled Value="false" /><Chance Value="100" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionA><FollowActionB><FollowAction Id="2"><IsEnabled Value="false" /><Chance Value="0" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionB></FollowAction>`);
+        lines.push(`                    <FollowAction><FillDuration Value="0.25" /><IsLinked Value="true" /><LoopIterations Value="1" /><Type Value="0" /><DurationUnit Value="2" /><FollowActionA><FollowAction Id="${followAction1Id}"><IsEnabled Value="false" /><Chance Value="100" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionA><FollowActionB><FollowAction Id="${followAction2Id}"><IsEnabled Value="false" /><Chance Value="0" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionB></FollowAction>`);
         lines.push(`                    <Grid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></Grid>`);
         lines.push(`                    <FreezeStart Value="0" />`);
         lines.push(`                    <FreezeEnd Value="0" />`);
@@ -268,14 +276,17 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     const title = escapeXml(song.title || `Cancion ${index + 1}`);
     const bpm = Number(song.bpm) || 120;
     const { num, den } = parseTimeSig(song.time_sig);
-    lines.push(`      <Scene Id="${index}">`);
+    const sceneId = getNextId();
+    const tsId = getNextId();
+    const controlTargetId = getNextId();
+    lines.push(`      <Scene Id="${sceneId}">`);
     lines.push(`        <Name Value="${title}" />`);
     lines.push(`        <Annotation Value="" />`);
     lines.push(`        <Color Value="-1" />`);
     lines.push(`        <Tempo Value="${bpm}" />`);
     lines.push(`        <TimeSignature>`);
     lines.push(`          <TimeSignatures>`);
-    lines.push(`            <RemoteableTimeSignature Id="0">`);
+    lines.push(`            <RemoteableTimeSignature Id="${tsId}">`);
     lines.push(`              <Numerator Value="${num}" />`);
     lines.push(`              <Denominator Value="${den}" />`);
     lines.push(`            </RemoteableTimeSignature>`);
@@ -284,7 +295,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`        <IsTempoEnabled Value="true" />`);
     lines.push(`        <IsTimeSignatureEnabled Value="true" />`);
     lines.push(`        <ClipSlotsListWrapper LomId="0" />`);
-    lines.push(`        <SceneActivationTarget><RemoteableControlTarget Id="0" /></SceneActivationTarget>`);
+    lines.push(`        <SceneActivationTarget><RemoteableControlTarget Id="${controlTargetId}" /></SceneActivationTarget>`);
     lines.push(`        <IsManualViewMode Value="false" />`);
     lines.push(`      </Scene>`);
   });
