@@ -2,12 +2,16 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Music2, CalendarDays, Settings2, Bell,
-  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor, X, Check, Users, AlertTriangle,
+  LogOut, ChevronRight, Loader2, Building2, Clock, Monitor, X, Check, Users, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import { io as socketIo } from 'socket.io-client';
 import CancioneroNavbar from './CancioneroNavbar';
 import DemoPackBanner from '../../components/shared/DemoPackBanner';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
+import { forceRefreshApp } from '../../utils/forceRefreshApp';
+import { APP_VERSION } from '../../version';
+
+const BUILD_VERSION = APP_VERSION;
 
 const API = import.meta.env.VITE_API_URL || '';
 
@@ -218,10 +222,18 @@ export default function CancioneroDashboard() {
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <Building2 size={16} className="text-yellow-400 flex-shrink-0" />
           <span className="text-sm font-semibold text-white/80 truncate">{org?.name ?? '—'}</span>
+          <span className="text-xs text-zinc-500 bg-white/10 px-2 py-0.5 rounded">v{BUILD_VERSION}</span>
         </div>
 
         {/* Avatar + menú */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => forceRefreshApp('/cancionero')}
+            title="Forzar refresh"
+            className="flex items-center gap-1.5 text-xs text-white/40 hover:text-accent transition-colors px-2 py-1 rounded hover:bg-white/10"
+          >
+            <RefreshCw size={15} />
+          </button>
           <button
             onClick={() => navigate('/app')}
             title="Ir al Modo Presenter"
