@@ -61,6 +61,18 @@ function sanitizeFileName(value) {
     .slice(0, 50) || 'evento';
 }
 
+// Codifica un compás ("4/4", "3/4", "6/8", etc.) al entero que Ableton usa
+// como TimeSignatureId en las escenas. Fórmula derivada del formato ALS 11:
+//   value = log2(denominator) * 99 + (numerator - 1)
+// Ejemplos: 4/4→201, 3/4→200, 2/4→199, 6/8→302, 3/8→299, 2/2→100
+function encodeAbletonTimeSig(timeSigStr) {
+  const parts = String(timeSigStr || '4/4').split('/');
+  const num = Math.max(1, parseInt(parts[0], 10) || 4);
+  const den = Math.max(1, parseInt(parts[1], 10) || 4);
+  const log2den = Math.round(Math.log2(den));
+  return log2den * 99 + (num - 1);
+}
+
 function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   const ver = normalizeAbletonVersion(creatorVersion);
   const creator = `Ableton Live ${ver}`;
@@ -247,7 +259,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`        <Color Value="-1" />`);
     lines.push(`        <Tempo Value="${bpm}" />`);
     lines.push(`        <IsTempoEnabled Value="true" />`);
-    lines.push(`        <TimeSignatureId Value="0" />`);
+    lines.push(`        <TimeSignatureId Value="${encodeAbletonTimeSig(song.time_sig)}" />`);
     lines.push(`        <IsTimeSignatureEnabled Value="true" />`);
     lines.push(`        <LomId Value="0" />`);
     lines.push(`        <ClipSlotsListWrapper LomId="0" />`);

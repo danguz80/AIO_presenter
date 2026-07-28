@@ -1,5 +1,5 @@
 import { useEffect, useState, Component } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { APP_VERSION } from './version';
 import { PresenterProvider } from './context/PresenterContext';
@@ -271,7 +271,7 @@ function UpdateBanner() {
       const reg = await navigator.serviceWorker.getRegistration();
       if (reg?.waiting) {
         reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        return;
+        // No hacer return — siempre recargar para usar los assets nuevos
       }
     } catch {
       // no-op
@@ -336,10 +336,26 @@ class MobileErrorBoundary extends Component {
   }
 }
 
+// Badge de versión fijo en esquina inferior derecha — visible en todas las vistas
+// excepto en páginas de display (output, stage, virtual) y landing/login
+function VersionBadge() {
+  const location = useLocation();
+  const hide = ['/output', '/stage', '/virtual', '/', '/login'].some(
+    p => location.pathname === p || location.pathname.startsWith(p + '/')
+  );
+  if (hide) return null;
+  return (
+    <div className="fixed bottom-1 right-2 z-[9980] text-[10px] text-zinc-500/50 pointer-events-none select-none">
+      v{BUILD_VERSION}
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <PresenterProvider>
       <UpdateBanner />
+      <VersionBadge />
       <OAuthCallbackHandler />
       <ThemeApplier />
       <TrialExpiredBanner />
