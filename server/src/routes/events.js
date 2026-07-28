@@ -62,31 +62,29 @@ function sanitizeFileName(value) {
 }
 
 function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
-  const ver = normalizeAbletonVersion(creatorVersion); // e.g. "11.3.0"
+  const ver = normalizeAbletonVersion(creatorVersion);
   const creator = `Ableton Live ${ver}`;
-  // MinorVersion is the DOCUMENT FORMAT version extracted from real Live 11.3 files.
-  // Real format: "11.0_11300" for Live 11.3.x (major_minor_build).
   const minorVersion = '11.0_11300';
 
-  // Validar que tenemos al menos una canción
+  // Validar entrada
   if (!songs || songs.length === 0) {
     songs = [{ title: 'Cancion 1', bpm: 120, time_sig: '4/4' }];
   }
 
-  let nextGlobalId = 1000; // Global ID counter to ensure uniqueness across the document
-  const getNextId = () => nextGlobalId++;
+  // Contador global de IDs - CRÍTICO para evitar duplicados
+  let nextId = 1000;
+  const getNextId = () => nextId++;
 
   const lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8" standalone="no"?>');
   lines.push(`<Ableton MajorVersion="5" MinorVersion="${minorVersion}" SchemaChangeCount="7" Creator="${creator}" Revision="">`);
   lines.push('  <LiveSet>');
-  // NextPointeeId must be greater than every Id attribute used in the document.
-  // We use a fixed high value to avoid collisions regardless of song count.
   lines.push('    <NextPointeeId Value="10000" />');
   lines.push(`    <Name Value="${escapeXml(event.title || 'Evento')}" />`);
 
-  // MasterTrack: global tempo fallback (each scene overrides it per-clip)
+  // MasterTrack
   lines.push('    <MasterTrack>');
+  lines.push('      <LomId Value="0" />');
   lines.push('      <Tempo>');
   lines.push('        <LomId Value="0" />');
   lines.push('        <Manual Value="120" />');
@@ -99,39 +97,35 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push('      </Tempo>');
   lines.push('      <TimeSignature>');
   lines.push('        <TimeSignatures>');
-  lines.push(`          <RemoteableTimeSignature Id="${getNextId()}">`);
-  lines.push('            <Numerator Value="4" />');
-  lines.push('            <Denominator Value="4" />');
-  lines.push('          </RemoteableTimeSignature>');
+  lines.push(`          <RemoteableTimeSignature Id="${getNextId()}"><Numerator Value="4" /><Denominator Value="4" /></RemoteableTimeSignature>`);
   lines.push('        </TimeSignatures>');
   lines.push('      </TimeSignature>');
   lines.push('    </MasterTrack>');
 
-  // Tracks — one MidiTrack per song
+  // Tracks
   lines.push('    <Tracks>');
-  songs.forEach((song, index) => {
-    const title = escapeXml(song.title || `Cancion ${index + 1}`);
-    const bpm = Number(song.bpm) || 120;
+  songs.forEach((song, trackIdx) => {
+    const title = escapeXml(song.title || `Cancion ${trackIdx + 1}`);
     const { num, den } = parseTimeSig(song.time_sig);
-    
-    // Generate all unique IDs for this track at the beginning
+
+    // Pre-allocate all IDs for this track
     const trackId = getNextId();
-    const automationTarget_On_Mixer = getNextId();
-    const modulationTarget_On_Mixer = getNextId();
-    const pointee_Mixer = getNextId();
-    const automationTarget_Volume = getNextId();
-    const modulationTarget_Volume = getNextId();
-    const automationTarget_Pan = getNextId();
-    const modulationTarget_Pan = getNextId();
-    const automationTarget_SpeakerOn = getNextId();
-    const modulationTarget_SpeakerOn = getNextId();
-    const automationTarget_CrossFadeState = getNextId();
-    const modulationTarget_CrossFadeState = getNextId();
-    const automationTarget_On_MainSequencer = getNextId();
-    const modulationTarget_On_MainSequencer = getNextId();
-    const pointee_MainSequencer = getNextId();
-    const pointee_FreezeSequencer = getNextId();
-    
+    const autmix = getNextId();
+    const modmix = getNextId();
+    const ptrmix = getNextId();
+    const autvol = getNextId();
+    const modvol = getNextId();
+    const autpan = getNextId();
+    const modpan = getNextId();
+    const autspr = getNextId();
+    const modspr = getNextId();
+    const autcfs = getNextId();
+    const modcfs = getNextId();
+    const autseq = getNextId();
+    const modseq = getNextId();
+    const ptrseq = getNextId();
+    const ptrfzq = getNextId();
+
     lines.push(`      <MidiTrack Id="${trackId}">`);
     lines.push(`        <LomId Value="0" />`);
     lines.push(`        <IsContentSelectedInDocument Value="false" />`);
@@ -144,34 +138,34 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`        <TrackUnfolded Value="true" />`);
     lines.push(`        <DevicesListWrapper LomId="0" />`);
     
-    // CLIP SLOTS at MidiTrack level
+    // ClipSlotList at Track level (IMPORTANT: not in MainSequencer)
     lines.push(`        <ClipSlotList>`);
-    songs.forEach((s, si) => {
-      const sTitle = escapeXml(s.title || `Cancion ${si + 1}`);
+    songs.forEach((_, slotIdx) => {
       const clipSlotId = getNextId();
-      const midiClipId = getNextId();
-      const tsId = getNextId();
-      const followAction1Id = getNextId();
-      const followAction2Id = getNextId();
-      const { num: sNum, den: sDen } = parseTimeSig(s.time_sig);
+      const hasClip = slotIdx === trackIdx;
       
       lines.push(`          <ClipSlot Id="${clipSlotId}">`);
       lines.push(`            <Value>`);
       
-      if (si === index) {
-        // Only the matching slot has a clip; others are empty
+      if (hasClip) {
+        const midiClipId = getNextId();
+        const tsId = getNextId();
+        const fa1Id = getNextId();
+        const fa2Id = getNextId();
+        const clipTitle = escapeXml(song.title || `Cancion ${slotIdx + 1}`);
+        
         lines.push(`              <MidiClip Id="${midiClipId}" Time="0">`);
         lines.push(`                <LomId Value="0" />`);
         lines.push(`                <LomIdView Value="0" />`);
         lines.push(`                <CurrentStart Value="0" />`);
         lines.push(`                <CurrentEnd Value="8" />`);
         lines.push(`                <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><StartRelative Value="0" /><LoopOn Value="true" /><OutMarker Value="8" /><HiddenLoopStart Value="0" /><HiddenLoopEnd Value="8" /></Loop>`);
-        lines.push(`                <Name Value="${sTitle}" />`);
+        lines.push(`                <Name Value="${clipTitle}" />`);
         lines.push(`                <Annotation Value="" />`);
         lines.push(`                <Color Value="-1" />`);
         lines.push(`                <LaunchMode Value="0" />`);
         lines.push(`                <LaunchQuantisation Value="0" />`);
-        lines.push(`                <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${sNum}" /><Denominator Value="${sDen}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
+        lines.push(`                <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${num}" /><Denominator Value="${den}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
         lines.push(`                <Envelopes><Envelopes /></Envelopes>`);
         lines.push(`                <ScrollerTimePreserver><LeftTime Value="0" /><RightTime Value="16" /></ScrollerTimePreserver>`);
         lines.push(`                <TimeSelection><AnchorTime Value="0" /><OtherTime Value="0" /></TimeSelection>`);
@@ -180,7 +174,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
         lines.push(`                <SnapToGrid Value="true" />`);
         lines.push(`                <Disabled Value="false" />`);
         lines.push(`                <VelocityAmount Value="0" />`);
-        lines.push(`                <FollowAction><FillDuration Value="0.25" /><IsLinked Value="true" /><LoopIterations Value="1" /><Type Value="0" /><DurationUnit Value="2" /><FollowActionA><FollowAction Id="${followAction1Id}"><IsEnabled Value="false" /><Chance Value="100" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionA><FollowActionB><FollowAction Id="${followAction2Id}"><IsEnabled Value="false" /><Chance Value="0" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionB></FollowAction>`);
+        lines.push(`                <FollowAction><FillDuration Value="0.25" /><IsLinked Value="true" /><LoopIterations Value="1" /><Type Value="0" /><DurationUnit Value="2" /><FollowActionA><FollowAction Id="${fa1Id}"><IsEnabled Value="false" /><Chance Value="100" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionA><FollowActionB><FollowAction Id="${fa2Id}"><IsEnabled Value="false" /><Chance Value="0" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionB></FollowAction>`);
         lines.push(`                <Grid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></Grid>`);
         lines.push(`                <FreezeStart Value="0" />`);
         lines.push(`                <FreezeEnd Value="0" />`);
@@ -211,7 +205,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
       lines.push(`          </ClipSlot>`);
     });
     lines.push(`        </ClipSlotList>`);
-    
+
     lines.push(`        <ViewData Value="{}" />`);
     lines.push(`        <TakeLanes><TakeLanes /><IsExpanded Value="true" /></TakeLanes>`);
     lines.push(`        <LinkedTrackGroupId Value="-1" />`);
@@ -232,10 +226,10 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`            <LomId Value="0" />`);
     lines.push(`            <LomIdView Value="0" />`);
     lines.push(`            <IsExpanded Value="true" />`);
-    lines.push(`            <On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${automationTarget_On_Mixer}" /><ModulationTarget Id="${modulationTarget_On_Mixer}" /></On>`);
+    lines.push(`            <On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${autmix}" /><ModulationTarget Id="${modmix}" /></On>`);
     lines.push(`            <ModulationSourceCount Value="0" />`);
     lines.push(`            <ParametersListWrapper LomId="0" />`);
-    lines.push(`            <Pointee Id="${pointee_Mixer}" />`);
+    lines.push(`            <Pointee Id="${ptrmix}" />`);
     lines.push(`            <LastSelectedTimeableIndex Value="0" />`);
     lines.push(`            <LastSelectedClipEnvelopeIndex Value="0" />`);
     lines.push(`            <LastPresetRef><Value /></LastPresetRef>`);
@@ -246,12 +240,12 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`            <Annotation Value="" />`);
     lines.push(`            <SourceContext><Value /></SourceContext>`);
     lines.push(`            <ControllerTargets />`);
-    lines.push(`            <Volume><LomId Value="0" /><Manual Value="1" /><MidiControllerRange><Min Value="0.0003162277571" /><Max Value="1.99526238" /></MidiControllerRange><AutomationTarget Id="${automationTarget_Volume}" /><ModulationTarget Id="${modulationTarget_Volume}" /></Volume>`);
-    lines.push(`            <Pan><LomId Value="0" /><Manual Value="0" /><MidiControllerRange><Min Value="-1" /><Max Value="1" /></MidiControllerRange><AutomationTarget Id="${automationTarget_Pan}" /><ModulationTarget Id="${modulationTarget_Pan}" /></Pan>`);
-    lines.push(`            <SpeakerOn><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${automationTarget_SpeakerOn}" /><ModulationTarget Id="${modulationTarget_SpeakerOn}" /></SpeakerOn>`);
+    lines.push(`            <Volume><LomId Value="0" /><Manual Value="1" /><MidiControllerRange><Min Value="0.0003162277571" /><Max Value="1.99526238" /></MidiControllerRange><AutomationTarget Id="${autvol}" /><ModulationTarget Id="${modvol}" /></Volume>`);
+    lines.push(`            <Pan><LomId Value="0" /><Manual Value="0" /><MidiControllerRange><Min Value="-1" /><Max Value="1" /></MidiControllerRange><AutomationTarget Id="${autpan}" /><ModulationTarget Id="${modpan}" /></Pan>`);
+    lines.push(`            <SpeakerOn><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${autspr}" /><ModulationTarget Id="${modspr}" /></SpeakerOn>`);
     lines.push(`            <SoloSink Value="false" />`);
     lines.push(`            <PanMode Value="0" />`);
-    lines.push(`            <CrossFadeState><LomId Value="0" /><Manual Value="1" /><AutomationTarget Id="${automationTarget_CrossFadeState}" /><ModulationTarget Id="${modulationTarget_CrossFadeState}" /></CrossFadeState>`);
+    lines.push(`            <CrossFadeState><LomId Value="0" /><Manual Value="1" /><AutomationTarget Id="${autcfs}" /><ModulationTarget Id="${modcfs}" /></CrossFadeState>`);
     lines.push(`            <SendInfos />`);
     lines.push(`            <ReceiveInfos />`);
     lines.push(`            <ClipSendDelays />`);
@@ -261,10 +255,10 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`            <LomId Value="0" />`);
     lines.push(`            <LomIdView Value="0" />`);
     lines.push(`            <IsExpanded Value="true" />`);
-    lines.push(`            <On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${automationTarget_On_MainSequencer}" /><ModulationTarget Id="${modulationTarget_On_MainSequencer}" /></On>`);
+    lines.push(`            <On><LomId Value="0" /><Manual Value="true" /><AutomationTarget Id="${autseq}" /><ModulationTarget Id="${modseq}" /></On>`);
     lines.push(`            <ModulationSourceCount Value="0" />`);
     lines.push(`            <ParametersListWrapper LomId="0" />`);
-    lines.push(`            <Pointee Id="${pointee_MainSequencer}" />`);
+    lines.push(`            <Pointee Id="${ptrseq}" />`);
     lines.push(`            <LastSelectedTimeableIndex Value="0" />`);
     lines.push(`            <LastSelectedClipEnvelopeIndex Value="0" />`);
     lines.push(`            <LastPresetRef><Value /></LastPresetRef>`);
@@ -282,7 +276,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`            <NoteEditorPlayingClipStartNode Value="-1" />`);
     lines.push(`            <MidiInputFilterType Value="0" />`);
     lines.push(`          </MainSequencer>`);
-    lines.push(`          <FreezeSequencer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${pointee_FreezeSequencer}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ControllerTargets /><ClipTimeable><ArrangerAutomation><Events /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></ArrangerAutomation></ClipTimeable><MonitoringEnum Value="1" /><VoiceCount Value="0" /></FreezeSequencer>`);
+    lines.push(`          <FreezeSequencer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${ptrfzq}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ControllerTargets /><ClipTimeable><ArrangerAutomation><Events /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></ArrangerAutomation></ClipTimeable><MonitoringEnum Value="1" /><VoiceCount Value="0" /></FreezeSequencer>`);
     lines.push(`          <DevicesChain><Devices /><SignalModulations /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></DevicesChain>`);
     lines.push(`        </DeviceChain>`);
     lines.push(`        <ReWireSlaveMidiTargetId Value="-1" />`);
@@ -296,28 +290,22 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   });
   lines.push('    </Tracks>');
 
-  // Scenes — one per song, named exactly as the song title
+  // Scenes
   lines.push('    <Scenes>');
-  songs.forEach((song, index) => {
-    const title = escapeXml(song.title || `Cancion ${index + 1}`);
+  songs.forEach((song, idx) => {
+    const title = escapeXml(song.title || `Cancion ${idx + 1}`);
     const bpm = Number(song.bpm) || 120;
     const { num, den } = parseTimeSig(song.time_sig);
     const sceneId = getNextId();
     const tsId = getNextId();
     const controlTargetId = getNextId();
+    
     lines.push(`      <Scene Id="${sceneId}">`);
     lines.push(`        <Name Value="${title}" />`);
     lines.push(`        <Annotation Value="" />`);
     lines.push(`        <Color Value="-1" />`);
     lines.push(`        <Tempo Value="${bpm}" />`);
-    lines.push(`        <TimeSignature>`);
-    lines.push(`          <TimeSignatures>`);
-    lines.push(`            <RemoteableTimeSignature Id="${tsId}">`);
-    lines.push(`              <Numerator Value="${num}" />`);
-    lines.push(`              <Denominator Value="${den}" />`);
-    lines.push(`            </RemoteableTimeSignature>`);
-    lines.push(`          </TimeSignatures>`);
-    lines.push(`        </TimeSignature>`);
+    lines.push(`        <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${num}" /><Denominator Value="${den}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
     lines.push(`        <IsTempoEnabled Value="true" />`);
     lines.push(`        <IsTimeSignatureEnabled Value="true" />`);
     lines.push(`        <ClipSlotsListWrapper LomId="0" />`);
@@ -331,7 +319,6 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push('</Ableton>');
   return lines.join('\n');
 }
-
 // GET /api/events/:id/ableton-session?occurrence_date=YYYY-MM-DD&bars=4
 // Exporta un ALS gzip XML con escenas por canción, utilizable en Ableton Live.
 router.get('/:id/ableton-session', requireAuth, async (req, res) => {
