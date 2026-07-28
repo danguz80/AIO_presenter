@@ -68,6 +68,11 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   // Real format: "11.0_11300" for Live 11.3.x (major_minor_build).
   const minorVersion = '11.0_11300';
 
+  // Validar que tenemos al menos una canción
+  if (!songs || songs.length === 0) {
+    songs = [{ title: 'Cancion 1', bpm: 120, time_sig: '4/4' }];
+  }
+
   let nextGlobalId = 1000; // Global ID counter to ensure uniqueness across the document
   const getNextId = () => nextGlobalId++;
 
@@ -110,7 +115,7 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     const { num, den } = parseTimeSig(song.time_sig);
     
     // Generate all unique IDs for this track at the beginning
-    const trackId = getNextId(); // Use global ID for MidiTrack
+    const trackId = getNextId();
     const automationTarget_On_Mixer = getNextId();
     const modulationTarget_On_Mixer = getNextId();
     const pointee_Mixer = getNextId();
@@ -138,7 +143,75 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`        <TrackGroupId Value="-1" />`);
     lines.push(`        <TrackUnfolded Value="true" />`);
     lines.push(`        <DevicesListWrapper LomId="0" />`);
-    lines.push(`        <ClipSlotsListWrapper LomId="0" />`);
+    
+    // CLIP SLOTS at MidiTrack level
+    lines.push(`        <ClipSlotList>`);
+    songs.forEach((s, si) => {
+      const sTitle = escapeXml(s.title || `Cancion ${si + 1}`);
+      const clipSlotId = getNextId();
+      const midiClipId = getNextId();
+      const tsId = getNextId();
+      const followAction1Id = getNextId();
+      const followAction2Id = getNextId();
+      const { num: sNum, den: sDen } = parseTimeSig(s.time_sig);
+      
+      lines.push(`          <ClipSlot Id="${clipSlotId}">`);
+      lines.push(`            <Value>`);
+      
+      if (si === index) {
+        // Only the matching slot has a clip; others are empty
+        lines.push(`              <MidiClip Id="${midiClipId}" Time="0">`);
+        lines.push(`                <LomId Value="0" />`);
+        lines.push(`                <LomIdView Value="0" />`);
+        lines.push(`                <CurrentStart Value="0" />`);
+        lines.push(`                <CurrentEnd Value="8" />`);
+        lines.push(`                <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><StartRelative Value="0" /><LoopOn Value="true" /><OutMarker Value="8" /><HiddenLoopStart Value="0" /><HiddenLoopEnd Value="8" /></Loop>`);
+        lines.push(`                <Name Value="${sTitle}" />`);
+        lines.push(`                <Annotation Value="" />`);
+        lines.push(`                <Color Value="-1" />`);
+        lines.push(`                <LaunchMode Value="0" />`);
+        lines.push(`                <LaunchQuantisation Value="0" />`);
+        lines.push(`                <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${sNum}" /><Denominator Value="${sDen}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
+        lines.push(`                <Envelopes><Envelopes /></Envelopes>`);
+        lines.push(`                <ScrollerTimePreserver><LeftTime Value="0" /><RightTime Value="16" /></ScrollerTimePreserver>`);
+        lines.push(`                <TimeSelection><AnchorTime Value="0" /><OtherTime Value="0" /></TimeSelection>`);
+        lines.push(`                <Legato Value="false" />`);
+        lines.push(`                <Ram Value="false" />`);
+        lines.push(`                <SnapToGrid Value="true" />`);
+        lines.push(`                <Disabled Value="false" />`);
+        lines.push(`                <VelocityAmount Value="0" />`);
+        lines.push(`                <FollowAction><FillDuration Value="0.25" /><IsLinked Value="true" /><LoopIterations Value="1" /><Type Value="0" /><DurationUnit Value="2" /><FollowActionA><FollowAction Id="${followAction1Id}"><IsEnabled Value="false" /><Chance Value="100" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionA><FollowActionB><FollowAction Id="${followAction2Id}"><IsEnabled Value="false" /><Chance Value="0" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionB></FollowAction>`);
+        lines.push(`                <Grid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></Grid>`);
+        lines.push(`                <FreezeStart Value="0" />`);
+        lines.push(`                <FreezeEnd Value="0" />`);
+        lines.push(`                <IsWarped Value="false" />`);
+        lines.push(`                <NoteEditorFoldInZoom Value="-1" />`);
+        lines.push(`                <NoteEditorFoldInScroll Value="0" />`);
+        lines.push(`                <NoteEditorFoldOutZoom Value="-1" />`);
+        lines.push(`                <NoteEditorFoldOutScroll Value="0" />`);
+        lines.push(`                <NoteEditorFoldScaleZoom Value="-1" />`);
+        lines.push(`                <NoteEditorFoldScaleScroll Value="0" />`);
+        lines.push(`                <ScaleInformation><RootNote Value="0" /><Name Value="Major" /></ScaleInformation>`);
+        lines.push(`                <IsInKey Value="false" />`);
+        lines.push(`                <NoteSpellingPreference Value="3" />`);
+        lines.push(`                <PreferFlatRootNote Value="false" />`);
+        lines.push(`                <ExpressionGrid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></ExpressionGrid>`);
+        lines.push(`                <Notes><KeyTracks /><PerNoteEventStore><EventLists /></PerNoteEventStore><NoteIdCounter Value="0" /></Notes>`);
+        lines.push(`                <PerNoteEventLookAheadAmount Value="-1" />`);
+        lines.push(`                <BankSelectCoarse Value="-1" />`);
+        lines.push(`                <BankSelectFine Value="-1" />`);
+        lines.push(`                <ProgramChange Value="-1" />`);
+        lines.push(`                <NoteEditorKeyboardFoldStartNote Value="36" />`);
+        lines.push(`                <NoteEditorKeyboardFoldEndNote Value="72" />`);
+        lines.push(`              </MidiClip>`);
+      }
+      
+      lines.push(`            </Value>`);
+      lines.push(`            <HideSourceChain Value="false" />`);
+      lines.push(`          </ClipSlot>`);
+    });
+    lines.push(`        </ClipSlotList>`);
+    
     lines.push(`        <ViewData Value="{}" />`);
     lines.push(`        <TakeLanes><TakeLanes /><IsExpanded Value="true" /></TakeLanes>`);
     lines.push(`        <LinkedTrackGroupId Value="-1" />`);
@@ -203,72 +276,6 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`            <SourceContext><Value /></SourceContext>`);
     lines.push(`            <ControllerTargets />`);
     lines.push(`            <ClipTimeable><ArrangerAutomation><Events /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></ArrangerAutomation></ClipTimeable>`);
-    lines.push(`            <ClipSlotList>`);
-    // One ClipSlot per scene/song
-    songs.forEach((s, si) => {
-      const sTitle = escapeXml(s.title || `Cancion ${si + 1}`);
-      const sBpm = Number(s.bpm) || 120;
-      const { num: sNum, den: sDen } = parseTimeSig(s.time_sig);
-      const active = si === index ? 'true' : 'false';
-      const clipSlotId = getNextId();
-      const midiClipId = getNextId();
-      const tsId = getNextId();
-      const followAction1Id = getNextId();
-      const followAction2Id = getNextId();
-      lines.push(`              <ClipSlot Id="${clipSlotId}">`);
-      lines.push(`                <Value>`);
-      if (si === index) {
-        // Only the matching slot has a clip; others are empty
-        lines.push(`                  <MidiClip Id="${midiClipId}" Time="0">`);
-        lines.push(`                    <LomId Value="0" />`);
-        lines.push(`                    <LomIdView Value="0" />`);
-        lines.push(`                    <CurrentStart Value="0" />`);
-        lines.push(`                    <CurrentEnd Value="8" />`);
-        lines.push(`                    <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><StartRelative Value="0" /><LoopOn Value="true" /><OutMarker Value="8" /><HiddenLoopStart Value="0" /><HiddenLoopEnd Value="8" /></Loop>`);
-        lines.push(`                    <Name Value="${sTitle}" />`);
-        lines.push(`                    <Annotation Value="" />`);
-        lines.push(`                    <Color Value="-1" />`);
-        lines.push(`                    <LaunchMode Value="0" />`);
-        lines.push(`                    <LaunchQuantisation Value="0" />`);
-        lines.push(`                    <TimeSignature><TimeSignatures><RemoteableTimeSignature Id="${tsId}"><Numerator Value="${sNum}" /><Denominator Value="${sDen}" /></RemoteableTimeSignature></TimeSignatures></TimeSignature>`);
-        lines.push(`                    <Envelopes><Envelopes /></Envelopes>`);
-        lines.push(`                    <ScrollerTimePreserver><LeftTime Value="0" /><RightTime Value="16" /></ScrollerTimePreserver>`);
-        lines.push(`                    <TimeSelection><AnchorTime Value="0" /><OtherTime Value="0" /></TimeSelection>`);
-        lines.push(`                    <Legato Value="false" />`);
-        lines.push(`                    <Ram Value="false" />`);
-        lines.push(`                    <SnapToGrid Value="true" />`);
-        lines.push(`                    <Disabled Value="false" />`);
-        lines.push(`                    <VelocityAmount Value="0" />`);
-        lines.push(`                    <FollowAction><FillDuration Value="0.25" /><IsLinked Value="true" /><LoopIterations Value="1" /><Type Value="0" /><DurationUnit Value="2" /><FollowActionA><FollowAction Id="${followAction1Id}"><IsEnabled Value="false" /><Chance Value="100" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionA><FollowActionB><FollowAction Id="${followAction2Id}"><IsEnabled Value="false" /><Chance Value="0" /><JumpIndexExpression Value="0" /></FollowAction></FollowActionB></FollowAction>`);
-        lines.push(`                    <Grid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></Grid>`);
-        lines.push(`                    <FreezeStart Value="0" />`);
-        lines.push(`                    <FreezeEnd Value="0" />`);
-        lines.push(`                    <IsWarped Value="false" />`);
-        lines.push(`                    <NoteEditorFoldInZoom Value="-1" />`);
-        lines.push(`                    <NoteEditorFoldInScroll Value="0" />`);
-        lines.push(`                    <NoteEditorFoldOutZoom Value="-1" />`);
-        lines.push(`                    <NoteEditorFoldOutScroll Value="0" />`);
-        lines.push(`                    <NoteEditorFoldScaleZoom Value="-1" />`);
-        lines.push(`                    <NoteEditorFoldScaleScroll Value="0" />`);
-        lines.push(`                    <ScaleInformation><RootNote Value="0" /><Name Value="Major" /></ScaleInformation>`);
-        lines.push(`                    <IsInKey Value="false" />`);
-        lines.push(`                    <NoteSpellingPreference Value="3" />`);
-        lines.push(`                    <PreferFlatRootNote Value="false" />`);
-        lines.push(`                    <ExpressionGrid><FixedNumerator Value="1" /><FixedDenominator Value="16" /><GridIntervalPixels Value="20" /><Ntoles Value="3" /><SnapToGrid Value="true" /><Fixed Value="false" /></ExpressionGrid>`);
-        lines.push(`                    <Notes><KeyTracks /><PerNoteEventStore><EventLists /></PerNoteEventStore><NoteIdCounter Value="0" /></Notes>`);
-        lines.push(`                    <PerNoteEventLookAheadAmount Value="-1" />`);
-        lines.push(`                    <BankSelectCoarse Value="-1" />`);
-        lines.push(`                    <BankSelectFine Value="-1" />`);
-        lines.push(`                    <ProgramChange Value="-1" />`);
-        lines.push(`                    <NoteEditorKeyboardFoldStartNote Value="36" />`);
-        lines.push(`                    <NoteEditorKeyboardFoldEndNote Value="72" />`);
-        lines.push(`                  </MidiClip>`);
-      }
-      lines.push(`                </Value>`);
-      lines.push(`                <HideSourceChain Value="false" />`);
-      lines.push(`              </ClipSlot>`);
-    });
-    lines.push(`            </ClipSlotList>`);
     lines.push(`            <MonitoringEnum Value="1" />`);
     lines.push(`            <VoiceCount Value="6" />`);
     lines.push(`            <InstrumentChain><Devices /><SignalModulations /><AutomationTransformViewState><IsTransformPending Value="false" /><TimeAndValueTransforms /></AutomationTransformViewState></InstrumentChain>`);
