@@ -225,9 +225,9 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   });
   lines.push('    </Scenes>');
 
-  // Elementos finales mínimos
-  lines.push('    <PreHearTrack><TrackDelay><Value Value="0" /><IsValueSampleBased Value="false" /></TrackDelay></PreHearTrack>');
-  lines.push('    <SendsPre><Sends /></SendsPre>');
+  // Elementos finales - DEBEN estar vacíos
+  lines.push('    <PreHearTrack></PreHearTrack>');
+  lines.push('    <SendsPre></SendsPre>');
 
   lines.push('  </LiveSet>');
   lines.push('</Ableton>');
