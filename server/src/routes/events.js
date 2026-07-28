@@ -82,6 +82,14 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
   lines.push(`    <LomId Value="0" />`);
   lines.push(`    <LomIdView Value="0" />`);
 
+  // CRITICAL: Build the correct Ableton structure
+  // - N tracks = 1 per song
+  // - N scenes = 1 per song
+  // - Each track's MainSequencer has N ClipSlots (one per scene)
+  // - Only track[i] has an active clip in slot[i]; all others are empty
+  
+  const numSongs = songs.length;
+
   // Tracks - una por canción
   lines.push('    <Tracks>');
   songs.forEach((song, trackIdx) => {
@@ -142,24 +150,25 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
     lines.push(`            <Annotation Value="" />`);
     lines.push(`            <SourceContext><Value /></SourceContext>`);
     
-    // ClipSlotList - una entrada por scene
+    // ClipSlotList - UNA ENTRADA POR CADA SCENE (numSongs)
     lines.push(`            <ClipSlotList>`);
-    songs.forEach((s, slotIdx) => {
+    for (let sceneIdx = 0; sceneIdx < numSongs; sceneIdx++) {
       const clipSlotOuterId = getNextId();
       lines.push(`              <ClipSlot Id="${clipSlotOuterId}">`);
       lines.push(`                <LomId Value="0" />`);
       lines.push(`                <ClipSlot>`);
       
-      if (slotIdx === trackIdx) {
-        // Este slot tiene un clip
+      if (sceneIdx === trackIdx) {
+        // Este slot tiene un clip (track matches scene)
         const midiClipId = getNextId();
+        const songForClip = songs[sceneIdx] || song;
         lines.push(`                  <Value>`);
         lines.push(`                    <MidiClip Id="${midiClipId}" Time="0">`);
         lines.push(`                      <LomId Value="0" />`);
         lines.push(`                      <CurrentStart Value="0" />`);
         lines.push(`                      <CurrentEnd Value="8" />`);
         lines.push(`                      <Loop><LoopStart Value="0" /><LoopEnd Value="8" /><LoopOn Value="true" /></Loop>`);
-        lines.push(`                      <Name Value="${escapeXml(s.title || `Cancion ${slotIdx + 1}`)}" />`);
+        lines.push(`                      <Name Value="${escapeXml(songForClip.title || `Cancion ${sceneIdx + 1}`)}" />`);
         lines.push(`                      <Notes><KeyTracks /><PerNoteEventStore><EventLists /></PerNoteEventStore></Notes>`);
         lines.push(`                    </MidiClip>`);
         lines.push(`                  </Value>`);
@@ -171,13 +180,13 @@ function buildAbletonAlsXml({ event, songs, creatorVersion, warnings = [] }) {
       lines.push(`                </ClipSlot>`);
       lines.push(`                <HasStop Value="true" />`);
       lines.push(`              </ClipSlot>`);
-    });
+    }
     lines.push(`            </ClipSlotList>`);
     
     lines.push(`            <MonitoringEnum Value="1" />`);
     lines.push(`          </MainSequencer>`);
     
-    // FreezeSequencer vacío
+    // FreezeSequencer - siempre tiene UN ClipSlot
     lines.push(`          <FreezeSequencer><LomId Value="0" /><LomIdView Value="0" /><IsExpanded Value="true" /><On><LomId Value="0" /><Manual Value="true" /></On><ModulationSourceCount Value="0" /><ParametersListWrapper LomId="0" /><Pointee Id="${getNextId()}" /><LastSelectedTimeableIndex Value="0" /><LastSelectedClipEnvelopeIndex Value="0" /><LastPresetRef><Value /></LastPresetRef><LockedScripts /><IsFolded Value="false" /><ShouldShowPresetName Value="true" /><UserName Value="" /><Annotation Value="" /><SourceContext><Value /></SourceContext><ClipSlotList><ClipSlot Id="${getNextId()}"><LomId Value="0" /><ClipSlot><Value /></ClipSlot><HasStop Value="true" /></ClipSlot></ClipSlotList><MonitoringEnum Value="1" /></FreezeSequencer>`);
     
     // DeviceChain vacío
