@@ -264,8 +264,8 @@ export default function StagePage() {
     return null;
   })();
 
-  const currentSlideIsSong = slideData?.isSong ?? true;
-  const showTopBar = (showSongTitle && currentSlideIsSong) || showSlideCounter || showSectionLabel;
+  const isSongSlide = slideData?.isSong ?? true;
+  const showTopBar = (showSongTitle && isSongSlide) || showSlideCounter || showSectionLabel;
   const currentSongKey = getSongKey(slideData);
   const currentSongFromSchedule = schedule.find((s) => sameSongId(s.song_id, currentSongId))
     || schedule.find((s) => normTitle(s.title) === normTitle(slideData?.songTitle))
@@ -281,7 +281,7 @@ export default function StagePage() {
     bpm: currentSongForTopBar.bpm,
     time_sig: currentSongForTopBar.time_sig,
   };
-  const currentSongMeta = currentSlideIsSong ? getNextSongMeta(currentSongMetaSource, {
+  const currentSongMeta = isSongSlide ? getNextSongMeta(currentSongMetaSource, {
     showBpm: showCurrentSongBpm,
     showTimeSig: showCurrentSongTimeSig,
   }) : '';
@@ -321,7 +321,7 @@ export default function StagePage() {
               </span>
             )}
           </div>
-          {showSongTitle && currentSlideIsSong && hasContent && slideData.songTitle && (
+          {showSongTitle && isSongSlide && hasContent && slideData.songTitle && (
             <div className="flex flex-col items-center leading-tight max-w-full min-w-0">
               <span className="text-white font-semibold truncate max-w-full" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
                 {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
