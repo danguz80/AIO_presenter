@@ -1207,7 +1207,7 @@ export default function SongDetail() {
                       const titles = { loop: 'Loop', continue: 'Continuar', stop: 'Parar', first: 'Ir al principio' };
                       return (
                         <span
-                          className="text-[10px] leading-none drop-shadow-md"
+                          className="text-[15px] leading-none drop-shadow-md"
                           title={titles[ea] ?? ea}
                           style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.9))' }}
                         >{icons[ea] ?? '🔁'}</span>
