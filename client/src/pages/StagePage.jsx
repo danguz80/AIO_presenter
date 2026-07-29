@@ -46,6 +46,11 @@ function getNextSongMeta(song, { showBpm = true, showTimeSig = true } = {}) {
   return parts.join(' • ');
 }
 
+function sameSongId(a, b) {
+  if (a == null || b == null) return false;
+  return String(a) === String(b);
+}
+
 export default function StagePage() {
   const { state } = usePresenter();
   const { liveState, stageConfig, schedule, songs, eventPlays, reservasMode } = state;
@@ -204,7 +209,7 @@ export default function StagePage() {
 
   // Siguiente canción del listado del día (saltando separadores y ya tocadas)
   const currentSongId = slideData?.songId;
-  const currentIdx    = schedule.findIndex(s => s.song_id === currentSongId);
+  const currentIdx    = schedule.findIndex(s => sameSongId(s.song_id, currentSongId));
 
   // Helper: normalizar label para buscar "reservas" sin importar acento/case
   const normLabel = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -248,7 +253,7 @@ export default function StagePage() {
     for (let i = 0; i < schedule.length; i++) {
       const it = schedule[i];
       if (it.item_type === 'separator' || !it.song_id) continue;
-      if (it.song_id === currentSongId) continue; // saltar la actual
+      if (sameSongId(it.song_id, currentSongId)) continue; // saltar la actual
       if (eventPlays?.has(it.song_id)) continue;
       return it;
     }
@@ -257,11 +262,15 @@ export default function StagePage() {
 
   const showTopBar = showSongTitle || showSlideCounter || showSectionLabel;
   const currentSongKey = getSongKey(slideData);
-  const currentSongFromSchedule = schedule.find((s) => s.song_id === currentSongId) || null;
+  const currentSongFromSchedule = schedule.find((s) => sameSongId(s.song_id, currentSongId)) || null;
   const currentSongFromLibrary = songs.find((s) => String(s.id) === String(currentSongId)) || null;
-  const currentSongMetaSource = {
+  const currentSongForTopBar = {
     bpm: slideData?.bpm ?? currentSongFromSchedule?.bpm ?? currentSongFromLibrary?.bpm ?? null,
     time_sig: slideData?.time_sig ?? currentSongFromSchedule?.time_sig ?? currentSongFromLibrary?.time_sig ?? null,
+  };
+  const currentSongMetaSource = {
+    bpm: currentSongForTopBar.bpm,
+    time_sig: currentSongForTopBar.time_sig,
   };
   const currentSongMeta = getNextSongMeta(currentSongMetaSource, {
     showBpm: showCurrentSongBpm,
