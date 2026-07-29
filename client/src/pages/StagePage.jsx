@@ -287,40 +287,11 @@ export default function StagePage() {
   const nextSongKey = getSongKey(nextSong);
   const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
 
-  // ── DEBUG temporal (activar con ?debug=1 en la URL de /stage) ──────────
-  const debugMode = new URLSearchParams(window.location.search).get('debug') === '1';
-
   return (
     <div
       className="w-screen h-screen flex flex-col select-none overflow-hidden relative"
       style={bgStyle}
     >
-      {debugMode && (
-        <div style={{
-          position: 'fixed', bottom: 4, left: 4, zIndex: 9999, pointerEvents: 'none',
-          background: 'rgba(0,0,0,0.9)', color: '#0f0', fontFamily: 'monospace',
-          fontSize: '11px', padding: '8px 10px', borderRadius: '6px',
-          maxWidth: '480px', whiteSpace: 'pre-wrap', lineHeight: 1.4,
-          border: '1px solid #0f0',
-        }}>
-          {[
-            `slideData.songId=${JSON.stringify(slideData?.songId)}`,
-            `slideData.songTitle=${JSON.stringify(slideData?.songTitle)}`,
-            `slideData.bpm=${JSON.stringify(slideData?.bpm)}  slideData.time_sig=${JSON.stringify(slideData?.time_sig)}`,
-            `currentSongId=${JSON.stringify(currentSongId)}`,
-            `schedule.length=${schedule.length}`,
-            `currentSongFromSchedule=${JSON.stringify(currentSongFromSchedule ? { song_id: currentSongFromSchedule.song_id, title: currentSongFromSchedule.title, bpm: currentSongFromSchedule.bpm, time_sig: currentSongFromSchedule.time_sig } : null)}`,
-            `songs.length=${songs.length}`,
-            `currentSongFromLibrary=${JSON.stringify(currentSongFromLibrary ? { id: currentSongFromLibrary.id, title: currentSongFromLibrary.title, bpm: currentSongFromLibrary.bpm, time_sig: currentSongFromLibrary.time_sig } : null)}`,
-            `showCurrentSongBpm=${showCurrentSongBpm}  showCurrentSongTimeSig=${showCurrentSongTimeSig}`,
-            `currentSongMeta="${currentSongMeta}"`,
-            `---`,
-            `nextSong=${JSON.stringify(nextSong ? { song_id: nextSong.song_id, title: nextSong.title, bpm: nextSong.bpm, time_sig: nextSong.time_sig } : null)}`,
-            `showNextSongBpm=${showNextSongBpm}  showNextSongTimeSig=${showNextSongTimeSig}`,
-            `nextSongMeta="${nextSongMeta}"`,
-          ].join('\n')}
-        </div>
-      )}
       {/* Capa de fondo multimedia (primerPlano=false) */}
       {hasBgMedia && (
         backgroundMedia.mediaType === 'video'
