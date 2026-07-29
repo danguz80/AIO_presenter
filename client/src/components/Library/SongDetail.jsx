@@ -167,6 +167,11 @@ export default function SongDetail() {
     return [];
   }, [selectedSong?.id, selectedSong?.structures, selectedSong?.structure]);
 
+  const isSongLibraryItem = Array.isArray(selectedSong?.tags)
+    ? selectedSong.tags.includes('Canciones')
+    : true;
+  const showTitleSlide = outputCfg.titleSlideEnabled && isSongLibraryItem;
+
   const orderedSlides = useMemo(() => {
     const rawSlides = selectedSong?.slides ?? [];
     const items = allStructures[Math.min(activeStructIdx, Math.max(0, allStructures.length - 1))]?.items ?? [];
@@ -781,7 +786,7 @@ export default function SongDetail() {
             }}
           >
             {/* ── Thumbnail de título (si está habilitado) ─────────── */}
-            {outputCfg.titleSlideEnabled && (() => {
+            {showTitleSlide && (() => {
               const titleActive = liveState.slideData?.type === 'title'
                 && liveState.slideData?.songId === selectedSong.id
                 && !liveState.isBlank;
@@ -1018,7 +1023,7 @@ export default function SongDetail() {
         ) : (
           /* ── Vista de lista ── */
           <div className="divide-y divide-surface-700/40">
-            {outputCfg.titleSlideEnabled && (() => {
+            {showTitleSlide && (() => {
               const titleActive = liveState.slideData?.type === 'title' && liveState.slideData?.songId === selectedSong.id && !liveState.isBlank;
               return (
                 <div
