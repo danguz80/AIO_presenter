@@ -7,6 +7,7 @@ const router = express.Router();
 // GET /api/audit-logs?limit=200&action=delete&entity=event
 router.get('/', requireAuth, async (req, res) => {
   const orgId = req.user.orgId;
+  const requesterUserId = req.user.userId;
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 200));
   const action = String(req.query.action || '').trim().toLowerCase();
   const entity = String(req.query.entity || '').trim().toLowerCase();
@@ -41,6 +42,17 @@ router.get('/', requireAuth, async (req, res) => {
   params.push(limit);
 
   try {
+    const { rows: meRows } = await pool.query(
+      `SELECT COALESCE(display_name, email, 'Usuario') AS requester_name
+       FROM sync_users
+       WHERE id = $1`,
+      [requesterUserId]
+    );
+    const requesterName = meRows[0]?.requester_name || 'Usuario';
+
+    const queryParams = [...params];
+    queryParams.push(requesterName);
+
     const { rows } = await pool.query(
       `SELECT
          al.id,
@@ -52,25 +64,26 @@ router.get('/', requireAuth, async (req, res) => {
          al.message,
          al.metadata,
          al.created_at,
-         COALESCE(u.display_name, u.email, 'Usuario') AS user_name,
+         COALESCE(u.display_name, u.email, $${queryParams.length}) AS user_name,
          u.email AS user_email
        FROM audit_logs al
        LEFT JOIN sync_users u ON u.id = al.user_id
        WHERE ${where.join(' AND ')}
        ORDER BY al.created_at DESC
        LIMIT $${params.length}`,
-      params
+      queryParams
     );
     const { rows: users } = await pool.query(
       `SELECT DISTINCT
          al.user_id,
-         COALESCE(u.display_name, u.email, 'Usuario') AS user_name,
+         COALESCE(u.display_name, u.email, $2) AS user_name,
          u.email AS user_email
        FROM audit_logs al
        LEFT JOIN sync_users u ON u.id = al.user_id
        WHERE al.organization_id = $1
+         AND al.user_id IS NOT NULL
        ORDER BY user_name ASC`,
-      [orgId]
+      [orgId, requesterName]
     );
 
     res.json({ logs: rows, users });
