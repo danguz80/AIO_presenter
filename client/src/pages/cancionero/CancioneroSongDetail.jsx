@@ -1412,18 +1412,39 @@ export default function CancioneroSongDetail() {
       />
     </div>
 
-      {/* ── A continuación: barra fija inferior ─────────────────────── */}
-      {nextSong && (
-        <button
-          onClick={() => goTo(nextSong)}
-          className="flex-shrink-0 flex items-center gap-3 px-4 py-3 bg-white/5 border-t border-white/10 hover:bg-white/10 transition-colors text-left"
-        >
-          <div className="flex-1 min-w-0">
+      {/* ── Navegación inferior (anterior / siguiente) ───────────────── */}
+      {(prevSong || nextSong) && (
+        <div className="flex-shrink-0 grid grid-cols-[44px_1fr_44px] items-center px-2 py-1 bg-white/5 border-t border-white/10">
+          <button
+            onClick={() => goTo(prevSong)}
+            disabled={!prevSong}
+            className="h-10 w-10 rounded-lg flex items-center justify-center text-white/40 hover:text-white/75 hover:bg-white/10 transition-colors disabled:opacity-20 disabled:hover:bg-transparent"
+            title={prevSong?.title ?? ''}
+            aria-label="Canción anterior"
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          <button
+            onClick={() => goTo(nextSong)}
+            disabled={!nextSong}
+            className="px-3 py-2 rounded-lg text-center hover:bg-white/10 transition-colors disabled:opacity-35 disabled:hover:bg-transparent"
+            title={nextSong?.title ?? 'No hay siguiente canción'}
+          >
             <p className="text-[10px] uppercase tracking-widest text-white/30 leading-none mb-0.5">A continuación...</p>
-            <p className="text-sm font-semibold text-white/60 truncate">{nextSong.title}</p>
-          </div>
-          <ChevronRight size={16} className="text-white/30 flex-shrink-0" />
-        </button>
+            <p className="text-sm font-semibold text-white/60 truncate">{nextSong?.title ?? 'Fin de la lista'}</p>
+          </button>
+
+          <button
+            onClick={() => goTo(nextSong)}
+            disabled={!nextSong}
+            className="h-10 w-10 rounded-lg flex items-center justify-center text-white/30 hover:text-white/75 hover:bg-white/10 transition-colors disabled:opacity-20 disabled:hover:bg-transparent"
+            title={nextSong?.title ?? ''}
+            aria-label="Siguiente canción"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
       )}
 
       {/* ── Modal edición ───────────────────────────────────────────── */}
