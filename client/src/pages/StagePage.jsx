@@ -334,17 +334,18 @@ export default function StagePage() {
       {/* ── BARRA SUPERIOR ─────────────────────────────────────────────── */}
       {showTopBar && (
         <div
-          className="relative flex items-center justify-between px-5 py-1.5 bg-black/70 shrink-0 border-b border-white/10 gap-4 min-h-[68px] overflow-hidden"
-          style={{ fontFamily: fontStyles.fontFamily, zIndex: 1 }}
+          className="relative grid items-center bg-black/70 shrink-0 border-b border-white/10 gap-4 px-5 py-1.5 min-h-[68px]"
+          style={{ fontFamily: fontStyles.fontFamily, zIndex: 1, gridTemplateColumns: '1fr auto 1fr' }}
         >
-        <div className="flex items-center min-w-0 flex-1">
-          {showSlideCounter && hasContent && totalSlides != null && (
-            <span className="text-white font-mono font-bold shrink-0 tabular-nums" style={{ fontSize: sz(fontSizeCounter) }}>
-              {slideNum}/{totalSlides}
-            </span>
-          )}
+          <div className="flex items-center min-w-0">
+            {showSlideCounter && hasContent && totalSlides != null && (
+              <span className="text-white font-mono font-bold shrink-0 tabular-nums" style={{ fontSize: sz(fontSizeCounter) }}>
+                {slideNum}/{totalSlides}
+              </span>
+            )}
+          </div>
           {showSongTitle && hasContent && slideData.songTitle && (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[70%] flex flex-col items-center leading-tight">
+            <div className="flex flex-col items-center leading-tight max-w-full min-w-0">
               <span className="text-white font-semibold truncate max-w-full" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
                 {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
               </span>
@@ -355,7 +356,7 @@ export default function StagePage() {
               )}
             </div>
           )}
-        </div>
+          <div />
         </div>
       )}
 
