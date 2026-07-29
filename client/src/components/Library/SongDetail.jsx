@@ -292,7 +292,6 @@ export default function SongDetail() {
       .map((slide, index) => ({ slide, index, key: getSlideKey(slide, index) }))
       .filter(entry => selectedSlideKeys.has(entry.key));
   }, [orderedSlides, selectedSlideKeys]);
-  const previewSlideEntry = selectedSlideEntries[0] ?? null;
   const selectedVideoEntries = selectedSlideEntries.filter(({ slide }) => slide.slide_background?.mediaType === 'video');
 
   const replaceSelection = (entries, anchorIndex = null) => {
@@ -852,58 +851,6 @@ export default function SongDetail() {
           </span>
         </div>
       </div>
-
-      {isPresentationItem && (
-        <div className="px-3 pt-3">
-          <div className="rounded-xl border border-surface-700 bg-black/40 overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-surface-700">
-              <div className="min-w-0">
-                <p className="text-[10px] uppercase tracking-wider text-zinc-500">Vista previa</p>
-                <p className="text-xs text-zinc-300 truncate">
-                  {selectedSlideEntries.length > 0 ? `${selectedSlideEntries.length} seleccionada${selectedSlideEntries.length !== 1 ? 's' : ''}` : 'Selecciona una diapo'}
-                </p>
-              </div>
-              {selectedSlideEntries.length > 0 && (
-                <button
-                  type="button"
-                  onClick={clearSelection}
-                  className="text-[10px] text-zinc-400 hover:text-zinc-200"
-                >
-                  Limpiar selección
-                </button>
-              )}
-            </div>
-            <div className="relative w-full" style={{ aspectRatio: '16 / 9' }}>
-              {previewSlideEntry ? (
-                <OutputRenderer
-                  cfg={outputCfg}
-                  slideData={{
-                    type:            'song',
-                    songId:          selectedSong.id,
-                    slideId:         previewSlideEntry.slide.id,
-                    songTitle:       selectedSong.title,
-                    songAuthor:      selectedSong.author || '',
-                    isSong:          false,
-                    songKey:         selectedSong.song_key || null,
-                    label:           previewSlideEntry.slide.label,
-                    content:         previewSlideEntry.slide.content,
-                    slideBackground: previewSlideEntry.slide.slide_background ?? null,
-                  }}
-                  isBlank={false}
-                  background={previewSlideEntry.slide.slide_background ? { type: 'color', color: '#000000' } : (liveState.background ?? { type: 'color', color: '#000000' })}
-                  backgroundMedia={previewSlideEntry.slide.slide_background ?? null}
-                  bgCacheKey={thumbBgCacheKey}
-                  staticVideoFrame={false}
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm">
-                  Selecciona una diapo para previsualizar
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {selectedSlideEntries.length > 0 && (
         <div className="px-3 pt-3">
