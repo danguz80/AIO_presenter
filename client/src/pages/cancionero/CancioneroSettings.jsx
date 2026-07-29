@@ -1644,26 +1644,35 @@ function OrgSection({ orgs, onSwitch }) {
 
 function AuditLogSection() {
   const [logs, setLogs] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [userFilter, setUserFilter] = useState('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ limit: '200' });
       if (filter !== 'all') params.set('action', filter);
+      if (userFilter !== 'all') params.set('user_id', userFilter);
+      if (fromDate) params.set('from', fromDate);
+      if (toDate) params.set('to', toDate);
       const res = await fetch(`${API}/api/audit-logs?${params.toString()}`, {
         headers: authHeaders(),
       });
       if (!res.ok) throw new Error('No se pudo cargar la bitácora');
       const data = await res.json();
-      setLogs(Array.isArray(data) ? data : []);
+      setLogs(Array.isArray(data?.logs) ? data.logs : []);
+      setUsers(Array.isArray(data?.users) ? data.users : []);
     } catch {
       setLogs([]);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, userFilter, fromDate, toDate]);
 
   useEffect(() => {
     loadLogs();
@@ -1701,6 +1710,51 @@ function AuditLogSection() {
           className="px-2.5 py-1 rounded-full text-xs border bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
         >
           Recargar
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <select
+          value={userFilter}
+          onChange={(e) => setUserFilter(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white/80 focus:outline-none focus:border-yellow-400/40"
+        >
+          <option value="all">Todos los usuarios</option>
+          {users.map((u) => (
+            <option key={u.user_id || 'unknown'} value={String(u.user_id || '')}>
+              {u.user_name || u.user_email || 'Usuario'}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white/80 focus:outline-none focus:border-yellow-400/40"
+          title="Desde"
+        />
+
+        <input
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-xs text-white/80 focus:outline-none focus:border-yellow-400/40"
+          title="Hasta"
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            setFilter('all');
+            setUserFilter('all');
+            setFromDate('');
+            setToDate('');
+          }}
+          className="px-2.5 py-1 rounded-full text-xs border bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+        >
+          Limpiar filtros
         </button>
       </div>
 
