@@ -248,6 +248,7 @@ export default function SongDetail() {
   const selectionAnchorRef = useRef(null);
 
   const getSlideKey = (slide, index) => `${slide.id}-${index}`;
+  const getSlideBackground = (slide) => slide?.slide_background ?? slide?.slideBackground ?? null;
 
   // ── Historial deshacer ────────────────────────────────────────────────────
   const undoStack = useRef([]);
@@ -292,7 +293,61 @@ export default function SongDetail() {
       .map((slide, index) => ({ slide, index, key: getSlideKey(slide, index) }))
       .filter(entry => selectedSlideKeys.has(entry.key));
   }, [orderedSlides, selectedSlideKeys]);
-  const selectedVideoEntries = selectedSlideEntries.filter(({ slide }) => slide.slide_background?.mediaType === 'video');
+  const selectedVideoEntries = selectedSlideEntries.filter(({ slide }) => getSlideBackground(slide)?.mediaType === 'video');
+
+  const showSelectedSlide = useCallback((slide, index) => {
+    const nextSlide = orderedSlides[index + 1] || null;
+    actions.selectSlide(slide);
+    actions.showSlide({
+      type:       'song',
+      slides:     orderedSlides,
+      slideIndex: index,
+      slideData: {
+        type:            'song',
+        songId:          selectedSong.id,
+        slideId:         slide.id,
+        songTitle:       selectedSong.title,
+        songAuthor:      selectedSong.author || '',
+        isSong:          false,
+        songKey:         selectedSong.song_key || null,
+        label:           slide.label,
+        content:         slide.content,
+        slideBackground: getSlideBackground(slide),
+      },
+      nextSlideData: nextSlide ? {
+        type:    'song',
+        label:   nextSlide.label,
+        content: nextSlide.content,
+      } : null,
+    });
+  }, [actions, orderedSlides, selectedSong?.author, selectedSong?.id, selectedSong?.song_key, selectedSong?.title]);
+
+  useEffect(() => {
+    if (!isPresentationItem) return;
+    const previewEntry = selectedSlideEntries[0];
+    if (!previewEntry) return;
+    if (
+      liveState.slideData?.slideId === previewEntry.slide.id
+      && liveState.slideIndex === previewEntry.index
+      && !liveState.isBlank
+    ) {
+      return;
+    }
+    showSelectedSlide(previewEntry.slide, previewEntry.index);
+  }, [
+    actions,
+    isPresentationItem,
+    liveState.isBlank,
+    liveState.slideData?.slideId,
+    liveState.slideIndex,
+    orderedSlides,
+    selectedSlideEntries,
+    selectedSong?.author,
+    selectedSong?.id,
+    selectedSong?.song_key,
+    selectedSong?.title,
+    showSelectedSlide,
+  ]);
 
   const replaceSelection = (entries, anchorIndex = null) => {
     setSelectedSlideKeys(new Set(entries.map(({ key }) => key)));
@@ -624,6 +679,9 @@ export default function SongDetail() {
       selectionAnchorRef.current = index;
       setLocalSelectedKey(key);
       actions.selectSlide(slide);
+      if (next.size === 1) {
+        showSelectedSlide(slide, index);
+      }
       if (next.size === 0 && isAlreadyLive) actions.toggleBlank(true);
       return;
     }
@@ -639,32 +697,8 @@ export default function SongDetail() {
 
     setLocalSelectedKey(key);
     replaceSelection([{ slide, index, key }], index);
-    const slides    = orderedSlides;
-    const nextSlide = slides[index + 1] || null;
-    const isSongLike = !isPresentationItem;
     actions.selectSlide(slide);
-    actions.showSlide({
-      type:       'song',
-      slides,
-      slideIndex: index,
-      slideData: {
-        type:            'song',
-        songId:          selectedSong.id,
-        slideId:         slide.id,
-        songTitle:       selectedSong.title,
-        songAuthor:      selectedSong.author || '',
-        isSong:          isSongLike,
-        songKey:         selectedSong.song_key || null,
-        label:           slide.label,
-        content:         slide.content,
-        slideBackground: slide.slide_background ?? null,
-      },
-      nextSlideData: nextSlide ? {
-        type:    'song',
-        label:   nextSlide.label,
-        content: nextSlide.content,
-      } : null,
-    });
+    showSelectedSlide(slide, index);
     trackSlide(slide.id);
   };
 
@@ -1291,7 +1325,7 @@ export default function SongDetail() {
                 ✏️ Renombrar "{ctxMenu.slide.label}"
               </button>
             )}
-            {isPresentationItem && ctxMenu.slide.slide_background?.mediaType === 'video' && (
+            {isPresentationItem && getSlideBackground(ctxMenu.slide)?.mediaType === 'video' && (
               <div className="px-3 py-1.5">
                 <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Al terminar el video</p>
                 {[
@@ -1300,7 +1334,7 @@ export default function SongDetail() {
                   ['stop', 'Parar'],
                   ['first', 'Ir al principio'],
                 ].map(([value, label]) => {
-                  const active = (ctxMenu.slide.slide_background?.endAction || 'loop') === value;
+                  const active = (getSlideBackground(ctxMenu.slide)?.endAction || 'loop') === value;
                   return (
                     <button
                       key={value}
