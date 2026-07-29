@@ -420,6 +420,9 @@ export default function SongDetail() {
   const [dropBefore,     setDropBefore]     = useState(null);
   const [dropping,       setDropping]       = useState(false);
   const [mediaDropIdx,   setMediaDropIdx]   = useState(null); // index del slide con drag-over de media
+  // ── Drag & drop para reordenar slides ────────────────────────────────────
+  const [dragSlideIdx,   setDragSlideIdx]   = useState(null); // índice del slide siendo arrastrado
+  const [reorderDropIdx, setReorderDropIdx] = useState(null); // índice destino (insertar antes)
   // ── Zoom de thumbnails (número de columnas: 3-8) ──────────────────────
   const [thumbCols, setThumbCols] = useState(5);
   // ── Modo de vista: 'grid' | 'list' ── 'list' por defecto en < 1024px ──
@@ -456,6 +459,21 @@ export default function SongDetail() {
       setDropBefore(null);
       setDropping(false);
     }
+  };
+
+  // Reordenar slides por drag dentro de la grilla
+  const handleSlideReorder = async (fromIdx, toIdx) => {
+    if (fromIdx === toIdx || fromIdx === null || toIdx === null) return;
+    const slides = selectedSong.slides;
+    const reordered = [...slides];
+    const [moved] = reordered.splice(fromIdx, 1);
+    const insertAt = toIdx > fromIdx ? toIdx - 1 : toIdx;
+    reordered.splice(insertAt, 0, moved);
+    await saveSong(reordered.map(s => ({
+      label:           s.label,
+      content:         s.content,
+      slideBackground: s.slide_background ?? null,
+    })));
   };
 
   // Asignar (o quitar) fondo de media a un slide
@@ -1102,8 +1120,22 @@ export default function SongDetail() {
                   <div
                     onClick={(e) => handleSlideClick(e, slide, index)}
                     onContextMenu={e => openCtx(e, slide, index)}
+                    draggable
+                    onDragStart={e => {
+                      e.dataTransfer.setData('application/aio-slide-reorder', String(index));
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDragSlideIdx(index);
+                    }}
+                    onDragEnd={() => { setDragSlideIdx(null); setReorderDropIdx(null); }}
                     onDragOver={e => {
-                      // Media drag tiene prioridad
+                      // Reordenar slides tiene prioridad si viene de la misma grilla
+                      if (e.dataTransfer.types.includes('application/aio-slide-reorder')) {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        setReorderDropIdx(index);
+                        return;
+                      }
+                      // Media drag
                       if (e.dataTransfer.types.includes('application/aio-media')) {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'copy';
@@ -1112,11 +1144,20 @@ export default function SongDetail() {
                       }
                       if (dragLabel) { e.preventDefault(); setDropBefore(index); }
                     }}
-                    onDragLeave={() => setMediaDropIdx(null)}
+                    onDragLeave={() => { setMediaDropIdx(null); setReorderDropIdx(null); }}
                     onDrop={e => {
                       e.preventDefault();
                       e.stopPropagation();
                       setMediaDropIdx(null);
+                      // Reorder drop
+                      const reorderRaw = e.dataTransfer.getData('application/aio-slide-reorder');
+                      if (reorderRaw !== '') {
+                        const fromIdx = parseInt(reorderRaw, 10);
+                        handleSlideReorder(fromIdx, index);
+                        setDragSlideIdx(null);
+                        setReorderDropIdx(null);
+                        return;
+                      }
                       // Media drop
                       const raw = e.dataTransfer.getData('application/aio-media');
                       if (raw) {
@@ -1131,8 +1172,10 @@ export default function SongDetail() {
                       if (lbl) handleGroupDrop(lbl, index);
                     }}
                     className={[
-                      'relative flex flex-col cursor-pointer rounded-md overflow-hidden transition-all select-none',
+                      'relative flex flex-col cursor-grab active:cursor-grabbing rounded-md overflow-hidden transition-all select-none',
                       'border-2',
+                      dragSlideIdx === index ? 'opacity-40 scale-95' :
+                      reorderDropIdx === index ? 'border-yellow-400 shadow-lg shadow-yellow-900/40' :
                       isMediaDropHere ? 'border-blue-400 shadow-lg shadow-blue-900/40' :
                       active   ? 'border-green-400 shadow-lg shadow-green-900/40' :
                       selected ? 'border-accent shadow-md shadow-accent/20' :
@@ -1155,10 +1198,22 @@ export default function SongDetail() {
                   {/* Número */}
                   <span className="absolute top-1 left-1.5 text-[9px] font-bold text-zinc-300 z-10 leading-none drop-shadow">{index + 1}</span>
 
-                  {/* Indicador EN VIVO */}
-                  {active && (
-                    <span className="absolute top-1 right-1 z-10 w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  )}
+                  {/* Indicador EN VIVO + icono de comportamiento de video */}
+                  <div className="absolute top-1 right-1 z-10 flex items-center gap-0.5">
+                    {active && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+                    {slideBg?.mediaType === 'video' && (() => {
+                      const ea = slideBg.endAction || 'loop';
+                      const icons = { loop: '🔁', continue: '⏭', stop: '⏹', first: '⏮' };
+                      const titles = { loop: 'Loop', continue: 'Continuar', stop: 'Parar', first: 'Ir al principio' };
+                      return (
+                        <span
+                          className="text-[10px] leading-none drop-shadow-md"
+                          title={titles[ea] ?? ea}
+                          style={{ filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.9))' }}
+                        >{icons[ea] ?? '🔁'}</span>
+                      );
+                    })()}
+                  </div>
 
                   {/* Nombre del archivo de fondo, justo encima del banner de etiqueta */}
                   {slideBg && (
