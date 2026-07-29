@@ -818,7 +818,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 placeholder={`{Verso 1}\nPrimera línea del verso\nSegunda línea\n\n{Coro}\nLetra del coro`}
                 spellCheck={false}
               />
-          </div>{/* end editor */}
+          </div>
           )}
           </div>{/* end scroll */}
 
