@@ -2,6 +2,7 @@ const express      = require('express');
 const { google }   = require('googleapis');
 const { Resend }   = require('resend');
 const pool         = require('../config/database');
+const { writeAuditLog } = require('../utils/auditLog');
 const { requireAuth } = require('./auth');
 
 // ─── Helper: bulk insert de slides (evita N queries individuales) ─────────────
@@ -433,6 +434,18 @@ router.patch('/config', async (req, res) => {
       if (!req.user.isAdmin) return res.status(403).json({ error: 'Solo el admin puede cambiar la carpeta de Drive' });
       await pool.query('UPDATE sync_users SET drive_folder_id=$1, updated_at=NOW() WHERE id=$2',
         [drive_folder_id, req.user.userId]);
+
+      await writeAuditLog(pool, {
+        organizationId: req.user.orgId,
+        userId: req.user.userId,
+        actionType: 'update',
+        entityType: 'sync_settings',
+        entityId: String(req.user.userId),
+        message: 'Configuración de sincronización actualizada',
+        metadata: {
+          drive_folder_id: drive_folder_id || null,
+        },
+      });
     }
     res.json({ ok: true });
   } catch (err) {

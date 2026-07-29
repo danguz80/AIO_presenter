@@ -3,6 +3,7 @@ const { google } = require('googleapis');
 const jwt        = require('jsonwebtoken');
 const { Resend } = require('resend');
 const pool       = require('../config/database');
+const { writeAuditLog } = require('../utils/auditLog');
 
 const router = express.Router();
 
@@ -531,6 +532,20 @@ router.patch('/me', requireAuth, async (req, res) => {
       [instruments || [], normalizedAbletonVersion, req.user.userId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    await writeAuditLog(pool, {
+      organizationId: req.user.orgId,
+      userId: req.user.userId,
+      actionType: 'update',
+      entityType: 'profile_settings',
+      entityId: String(req.user.userId),
+      message: 'Perfil actualizado (instrumentos / versión Ableton)',
+      metadata: {
+        instruments_count: Array.isArray(instruments) ? instruments.length : 0,
+        ableton_version: normalizedAbletonVersion,
+      },
+    });
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -627,6 +642,21 @@ router.patch('/org', requireAuth, async (req, res) => {
       [name?.trim() || null, band_name ?? null, spotify_client_id ?? null, req.user.orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Organización no encontrada' });
+
+    await writeAuditLog(pool, {
+      organizationId: req.user.orgId,
+      userId: req.user.userId,
+      actionType: 'update',
+      entityType: 'organization_settings',
+      entityId: String(req.user.orgId),
+      message: 'Configuración de organización actualizada',
+      metadata: {
+        name: name?.trim() || null,
+        band_name: band_name ?? null,
+        spotify_client_id: spotify_client_id ? 'set' : null,
+      },
+    });
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });

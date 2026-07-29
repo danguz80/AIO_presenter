@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { writeAuditLog } = require('../utils/auditLog');
 
 /**
  * Devuelve el orgId del usuario autenticado, o el id de la primera org
@@ -266,17 +267,48 @@ async function updateEvent(req, res) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    const { rows: currentRows } = await client.query(
+      'SELECT * FROM events WHERE id=$1 AND organization_id=$2 FOR UPDATE',
+      [id, orgId]
+    );
+    if (!currentRows.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Evento no encontrado' });
+    }
+
+    const current = currentRows[0];
+    const isOccurrenceEdit = Boolean(occurrence_date && current.is_recurring);
+
+    // Si se está editando una ocurrencia de un evento recurrente, NO mover la fecha base
+    // ni su recurrencia. Solo se permite tocar metadatos generales y la playlist de esa ocurrencia.
+    const nextTitle = (typeof title === 'string' && title.trim()) ? title.trim() : current.title;
+    const nextDate = isOccurrenceEdit
+      ? current.date
+      : (date || current.date);
+    const nextTime = Object.prototype.hasOwnProperty.call(req.body, 'time')
+      ? (time || null)
+      : current.time;
+    const nextDescription = Object.prototype.hasOwnProperty.call(req.body, 'description')
+      ? (description || null)
+      : current.description;
+    const nextIsRecurring = isOccurrenceEdit
+      ? current.is_recurring
+      : (typeof is_recurring === 'boolean' ? is_recurring : current.is_recurring);
+    const nextRecurrence = isOccurrenceEdit
+      ? current.recurrence
+      : (recurrence || null);
+    const nextRecurEnd = isOccurrenceEdit
+      ? current.recur_end
+      : (recur_end || null);
+
     const { rows } = await client.query(
       `UPDATE events
        SET title=$1, date=$2, time=$3, description=$4, is_recurring=$5,
            recurrence=$6, recur_end=$7, updated_at=NOW()
        WHERE id=$8 AND organization_id=$9 RETURNING *`,
-      [title, date, time || null, description || null, is_recurring, recurrence || null, recur_end || null, id, orgId]
+      [nextTitle, nextDate, nextTime, nextDescription, nextIsRecurring, nextRecurrence, nextRecurEnd, id, orgId]
     );
-    if (!rows.length) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ error: 'Evento no encontrado' });
-    }
     if (Array.isArray(songs)) {
       if (occurrence_date) {
         await client.query(
@@ -329,6 +361,23 @@ async function updateEvent(req, res) {
         }
       }
     }
+
+    await writeAuditLog(client, {
+      organizationId: orgId,
+      userId: req.user.userId,
+      actionType: 'update',
+      entityType: 'event',
+      entityId: String(id),
+      message: isOccurrenceEdit
+        ? 'Edición de ocurrencia recurrente (sin alterar serie base)'
+        : 'Edición de evento',
+      metadata: {
+        occurrence_date: occurrence_date || null,
+        edited_playlist: Array.isArray(songs),
+        songs_count: Array.isArray(songs) ? songs.length : null,
+      },
+    });
+
     await client.query('COMMIT');
     res.json(rows[0]);
   } catch (err) {
@@ -344,11 +393,25 @@ async function deleteEvent(req, res) {
   const { id } = req.params;
   const orgId = req.user.orgId;
   try {
-    const { rowCount } = await pool.query(
-      'DELETE FROM events WHERE id=$1 AND organization_id=$2',
+    const { rows } = await pool.query(
+      'DELETE FROM events WHERE id=$1 AND organization_id=$2 RETURNING id, title, date',
       [id, orgId]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Evento no encontrado' });
+
+    if (!rows.length) return res.status(404).json({ error: 'Evento no encontrado' });
+
+    await writeAuditLog(pool, {
+      organizationId: orgId,
+      userId: req.user.userId,
+      actionType: 'delete',
+      entityType: 'event',
+      entityId: String(rows[0].id),
+      message: `Evento eliminado: ${rows[0].title || '(sin título)'}`,
+      metadata: {
+        date: rows[0].date,
+      },
+    });
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

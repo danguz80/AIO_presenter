@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const zlib = require('zlib');
 const { requireAuth, optionalAuth } = require('../middleware/auth');
+const { writeAuditLog } = require('../utils/auditLog');
 const {
   getEvents,
   getEventById,
@@ -388,6 +389,20 @@ router.patch('/:id/band-config', requireAuth, async (req, res) => {
          RETURNING event_id AS id, band_config_id`,
         [req.params.id, occurrence_date, band_config_id ?? null]
       );
+
+      await writeAuditLog(pool, {
+        organizationId: req.user.orgId,
+        userId: req.user.userId,
+        actionType: 'update',
+        entityType: 'event_band_config',
+        entityId: String(req.params.id),
+        message: 'Configuración de banda por ocurrencia actualizada',
+        metadata: {
+          occurrence_date,
+          band_config_id: band_config_id ?? null,
+        },
+      });
+
       return res.json(rows[0]);
     }
 
@@ -398,6 +413,19 @@ router.patch('/:id/band-config', requireAuth, async (req, res) => {
         RETURNING id, band_config_id`,
       [band_config_id ?? null, req.params.id, req.user.orgId]
     );
+
+    await writeAuditLog(pool, {
+      organizationId: req.user.orgId,
+      userId: req.user.userId,
+      actionType: 'update',
+      entityType: 'event_band_config',
+      entityId: String(req.params.id),
+      message: 'Configuración de banda del evento actualizada',
+      metadata: {
+        band_config_id: band_config_id ?? null,
+      },
+    });
+
     res.json(rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

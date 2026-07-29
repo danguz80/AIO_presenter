@@ -341,9 +341,12 @@ function EventEditModal({ event, occurrenceDate, onClose, onSaved }) {
   const save = async () => {
     if (!title.trim() || !date) return;
     setSaving(true);
+    const safeBaseDate = (event?.is_recurring && occurrenceDate)
+      ? String(event?.base_date || event?.date || date).slice(0, 10)
+      : date;
     const body = {
       title: title.trim(),
-      date,
+      date: safeBaseDate,
       time: time || null,
       description: description.trim() || null,
       is_recurring: isRecurring,

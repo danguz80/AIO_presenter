@@ -1,6 +1,7 @@
 const express    = require('express');
 const jwt        = require('jsonwebtoken');
 const pool       = require('../config/database');
+const { writeAuditLog } = require('../utils/auditLog');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aio-presenter-secret-change-me';
 const router     = express.Router();
@@ -43,6 +44,19 @@ router.post('/', requireAuth, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [req.user.orgId, name, subtitle || null, JSON.stringify(slots || []), position]
     );
+
+    await writeAuditLog(pool, {
+      organizationId: req.user.orgId,
+      userId: req.user.userId,
+      actionType: 'create',
+      entityType: 'band_config',
+      entityId: String(rows[0].id),
+      message: `Configuración de banda creada: ${rows[0].name || '(sin nombre)'}`,
+      metadata: {
+        slots_count: Array.isArray(slots) ? slots.length : 0,
+      },
+    });
+
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -59,6 +73,19 @@ router.put('/:id', requireAuth, async (req, res) => {
       [name, subtitle ?? null, JSON.stringify(slots || []), req.params.id, req.user.orgId]
     );
     if (!rows.length) return res.status(404).json({ error: 'Config no encontrada' });
+
+    await writeAuditLog(pool, {
+      organizationId: req.user.orgId,
+      userId: req.user.userId,
+      actionType: 'update',
+      entityType: 'band_config',
+      entityId: String(rows[0].id),
+      message: `Configuración de banda actualizada: ${rows[0].name || '(sin nombre)'}`,
+      metadata: {
+        slots_count: Array.isArray(slots) ? slots.length : 0,
+      },
+    });
+
     res.json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -68,10 +95,23 @@ router.put('/:id', requireAuth, async (req, res) => {
 // DELETE /api/band-configs/:id
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    await pool.query(
-      'DELETE FROM band_configs WHERE id = $1 AND organization_id = $2',
+    const { rows } = await pool.query(
+      'DELETE FROM band_configs WHERE id = $1 AND organization_id = $2 RETURNING id, name',
       [req.params.id, req.user.orgId]
     );
+
+    if (rows.length) {
+      await writeAuditLog(pool, {
+        organizationId: req.user.orgId,
+        userId: req.user.userId,
+        actionType: 'delete',
+        entityType: 'band_config',
+        entityId: String(rows[0].id),
+        message: `Configuración de banda eliminada: ${rows[0].name || '(sin nombre)'}`,
+        metadata: null,
+      });
+    }
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

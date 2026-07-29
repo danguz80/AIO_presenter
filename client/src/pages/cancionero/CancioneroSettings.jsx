@@ -34,6 +34,18 @@ const DAYS_ES = ['L','M','X','J','V','S','D'];
 
 function pad(n) { return String(n).padStart(2, '0'); }
 function dateStr(y, m, d) { return `${y}-${pad(m + 1)}-${pad(d)}`; }
+function formatDateTime(dt) {
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return 'Fecha desconocida';
+  return d.toLocaleString('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
 
 // ─── Mi Perfil ────────────────────────────────────────────────────────────────
 function ProfileSection({ user, onSaved }) {
@@ -1630,6 +1642,95 @@ function OrgSection({ orgs, onSwitch }) {
   );
 }
 
+function AuditLogSection() {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+
+  const loadLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ limit: '200' });
+      if (filter !== 'all') params.set('action', filter);
+      const res = await fetch(`${API}/api/audit-logs?${params.toString()}`, {
+        headers: authHeaders(),
+      });
+      if (!res.ok) throw new Error('No se pudo cargar la bitácora');
+      const data = await res.json();
+      setLogs(Array.isArray(data) ? data : []);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
+
+  const actionPill = (action) => {
+    if (action === 'delete') return 'bg-red-500/15 text-red-300 border-red-400/30';
+    if (action === 'create') return 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30';
+    return 'bg-blue-500/15 text-blue-300 border-blue-400/30';
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: 'all', label: 'Todo' },
+          { id: 'delete', label: 'Borrados' },
+          { id: 'update', label: 'Cambios' },
+          { id: 'create', label: 'Creaciones' },
+        ].map((opt) => (
+          <button
+            key={opt.id}
+            onClick={() => setFilter(opt.id)}
+            className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+              filter === opt.id
+                ? 'bg-yellow-500/20 text-yellow-300 border-yellow-400/30'
+                : 'bg-white/5 text-white/55 border-white/10 hover:text-white/80 hover:border-white/20'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+        <button
+          onClick={loadLogs}
+          className="px-2.5 py-1 rounded-full text-xs border bg-white/5 text-white/60 border-white/10 hover:bg-white/10"
+        >
+          Recargar
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-5">
+          <Loader2 size={16} className="animate-spin text-white/30" />
+        </div>
+      ) : logs.length === 0 ? (
+        <p className="text-xs text-white/35 text-center py-3">Sin registros en la bitácora</p>
+      ) : (
+        <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+          {logs.map((item) => (
+            <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2.5">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-semibold border ${actionPill(item.action_type)}`}>
+                  {item.action_type}
+                </span>
+                <span className="text-[11px] text-white/45">{item.entity_type}</span>
+                <span className="text-[10px] text-white/30 ml-auto">{formatDateTime(item.created_at)}</span>
+              </div>
+              <p className="text-xs text-white/85">{item.message || 'Sin descripción'}</p>
+              <p className="text-[11px] text-white/45 mt-1">Por: {item.user_name || item.user_email || 'Usuario'}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Tarjeta acordeón ─────────────────────────────────────────────────────────
 function SectionCard({ icon: Icon, title, subtitle, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -1782,6 +1883,14 @@ export default function CancioneroSettings() {
           subtitle="Fechas en que cada canción fue marcada como tocada"
         >
           <SongHistoryPanel />
+        </SectionCard>
+
+        <SectionCard
+          icon={AlertCircle}
+          title="Bitácora de actividad"
+          subtitle="Borrados y cambios de configuración con usuario y fecha"
+        >
+          <AuditLogSection />
         </SectionCard>
       </div>
 

@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { writeAuditLog } = require('../utils/auditLog');
 
 // GET /api/event-templates
 async function getTemplates(req, res) {
@@ -23,6 +24,19 @@ async function createTemplate(req, res) {
        RETURNING *`,
       [name.trim(), JSON.stringify(items || [])]
     );
+
+    await writeAuditLog(pool, {
+      organizationId: req.user?.orgId,
+      userId: req.user?.userId,
+      actionType: 'create',
+      entityType: 'event_template',
+      entityId: String(rows[0].id),
+      message: `Plantilla guardada: ${rows[0].name || '(sin nombre)'}`,
+      metadata: {
+        items_count: Array.isArray(items) ? items.length : 0,
+      },
+    });
+
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -33,11 +47,23 @@ async function createTemplate(req, res) {
 async function deleteTemplate(req, res) {
   const { id } = req.params;
   try {
-    const { rowCount } = await pool.query(
-      'DELETE FROM event_templates WHERE id = $1',
+    const { rows } = await pool.query(
+      'DELETE FROM event_templates WHERE id = $1 RETURNING id, name',
       [id]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Plantilla no encontrada' });
+
+    if (!rows.length) return res.status(404).json({ error: 'Plantilla no encontrada' });
+
+    await writeAuditLog(pool, {
+      organizationId: req.user?.orgId,
+      userId: req.user?.userId,
+      actionType: 'delete',
+      entityType: 'event_template',
+      entityId: String(rows[0].id),
+      message: `Plantilla eliminada: ${rows[0].name || '(sin nombre)'}`,
+      metadata: null,
+    });
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { writeAuditLog } = require('../utils/auditLog');
 
 function normalizeLinksInput(input) {
   const arr = Array.isArray(input) ? input : [];
@@ -220,12 +221,23 @@ const deleteSong = async (req, res) => {
     const { id } = req.params;
     const orgId = req.user.orgId;
     const result = await pool.query(
-      'DELETE FROM songs WHERE id = $1 AND organization_id = $2 RETURNING id',
+      'DELETE FROM songs WHERE id = $1 AND organization_id = $2 RETURNING id, title',
       [id, orgId]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Canción no encontrada' });
     }
+
+    await writeAuditLog(pool, {
+      organizationId: orgId,
+      userId: req.user.userId,
+      actionType: 'delete',
+      entityType: 'song',
+      entityId: String(result.rows[0].id),
+      message: `Canción eliminada: ${result.rows[0].title || '(sin título)'}`,
+      metadata: null,
+    });
+
     res.json({ message: 'Canción eliminada', id: result.rows[0].id });
   } catch (err) {
     console.error('[Songs] deleteSong:', err.message);

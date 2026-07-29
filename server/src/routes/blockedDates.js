@@ -1,6 +1,7 @@
 const express    = require('express');
 const jwt        = require('jsonwebtoken');
 const pool       = require('../config/database');
+const { writeAuditLog } = require('../utils/auditLog');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'aio-presenter-secret-change-me';
 const router     = express.Router();
@@ -51,6 +52,20 @@ router.post('/', requireAuth, async (req, res) => {
        RETURNING *`,
       [req.user.userId, req.user.orgId, date, reason || null]
     );
+
+    await writeAuditLog(pool, {
+      organizationId: req.user.orgId,
+      userId: req.user.userId,
+      actionType: 'update',
+      entityType: 'blocked_date',
+      entityId: String(rows[0].id),
+      message: 'Fecha bloqueada guardada',
+      metadata: {
+        date,
+        reason: reason || null,
+      },
+    });
+
     res.status(201).json(rows[0]);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -60,11 +75,25 @@ router.post('/', requireAuth, async (req, res) => {
 // DELETE /api/blocked-dates/:id — desbloquear (solo el propio usuario)
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    const { rowCount } = await pool.query(
-      'DELETE FROM user_blocked_dates WHERE id = $1 AND user_id = $2',
+    const { rows } = await pool.query(
+      'DELETE FROM user_blocked_dates WHERE id = $1 AND user_id = $2 RETURNING id, date',
       [req.params.id, req.user.userId]
     );
-    if (!rowCount) return res.status(404).json({ error: 'Fecha no encontrada o sin permiso' });
+
+    if (!rows.length) return res.status(404).json({ error: 'Fecha no encontrada o sin permiso' });
+
+    await writeAuditLog(pool, {
+      organizationId: req.user.orgId,
+      userId: req.user.userId,
+      actionType: 'delete',
+      entityType: 'blocked_date',
+      entityId: String(rows[0].id),
+      message: 'Fecha bloqueada eliminada',
+      metadata: {
+        date: rows[0].date,
+      },
+    });
+
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

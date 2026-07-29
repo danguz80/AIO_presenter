@@ -23,8 +23,10 @@ const syncRouter   = require('./routes/sync');
 const bandConfigsRouter  = require('./routes/bandConfigs');
 const blockedDatesRouter = require('./routes/blockedDates');
 const notificationsRouter = require('./routes/notifications');
+const auditLogsRouter = require('./routes/auditLogs');
 const annotationsRouter = require('./routes/annotations');
 const paypalRouter = require('./routes/paypal');
+const { writeAuditLog } = require('./utils/auditLog');
 const { requireAuth, requireActivePlan } = require('./middleware/auth');
 
 const app    = express();
@@ -407,6 +409,22 @@ async function saveOrgSetting(orgId, key, value) {
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_song_play_history_org_date ON song_play_history(organization_id, played_on DESC)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_song_play_history_org_song ON song_play_history(organization_id, song_id, played_on DESC)`);
+    // ─── Auditoría de acciones sensibles ──────────────────────────────────────
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id              BIGSERIAL PRIMARY KEY,
+        organization_id INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+        user_id         INTEGER REFERENCES sync_users(id) ON DELETE SET NULL,
+        action_type     VARCHAR(40) NOT NULL,
+        entity_type     VARCHAR(80) NOT NULL,
+        entity_id       TEXT,
+        message         TEXT,
+        metadata        JSONB DEFAULT '{}'::jsonb,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_org_created ON audit_logs(organization_id, created_at DESC)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_audit_logs_action_entity ON audit_logs(action_type, entity_type)`);
     // Backfill inicial: importar canciones ya marcadas como tocadas antes de esta feature.
     // Es idempotente por UNIQUE(organization_id, song_id, played_on).
     await pool.query(`
@@ -571,6 +589,19 @@ io.on('connection', async (socket) => {
     }
   };
 
+  const logConfigChange = (entityType, message, metadata = null) => {
+    if (!socket.userId) return;
+    writeAuditLog(pool, {
+      organizationId: orgId,
+      userId: socket.userId,
+      actionType: 'update',
+      entityType,
+      entityId: String(orgId),
+      message,
+      metadata,
+    });
+  };
+
   // Configuraciones (compartidas por org) → solo al cliente que conecta
   socket.emit('display:config',    s.displayConfig);
   socket.emit('app:theme',         s.appTheme);
@@ -677,6 +708,9 @@ io.on('connection', async (socket) => {
     s.stageTemplates = Array.isArray(templates) ? templates : [];
     saveOrgSetting(orgId, 'stageTemplates', s.stageTemplates);
     emitToOrg('stage:templates', s.stageTemplates);
+    logConfigChange('stage_templates', 'Plantillas de escenario actualizadas', {
+      count: s.stageTemplates.length,
+    });
   });
 
   // Actualizar lista del evento del día
@@ -702,6 +736,9 @@ io.on('connection', async (socket) => {
     s.stageConfig = { ...s.stageConfig, ...config };
     saveOrgSetting(orgId, 'stageConfig', s.stageConfig);
     emitToOrg('stage:config', s.stageConfig);
+    logConfigChange('stage_config', 'Configuración de escenario actualizada', {
+      keys: Object.keys(config || {}),
+    });
   });
 
   // Actualizar configuración de salida principal
@@ -709,6 +746,9 @@ io.on('connection', async (socket) => {
     s.outputConfig = { ...s.outputConfig, ...config };
     saveOrgSetting(orgId, 'outputConfig', s.outputConfig);
     emitToOrg('output:config', s.outputConfig);
+    logConfigChange('output_config', 'Configuración de salida actualizada', {
+      keys: Object.keys(config || {}),
+    });
   });
 
   // Plantillas de salida principal
@@ -716,6 +756,9 @@ io.on('connection', async (socket) => {
     s.outputTemplates = Array.isArray(templates) ? templates : [];
     saveOrgSetting(orgId, 'outputTemplates', s.outputTemplates);
     emitToOrg('output:templates', s.outputTemplates);
+    logConfigChange('output_templates', 'Plantillas de salida actualizadas', {
+      count: s.outputTemplates.length,
+    });
   });
 
   // Plantillas streaming/virtual
@@ -723,6 +766,9 @@ io.on('connection', async (socket) => {
     s.virtualTemplates = Array.isArray(templates) ? templates : [];
     saveOrgSetting(orgId, 'virtualTemplates', s.virtualTemplates);
     emitToOrg('virtual:templates', s.virtualTemplates);
+    logConfigChange('virtual_templates', 'Plantillas virtuales actualizadas', {
+      count: s.virtualTemplates.length,
+    });
   });
 
   // Guardar tema de la UI
@@ -730,6 +776,9 @@ io.on('connection', async (socket) => {
     s.appTheme = String(theme);
     saveOrgSetting(orgId, 'appTheme', s.appTheme);
     emitToOrg('app:theme', s.appTheme);
+    logConfigChange('app_theme', 'Tema de la aplicación actualizado', {
+      theme: s.appTheme,
+    });
   });
 
   // Guardar configuración de pantallas físicas
@@ -737,6 +786,9 @@ io.on('connection', async (socket) => {
     s.displayConfig = { ...s.displayConfig, ...config };
     saveOrgSetting(orgId, 'displayConfig', s.displayConfig);
     emitToOrg('display:config', s.displayConfig);
+    logConfigChange('display_config', 'Configuración de pantallas actualizada', {
+      keys: Object.keys(config || {}),
+    });
   });
 
   // Actualizar configuración virtual
@@ -744,6 +796,9 @@ io.on('connection', async (socket) => {
     s.virtualConfig = { ...s.virtualConfig, ...config };
     saveOrgSetting(orgId, 'virtualConfig', s.virtualConfig);
     emitToOrg('virtual:config', s.virtualConfig);
+    logConfigChange('virtual_config', 'Configuración virtual actualizada', {
+      keys: Object.keys(config || {}),
+    });
   });
 
   // Navegar: el móvil u otro cliente pide avanzar/retroceder
@@ -924,6 +979,7 @@ app.use('/api/sync',  syncRouter);
 app.use('/api/band-configs',  requireAuth, requireActivePlan, bandConfigsRouter);
 app.use('/api/blocked-dates', requireAuth, requireActivePlan, blockedDatesRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/audit-logs',    requireAuth, requireActivePlan, auditLogsRouter);
 app.use('/paypal',            paypalRouter);
 
 const adminRouter = require('./routes/admin');
