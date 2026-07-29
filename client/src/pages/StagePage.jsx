@@ -51,6 +51,10 @@ function sameSongId(a, b) {
   return String(a) === String(b);
 }
 
+function normTitle(s) {
+  return String(s || '').trim().toLowerCase();
+}
+
 export default function StagePage() {
   const { state } = usePresenter();
   const { liveState, stageConfig, schedule, songs, eventPlays, reservasMode } = state;
@@ -262,8 +266,12 @@ export default function StagePage() {
 
   const showTopBar = showSongTitle || showSlideCounter || showSectionLabel;
   const currentSongKey = getSongKey(slideData);
-  const currentSongFromSchedule = schedule.find((s) => sameSongId(s.song_id, currentSongId)) || null;
-  const currentSongFromLibrary = songs.find((s) => String(s.id) === String(currentSongId)) || null;
+  const currentSongFromSchedule = schedule.find((s) => sameSongId(s.song_id, currentSongId))
+    || schedule.find((s) => normTitle(s.title) === normTitle(slideData?.songTitle))
+    || null;
+  const currentSongFromLibrary = songs.find((s) => sameSongId(s.id, currentSongId))
+    || songs.find((s) => normTitle(s.title) === normTitle(slideData?.songTitle))
+    || null;
   const currentSongForTopBar = {
     bpm: slideData?.bpm ?? currentSongFromSchedule?.bpm ?? currentSongFromLibrary?.bpm ?? null,
     time_sig: slideData?.time_sig ?? currentSongFromSchedule?.time_sig ?? currentSongFromLibrary?.time_sig ?? null,
