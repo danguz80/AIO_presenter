@@ -482,6 +482,9 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
     showSideLabel = true, showSongTitle = true, showSlideCounter = true,
     showClock = true, showNextSlide = true, showSectionLabel = true,
     showNextSongBpm = true, showNextSongTimeSig = true,
+    showCurrentSongBpm = true, showCurrentSongTimeSig = true,
+    currentSongMetaColor = '#a5b4fc',
+    fontSizeCurrentSongMeta = 12,
     slideIndex, totalSlides,
   } = stageConfig;
 
@@ -543,6 +546,8 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
 
   const showNextPanel = showNextSlide && slideData?.type !== 'bible';
   const currentSongKey = getSongKey(slideData);
+  const currentSongFromSchedule = idx >= 0 ? schedule[idx] : null;
+  const currentSongMeta = getNextSongMeta(currentSongFromSchedule, { showBpm: showCurrentSongBpm, showTimeSig: showCurrentSongTimeSig });
   const nextSongKey = getSongKey(nextSong);
   const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
 
@@ -572,10 +577,16 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
           </span>
         )}
         {showSongTitle && live && slideData?.songTitle && (
-          <span className="absolute left-1/2 -translate-x-1/2 font-bold truncate max-w-[70%]"
-            style={{ color: lyricsColor, fontSize: '1em' }}>
-            {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
-          </span>
+          <div className="absolute left-1/2 -translate-x-1/2 max-w-[70%] flex flex-col items-center">
+            <span className="font-bold truncate max-w-full" style={{ color: lyricsColor, fontSize: '1em' }}>
+              {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
+            </span>
+            {currentSongMeta && (
+              <span className="truncate max-w-full" style={{ color: currentSongMetaColor, fontSize: `${Math.max(8, Math.round(fontSizeCurrentSongMeta * 0.0625 * 7))}px` }}>
+                {currentSongMeta}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -613,7 +624,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
               <div className="shrink-0 w-1.5" style={{ backgroundColor: sectionColor, opacity: 0.45 }} />
             )}
             <div className="flex-1 flex flex-col items-center justify-center px-1.5 py-0.5 overflow-hidden"
-              style={{ opacity: 0.55 }}>
+            >
               {nextSlideData && live ? (
                 <MiniSlideContent
                   slideData={nextSlideData}
@@ -624,6 +635,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
                   commentColor={stageConfig.commentColor ?? '#facc15'}
                   showLabel={showSectionLabel}
                   stageConfig={stageConfig}
+                  dimmed
                 />
               ) : nextSong ? (
                 <div className="flex flex-col items-center max-w-full">
@@ -867,7 +879,8 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
 }
 
 // ─── Slide content miniatura para StagePreview ────────────────────────────────
-function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, showComments = false, commentColor = '#facc15', showLabel = true, stageConfig = {} }) {
+function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, showComments = false, commentColor = '#facc15', showLabel = true, stageConfig = {}, dimmed = false }) {
+  const contentOpacity = dimmed ? 0.55 : 1;
   if (slideData.type === 'title') {
     return (
       <div className="text-center px-1 overflow-hidden">
@@ -910,16 +923,19 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, show
               ? <span style={{ color: commentColor, fontSize: '0.75em', fontStyle: 'italic', marginLeft: '0.3em' }}>{ld.comment}</span>
               : null;
             if (!hasC) return (
-              <div key={li} style={{ color: lyricsColor, fontSize: '1em', lineHeight: 1.2 }}>{lineText}{inlineComment}</div>
+              <div key={li} style={{ fontSize: '1em', lineHeight: 1.2 }}>
+                <span style={{ color: lyricsColor, opacity: contentOpacity }}>{lineText}</span>
+                {inlineComment}
+              </div>
             );
             return (
               <div key={li} className="flex flex-wrap justify-center" style={{ lineHeight: 1 }}>
                 {line.map((seg, si) => (
                   <span key={si} className="inline-flex flex-col items-start">
-                    <span style={{ color: chordsColor, fontSize: '0.8em', lineHeight: 1, minHeight: '0.9em', fontFamily: 'monospace', fontWeight: 'bold' }}>
+                    <span style={{ color: chordsColor, opacity: contentOpacity, fontSize: '0.8em', lineHeight: 1, minHeight: '0.9em', fontFamily: 'monospace', fontWeight: 'bold' }}>
                       {seg.chord || ''}
                     </span>
-                    <span style={{ color: lyricsColor, fontSize: '1em', lineHeight: 1.2, whiteSpace: 'pre' }}>
+                    <span style={{ color: lyricsColor, opacity: contentOpacity, fontSize: '1em', lineHeight: 1.2, whiteSpace: 'pre' }}>
                       {seg.text || (seg.chord ? '\u00a0' : '')}
                     </span>
                   </span>
@@ -938,7 +954,7 @@ function MiniSlideContent({ slideData, lyricsColor, chordsColor, hasChords, show
             {slideData.label}
           </p>
         )}
-        <p className="whitespace-pre-line line-clamp-4" style={{ color: lyricsColor, fontSize: '1em', lineHeight: 1.25 }}>
+        <p className="whitespace-pre-line line-clamp-4" style={{ color: lyricsColor, opacity: contentOpacity, fontSize: '1em', lineHeight: 1.25 }}>
           {stripChords(showComments ? slideData.content : stripComments(slideData.content))}
         </p>
       </div>

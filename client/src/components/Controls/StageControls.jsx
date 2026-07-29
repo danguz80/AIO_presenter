@@ -105,7 +105,10 @@ export default function StageControls({ defaultOpen = false }) {
     showSectionLabel, showSideLabel,
     showNextSongBpm = true,
     showNextSongTimeSig = true,
+    showCurrentSongBpm = true,
+    showCurrentSongTimeSig = true,
     lyricsColor, nextLyricsColor, chordsColor, clockColor, nextColor,
+    currentSongMetaColor = '#a5b4fc',
     fontFamily, fontBold, fontItalic,
     fontSizeCounter    = 14,
     fontSizeTitle      = 16,
@@ -113,6 +116,7 @@ export default function StageControls({ defaultOpen = false }) {
     fontSizeSideLabel  = 13,
     fontSizeClock      = 22,
     fontSizeNextSong   = 16,
+    fontSizeCurrentSongMeta = 12,
     fontSizeNextLyrics = 32,
     fontSize           = 36,
     fontSizeChords     = 18,
@@ -265,6 +269,8 @@ export default function StageControls({ defaultOpen = false }) {
             <ToggleRow icon={<Clock size={12} />}      label="Reloj"             value={showClock        ?? true}  onChange={v => update({ showClock: v })} />
             <ToggleRow icon={<Tag size={12} />}        label="BPM sig. canción"  value={showNextSongBpm  ?? true}  onChange={v => update({ showNextSongBpm: v })} />
             <ToggleRow icon={<Tag size={12} />}        label="Compás sig. canción" value={showNextSongTimeSig ?? true}  onChange={v => update({ showNextSongTimeSig: v })} />
+            <ToggleRow icon={<Tag size={12} />}        label="BPM canción actual" value={showCurrentSongBpm ?? true}  onChange={v => update({ showCurrentSongBpm: v })} />
+            <ToggleRow icon={<Tag size={12} />}        label="Compás canción actual" value={showCurrentSongTimeSig ?? true}  onChange={v => update({ showCurrentSongTimeSig: v })} />
             <ToggleRow icon={<Film size={12} />}       label="Reproducir video"  value={showVideo        ?? true}  onChange={v => update({ showVideo: v })} />
           </SubSection>
 
@@ -340,6 +346,7 @@ export default function StageControls({ defaultOpen = false }) {
             <SizeRow label="Acordes"            value={fontSizeChords      ?? 18} onChange={v => update({ fontSizeChords: v })} />
             <SizeRow label="Letras (sig.)"      value={fontSizeNextLyrics  ?? 32} onChange={v => update({ fontSizeNextLyrics: v })} />
             <SizeRow label="Título canción"     value={fontSizeTitle       ?? 16} onChange={v => update({ fontSizeTitle: v })} />
+            <SizeRow label="Meta canción actual" value={fontSizeCurrentSongMeta ?? 12} onChange={v => update({ fontSizeCurrentSongMeta: v })} />
             <SizeRow label="Contador"           value={fontSizeCounter     ?? 14} onChange={v => update({ fontSizeCounter: v })} />
             <SizeRow label="Franja lateral"     value={fontSizeSideLabel   ?? 13} onChange={v => update({ fontSizeSideLabel: v })} />
             <SizeRow label="Próx. canción"      value={fontSizeNextSong    ?? 16} onChange={v => update({ fontSizeNextSong: v })} />
@@ -379,6 +386,7 @@ export default function StageControls({ defaultOpen = false }) {
             <ColorRow label="Acordes"             value={chordsColor     ?? '#fde047'} onChange={v => update({ chordsColor: v })} />
             <ColorRow label="Reloj"               value={clockColor      ?? '#ef4444'} onChange={v => update({ clockColor: v })} />
             <ColorRow label="Próx. canción"       value={nextColor       ?? '#22c55e'} onChange={v => update({ nextColor: v })} />
+            <ColorRow label="Meta canción actual" value={currentSongMetaColor ?? '#a5b4fc'} onChange={v => update({ currentSongMetaColor: v })} />
           </SubSection>
 
           {/* COMENTARIOS DE DIRECTOR */}

@@ -48,7 +48,7 @@ function getNextSongMeta(song, { showBpm = true, showTimeSig = true } = {}) {
 
 export default function StagePage() {
   const { state } = usePresenter();
-  const { liveState, stageConfig, schedule, eventPlays, reservasMode } = state;
+  const { liveState, stageConfig, schedule, songs, eventPlays, reservasMode } = state;
   const outputCfg = state.outputConfig ?? {};
   const [time, setTime] = useState(new Date());
   const [lastLabel, setLastLabel] = useState(null);
@@ -115,11 +115,14 @@ export default function StagePage() {
     showSideLabel    = true,
     showNextSongBpm  = true,
     showNextSongTimeSig = true,
+    showCurrentSongBpm = true,
+    showCurrentSongTimeSig = true,
     lyricsColor  = '#ffffff',
     nextLyricsColor = '#ffffff',
     chordsColor  = '#fde047',
     clockColor   = '#ef4444',
     nextColor    = '#22c55e',
+    currentSongMetaColor = '#a5b4fc',
     fontSize     = 36,
     fontFamily   = 'sans',
     fontBold     = true,
@@ -130,6 +133,7 @@ export default function StagePage() {
     fontSizeSideLabel  = 13,
     fontSizeClock      = 22,
     fontSizeNextSong   = 16,
+    fontSizeCurrentSongMeta = 12,
     fontSizeNextLyrics = 32,
     fontSizeChords     = 18,
     fontFamilyTitle    = 'sans',
@@ -253,6 +257,16 @@ export default function StagePage() {
 
   const showTopBar = showSongTitle || showSlideCounter || showSectionLabel;
   const currentSongKey = getSongKey(slideData);
+  const currentSongFromSchedule = schedule.find((s) => s.song_id === currentSongId) || null;
+  const currentSongFromLibrary = songs.find((s) => String(s.id) === String(currentSongId)) || null;
+  const currentSongMetaSource = {
+    bpm: slideData?.bpm ?? currentSongFromSchedule?.bpm ?? currentSongFromLibrary?.bpm ?? null,
+    time_sig: slideData?.time_sig ?? currentSongFromSchedule?.time_sig ?? currentSongFromLibrary?.time_sig ?? null,
+  };
+  const currentSongMeta = getNextSongMeta(currentSongMetaSource, {
+    showBpm: showCurrentSongBpm,
+    showTimeSig: showCurrentSongTimeSig,
+  });
   const nextSongKey = getSongKey(nextSong);
   const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
 
@@ -284,9 +298,16 @@ export default function StagePage() {
             </span>
           )}
           {showSongTitle && hasContent && slideData.songTitle && (
-            <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
-              {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
-            </span>
+            <div className="absolute left-1/2 -translate-x-1/2 max-w-[70%] flex flex-col items-center">
+              <span className="text-white font-semibold truncate max-w-full" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
+                {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
+              </span>
+              {currentSongMeta && (
+                <span className="truncate max-w-full" style={{ color: currentSongMetaColor, fontSize: sz(fontSizeCurrentSongMeta) }}>
+                  {currentSongMeta}
+                </span>
+              )}
+            </div>
           )}
         </div>
         </div>
@@ -375,7 +396,7 @@ export default function StagePage() {
             )}
 
             {/* Contenido del panel inferior */}
-            <div className="flex-1 overflow-hidden" style={{ opacity: 0.55 }}>
+            <div className="flex-1 overflow-hidden">
               {nextSlideData && !isBlank ? (
                 <StageSlideContent
                   slideData={nextSlideData}
@@ -392,6 +413,7 @@ export default function StagePage() {
                   commentFontSize={commentFontSize}
                   showVideo={showVideo}
                   stageCfg={stageConfig}
+                  dimmed
                 />
               ) : nextSong ? (
                 <div className="w-full h-full flex flex-col items-center justify-center gap-4 px-10 text-center">
@@ -583,7 +605,7 @@ function StageTitleSlide({ titleFF, artistFF, titleColor, artistColor, titleSize
   );
 }
 
-export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true, stageCfg = {} }) {
+export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFamily, outputCfg = {}, lyricsColor, chordsColor, chordsSize = 18, strokeWidth = 0, strokeColor = '#000000', showComments = false, commentColor = '#facc15', commentFontFamily = 'sans', commentFontSize = 16, showVideo = true, stageCfg = {}, dimmed = false }) {
   const stroke = strokeWidth > 0
     ? `${Array.from({ length: 4 }, (_, i) => {
         const angle = i * 90;
@@ -638,6 +660,7 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
       fontStyle: 'italic',
       textShadow: stroke,
     };
+    const contentOpacity = dimmed ? 0.55 : 1;
 
     return (
       <div
@@ -671,8 +694,9 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
             // ── Línea de letra sin acordes ────────────────────────────
             if (!hasChords) {
               return (
-                <div key={li} className="leading-relaxed" style={{ color: lyricsColor, textShadow: stroke }}>
-                  {lineText}{inlineComment}
+                <div key={li} className="leading-relaxed" style={{ textShadow: stroke }}>
+                  <span style={{ color: lyricsColor, opacity: contentOpacity }}>{lineText}</span>
+                  {inlineComment}
                 </div>
               );
             }
@@ -693,7 +717,7 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
                       <span className="inline-flex flex-col" style={{ ...outerStyle, alignItems }}>
                         <span
                           className="font-bold font-mono"
-                          style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: chordsColor }}
+                          style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: chordsColor, opacity: contentOpacity }}
                         >
                           {seg.chord || ''}
                         </span>
@@ -701,6 +725,7 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
                           <span
                             style={{
                               color: lyricsColor,
+                              opacity: contentOpacity,
                               textShadow: stroke,
                               lineHeight: 1.15,
                               whiteSpace: 'pre',
@@ -717,7 +742,7 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
                         <span className="inline-flex flex-col items-center" style={{ padding: '0 0.3em' }}>
                           <span
                             className="font-mono"
-                            style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: '#ffffff' }}
+                            style={{ fontSize: `${chordsSize}pt`, lineHeight: 0.85, minHeight: '0.9em', color: '#ffffff', opacity: contentOpacity }}
                           >
                             —
                           </span>
