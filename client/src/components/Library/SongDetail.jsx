@@ -899,7 +899,7 @@ export default function SongDetail() {
                   ['stop', 'Parar'],
                   ['first', 'Ir al principio'],
                 ].map(([value, label]) => {
-                  const active = selectedVideoEntries.every(({ slide }) => (slide.slide_background?.endAction || 'loop') === value);
+                  const active = selectedVideoEntries.every(({ slide }) => (getSlideBackground(slide)?.endAction || 'loop') === value);
                   return (
                     <button
                       key={value}
@@ -1086,7 +1086,7 @@ export default function SongDetail() {
               const thumbFontSize = `${Math.max(0.18, Math.min(2.4, baseSize * colScale * fontScale)).toFixed(3)}rem`;
               const isDroppingHere = dropBefore === index;
               const isMediaDropHere = mediaDropIdx === index;
-              const slideBg = slide.slide_background ?? null;
+              const slideBg = getSlideBackground(slide);
 
               return (
                 <div key={`${slide.id}-${index}`} style={{ display: 'contents' }}>
@@ -1194,8 +1194,8 @@ export default function SongDetail() {
                               : liveState.background ?? { type: 'color', color: '#000000' }
                           }
                           backgroundMedia={
-                            slide.slide_background?.mediaType
-                              ? slide.slide_background
+                            slideBg?.mediaType
+                              ? slideBg
                               : thumbGlobalBg
                           }
                           slideIndex={index}
@@ -1291,9 +1291,9 @@ export default function SongDetail() {
                     >
                       {visibleLines.join('\n') || '(vacío)'}
                     </p>
-                    {slide.slide_background && (
-                      <p className="text-[9px] text-blue-400 mt-0.5 truncate" title={slide.slide_background.fileName}>
-                        {slide.slide_background.mediaType === 'video' ? '▶' : '▪'} {slide.slide_background.fileName || 'fondo asignado'}
+                    {getSlideBackground(slide) && (
+                      <p className="text-[9px] text-blue-400 mt-0.5 truncate" title={getSlideBackground(slide).fileName}>
+                        {getSlideBackground(slide).mediaType === 'video' ? '▶' : '▪'} {getSlideBackground(slide).fileName || 'fondo asignado'}
                       </p>
                     )}
                   </div>
@@ -1371,7 +1371,7 @@ export default function SongDetail() {
             )}
             <div className="h-px bg-surface-700 my-1" />
             {/* Quitar fondo si tiene uno asignado */}
-            {ctxMenu.slide.slide_background && (
+            {getSlideBackground(ctxMenu.slide) && (
               <button
                 className="w-full text-left px-3 py-1.5 hover:bg-surface-700 text-zinc-300 transition-colors"
                 onClick={() => { handleSlideMediaDrop(ctxMenu.index, null); closeCtx(); }}
