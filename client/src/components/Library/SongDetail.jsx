@@ -170,6 +170,7 @@ export default function SongDetail() {
   const isSongLibraryItem = Array.isArray(selectedSong?.tags)
     ? selectedSong.tags.includes('Canciones')
     : false;
+  const isPresentationItem = !Array.isArray(selectedSong?.tags) || !selectedSong.tags.includes('Canciones');
   const showTitleSlide = outputCfg.titleSlideEnabled && isSongLibraryItem;
 
   const orderedSlides = useMemo(() => {
@@ -375,7 +376,6 @@ export default function SongDetail() {
   // ── Menú contextual ───────────────────────────────────────────────────────
   const [ctxMenu,  setCtxMenu]  = useState(null);
   const [renaming, setRenaming] = useState(null);
-  const isPresentationItem = !Array.isArray(selectedSong?.tags) || !selectedSong.tags.includes('Canciones');
 
   const openCtx  = (e, slide, index) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, slide, index }); };
   const closeCtx = () => { setCtxMenu(null); setRenaming(null); };
