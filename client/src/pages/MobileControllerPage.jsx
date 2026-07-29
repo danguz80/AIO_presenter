@@ -9,6 +9,7 @@ import DisplaysPanel   from '../components/Settings/DisplaysPanel';
 import SyncPanel       from '../components/Settings/SyncPanel';
 import MediaLibrary    from '../components/Library/MediaLibrary';
 import MessagesPanel   from '../components/Controls/MessagesPanel';
+import EventPickerModal from '../components/shared/EventPickerModal';
 import { StagePreview } from '../components/Controls/LivePreview';
 import OrgSwitcher     from '../components/shared/OrgSwitcher';
 import { stripChords, stripComments, isCommentLine, extractInlineComment, buildScaleChords, parseChordLines } from '../utils/chordUtils';
@@ -17,6 +18,7 @@ import { splitBibleVerseSmart } from '../utils/bibleSplit';
 import useVolumeKeys from '../hooks/useVolumeKeys';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
 import { APP_VERSION } from '../version';
+import { addSongToEvent, fetchEventsAround } from '../utils/eventSongActions';
 import {
   ChevronLeft, ChevronRight, EyeOff, Eye,
   Wifi, WifiOff, Music, Music2, Radio, Settings, ArrowLeft, Search, X, RefreshCw,
@@ -250,6 +252,15 @@ export default function MobileControllerPage() {
   const [loadingSong,      setLoadingSong]      = useState(false);
   const [songSearch,       setSongSearch]       = useState('');
   const [activeSongTagFilter, setActiveSongTagFilter] = useState(null);
+  const [songContextMenu, setSongContextMenu] = useState(null);
+  const [songEventPickerOpen, setSongEventPickerOpen] = useState(false);
+  const [songEventPickerLoading, setSongEventPickerLoading] = useState(false);
+  const [songEventPickerEvents, setSongEventPickerEvents] = useState([]);
+  const [songContextTarget, setSongContextTarget] = useState(null);
+  const [songEventActionMsg, setSongEventActionMsg] = useState('');
+  const songLongPressTimerRef = useRef(null);
+  const songLongPressOpenedRef = useRef(false);
+  const songTouchStartRef = useRef({ x: 0, y: 0 });
 
   const [cfgIp,    setCfgIp]    = useState(getSavedIp);
   const [cfgPort,  setCfgPort]  = useState(getSavedPort);
@@ -1145,6 +1156,176 @@ export default function MobileControllerPage() {
     return [...set].sort((a, b) => a.localeCompare(b, 'es'));
   }, [songs]);
 
+  const clampMenuPosition = useCallback((x, y) => {
+    const margin = 12;
+    const menuWidth = 280;
+    const menuHeight = 190;
+    const vw = window.innerWidth || 360;
+    const vh = window.innerHeight || 640;
+    return {
+      x: Math.min(Math.max(x, margin), Math.max(margin, vw - menuWidth - margin)),
+      y: Math.min(Math.max(y, margin), Math.max(margin, vh - menuHeight - margin)),
+    };
+  }, []);
+
+  const clearSongLongPressTimer = useCallback(() => {
+    if (!songLongPressTimerRef.current) return;
+    clearTimeout(songLongPressTimerRef.current);
+    songLongPressTimerRef.current = null;
+  }, []);
+
+  const openSongContextMenuAt = useCallback((x, y, song) => {
+    const pos = clampMenuPosition(x, y);
+    setSongContextTarget(song);
+    setSongContextMenu({ ...pos, song });
+  }, [clampMenuPosition]);
+
+  const openSongContextMenu = useCallback((event, song) => {
+    event.preventDefault();
+    event.stopPropagation();
+    songLongPressOpenedRef.current = false;
+    openSongContextMenuAt(event.clientX, event.clientY, song);
+  }, [openSongContextMenuAt]);
+
+  const handleSongPointerDown = useCallback((event, song) => {
+    if (event.pointerType !== 'touch') return;
+    songLongPressOpenedRef.current = false;
+    songTouchStartRef.current = { x: event.clientX, y: event.clientY };
+    clearSongLongPressTimer();
+    songLongPressTimerRef.current = setTimeout(() => {
+      songLongPressOpenedRef.current = true;
+      openSongContextMenuAt(event.clientX, event.clientY, song);
+      setTimeout(() => { songLongPressOpenedRef.current = false; }, 900);
+    }, 480);
+  }, [clearSongLongPressTimer, openSongContextMenuAt]);
+
+  const handleSongPointerMove = useCallback((event) => {
+    if (event.pointerType !== 'touch' || !songLongPressTimerRef.current) return;
+    const dx = Math.abs(event.clientX - songTouchStartRef.current.x);
+    const dy = Math.abs(event.clientY - songTouchStartRef.current.y);
+    if (dx > 12 || dy > 12) clearSongLongPressTimer();
+  }, [clearSongLongPressTimer]);
+
+  const handleSongPointerUp = useCallback((event) => {
+    if (event.pointerType === 'touch') clearSongLongPressTimer();
+  }, [clearSongLongPressTimer]);
+
+  const loadOpenEventRef = useCallback(() => {
+    try {
+      const raw = localStorage.getItem('aio_open_event_ref');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.id) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const addSongToOpenEventFromContext = useCallback(async () => {
+    const song = songContextMenu?.song;
+    if (!song) return;
+
+    try {
+      if (eventDetail?.id) {
+        const result = await addSongToEvent({ event: eventDetail, song, apiBase: getApiBase() });
+        if (result.duplicate) setSongEventActionMsg(`"${song.title}" ya estaba en este evento`);
+        else {
+          setSongEventActionMsg(`"${song.title}" agregada al evento abierto`);
+          loadEvents(eventsYear, eventsMonth);
+          setEventDetail(prev => prev
+            ? {
+                ...prev,
+                songs: [
+                  ...(Array.isArray(prev.songs) ? prev.songs : []),
+                  { song_id: song.id, item_type: 'song', title: song.title || null, author: song.artist || null },
+                ],
+              }
+            : prev);
+        }
+      } else {
+        const ref = loadOpenEventRef();
+        if (!ref) {
+          setSongEventActionMsg('No hay evento abierto');
+          setSongContextMenu(null);
+          return;
+        }
+        const today = String(ref.occurrence_date || new Date().toISOString().slice(0, 10));
+        const list = await fetchEventsAround({ apiBase: getApiBase(), pastDays: 730, futureDays: 730 });
+        const match = list.find((ev) => {
+          const evDate = String(ev.occurrence_date || ev.date).slice(0, 10);
+          if (String(ev.id) !== String(ref.id)) return false;
+          if (!ref.occurrence_date) return true;
+          return evDate === today;
+        });
+        if (!match) throw new Error('Evento abierto no encontrado');
+        const result = await addSongToEvent({ event: match, song, apiBase: getApiBase() });
+        if (result.duplicate) setSongEventActionMsg(`"${song.title}" ya estaba en ese evento`);
+        else setSongEventActionMsg(`"${song.title}" agregada al evento abierto`);
+      }
+    } catch (err) {
+      console.error(err);
+      setSongEventActionMsg('No se pudo agregar al evento abierto');
+    } finally {
+      setSongContextMenu(null);
+    }
+  }, [songContextMenu, eventDetail, loadOpenEventRef, loadEvents, eventsYear, eventsMonth]);
+
+  const openSongEventPicker = useCallback(async () => {
+    setSongContextTarget(songContextMenu?.song || null);
+    setSongContextMenu(null);
+    setSongEventPickerOpen(true);
+    setSongEventPickerLoading(true);
+    try {
+      const list = await fetchEventsAround({ apiBase: getApiBase(), pastDays: 180, futureDays: 180 });
+      setSongEventPickerEvents(list);
+    } catch (err) {
+      console.error(err);
+      setSongEventActionMsg('No se pudieron cargar eventos');
+    } finally {
+      setSongEventPickerLoading(false);
+    }
+  }, [songContextMenu]);
+
+  const addSongToPickedEvent = useCallback(async (eventItem) => {
+    const song = songContextTarget || songContextMenu?.song;
+    if (!song) return;
+    try {
+      const result = await addSongToEvent({ event: eventItem, song, apiBase: getApiBase() });
+      if (result.duplicate) setSongEventActionMsg(`"${song.title}" ya estaba en ese evento`);
+      else setSongEventActionMsg(`"${song.title}" agregada a "${eventItem.title}"`);
+      loadEvents(eventsYear, eventsMonth);
+    } catch (err) {
+      console.error(err);
+      setSongEventActionMsg('No se pudo agregar la canción al evento');
+    } finally {
+      setSongEventPickerOpen(false);
+      setSongContextMenu(null);
+      setSongContextTarget(null);
+    }
+  }, [songContextTarget, songContextMenu, loadEvents, eventsYear, eventsMonth]);
+
+  useEffect(() => {
+    if (!songContextMenu) return;
+    const close = () => setSongContextMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [songContextMenu]);
+
+  useEffect(() => {
+    if (!songEventActionMsg) return;
+    const t = setTimeout(() => setSongEventActionMsg(''), 2400);
+    return () => clearTimeout(t);
+  }, [songEventActionMsg]);
+
+  useEffect(() => () => clearSongLongPressTimer(), [clearSongLongPressTimer]);
+
   return (
     <div
       className="h-[100dvh] bg-surface-900 flex flex-col select-none overflow-hidden mobile-controller-root"
@@ -1622,6 +1803,11 @@ export default function MobileControllerPage() {
               {/* ── Lista de canciones ── */}
               {(!songDetail || songSearch || activeSongTagFilter) && !songEditMode && (
                 <div className="px-4 pb-4 pt-3 space-y-1.5">
+                  {songEventActionMsg && (
+                    <div className="px-3 py-2 text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                      {songEventActionMsg}
+                    </div>
+                  )}
                   {loadingSong && (
                     <div className="flex justify-center pt-8">
                       <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
@@ -1635,7 +1821,20 @@ export default function MobileControllerPage() {
                   {filteredSongs.map(song => (
                     <button
                       key={song.id}
-                      onClick={() => openSong(song.id)}
+                      onContextMenu={(e) => openSongContextMenu(e, song)}
+                      onPointerDown={(e) => handleSongPointerDown(e, song)}
+                      onPointerMove={handleSongPointerMove}
+                      onPointerUp={handleSongPointerUp}
+                      onPointerCancel={handleSongPointerUp}
+                      onClick={(e) => {
+                        if (songLongPressOpenedRef.current) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          songLongPressOpenedRef.current = false;
+                          return;
+                        }
+                        openSong(song.id);
+                      }}
                       className="w-full text-left px-4 py-3.5 bg-surface-800 active:bg-surface-700 rounded-xl border border-surface-700 transition-colors"
                     >
                       <p className="text-zinc-200 text-sm font-medium leading-snug">{song.title}</p>
@@ -2804,6 +3003,41 @@ export default function MobileControllerPage() {
         </div>
 
       </div>
+
+      {songContextMenu && (
+        <div
+          className="fixed z-[95] min-w-[240px] max-w-[280px] bg-surface-800 border border-surface-600 rounded-xl shadow-2xl overflow-hidden"
+          style={{ left: songContextMenu.x, top: songContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-2 border-b border-surface-600">
+            <p className="text-xs text-zinc-500">Canción</p>
+            <p className="text-sm text-zinc-100 font-medium truncate">{songContextMenu.song?.title}</p>
+          </div>
+          <button
+            onClick={addSongToOpenEventFromContext}
+            className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-surface-700"
+          >
+            Agregar al evento abierto
+          </button>
+          <button
+            onClick={openSongEventPicker}
+            className="w-full text-left px-3 py-2 text-sm text-zinc-200 hover:bg-surface-700"
+          >
+            Elegir evento por fecha...
+          </button>
+        </div>
+      )}
+
+      {songEventPickerOpen && (
+        <EventPickerModal
+          title="Agregar canción a evento"
+          events={songEventPickerEvents}
+          loading={songEventPickerLoading}
+          onClose={() => setSongEventPickerOpen(false)}
+          onPick={addSongToPickedEvent}
+        />
+      )}
 
       {/* ── Nav inferior fija: Anterior / Negro / Siguiente ── */}
       <div className="shrink-0 grid grid-cols-3 gap-2 px-3 py-2 bg-surface-900 border-t border-surface-700 mobile-nav-safe">

@@ -103,12 +103,25 @@ export default function CancioneroSongs() {
     return () => clearTimeout(t);
   }, [eventActionMsg]);
 
+  const clampMenuPosition = (x, y) => {
+    const margin = 12;
+    const menuWidth = 280;
+    const menuHeight = 190;
+    const vw = window.innerWidth || 360;
+    const vh = window.innerHeight || 640;
+    return {
+      x: Math.min(Math.max(x, margin), Math.max(margin, vw - menuWidth - margin)),
+      y: Math.min(Math.max(y, margin), Math.max(margin, vh - menuHeight - margin)),
+    };
+  };
+
   const openContextMenu = (event, song) => {
     event.preventDefault();
     event.stopPropagation();
     longPressOpenedRef.current = false;
+    const pos = clampMenuPosition(event.clientX, event.clientY);
     setEventTargetSong(song);
-    setContextMenu({ x: event.clientX, y: event.clientY, song });
+    setContextMenu({ ...pos, song });
   };
 
   const clearLongPressTimer = () => {
@@ -118,8 +131,9 @@ export default function CancioneroSongs() {
   };
 
   const openContextMenuAt = (x, y, song) => {
+    const pos = clampMenuPosition(x, y);
     setEventTargetSong(song);
-    setContextMenu({ x, y, song });
+    setContextMenu({ ...pos, song });
   };
 
   const handleSongPointerDown = (event, song) => {
