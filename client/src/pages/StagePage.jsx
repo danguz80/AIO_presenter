@@ -86,6 +86,7 @@ export default function StagePage() {
   const {
     slideData, nextSlideData, isBlank,
     slideIndex, totalSlides, backgroundMedia,
+    songBpm: liveSongBpm, songTimeSig: liveSongTimeSig,
   } = liveState;
 
   // Auto-cachear fondos de video locales (soporte multi-PC con OneDrive/Dropbox)
@@ -260,8 +261,8 @@ export default function StagePage() {
   const currentSongFromSchedule = schedule.find((s) => s.song_id === currentSongId) || null;
   const currentSongFromLibrary = songs.find((s) => String(s.id) === String(currentSongId)) || null;
   const currentSongMetaSource = {
-    bpm: slideData?.bpm ?? currentSongFromSchedule?.bpm ?? currentSongFromLibrary?.bpm ?? null,
-    time_sig: slideData?.time_sig ?? currentSongFromSchedule?.time_sig ?? currentSongFromLibrary?.time_sig ?? null,
+    bpm: slideData?.bpm ?? liveSongBpm ?? currentSongFromSchedule?.bpm ?? currentSongFromLibrary?.bpm ?? null,
+    time_sig: slideData?.time_sig ?? liveSongTimeSig ?? currentSongFromSchedule?.time_sig ?? currentSongFromLibrary?.time_sig ?? null,
   };
   const currentSongMeta = getNextSongMeta(currentSongMetaSource, {
     showBpm: showCurrentSongBpm,

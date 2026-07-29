@@ -589,6 +589,21 @@ io.on('connection', async (socket) => {
     }
   };
 
+  // Normaliza metadatos de canción para que Stage nunca dependa de payloads incompletos.
+  const withCurrentSongMeta = (slideLike) => {
+    if (!slideLike) return slideLike;
+    if (slideLike.type !== 'song' && slideLike.type !== 'title') return slideLike;
+    return {
+      ...slideLike,
+      songId: slideLike.songId ?? live.currentSong?.songId ?? null,
+      songTitle: slideLike.songTitle ?? live.currentSong?.songTitle ?? '',
+      songAuthor: slideLike.songAuthor ?? live.currentSong?.songAuthor ?? '',
+      songKey: slideLike.songKey ?? live.currentSong?.songKey ?? null,
+      bpm: slideLike.bpm ?? live.currentSong?.songBpm ?? null,
+      time_sig: slideLike.time_sig ?? live.currentSong?.songTimeSig ?? null,
+    };
+  };
+
   const logConfigChange = (entityType, message, metadata = null) => {
     if (!socket.userId) return;
     writeAuditLog(pool, {
@@ -636,7 +651,16 @@ io.on('connection', async (socket) => {
         };
       }
       const bgMedia = data.slideData?.slideBackground ?? s.outputConfig.titleBackground ?? null;
-      live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: data.slideData, nextSlideData: data.nextSlideData ?? null };
+      live.liveState = {
+        ...live.liveState,
+        backgroundMedia: bgMedia,
+        isBlank: false,
+        slideIndex: -1,
+        slideData: withCurrentSongMeta(data.slideData),
+        nextSlideData: withCurrentSongMeta(data.nextSlideData ?? null),
+        songBpm: live.currentSong?.songBpm ?? null,
+        songTimeSig: live.currentSong?.songTimeSig ?? null,
+      };
       emitToLiveState('live:state', live.liveState);
       return;
     }
@@ -690,7 +714,17 @@ io.on('connection', async (socket) => {
           label: firstSlide.label,
           content: firstSlide.content,
         } : null;
-        live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
+        live.liveState = {
+          ...live.liveState,
+          backgroundMedia: bgMedia,
+          isBlank: false,
+          slideIndex: -1,
+          slideData: withCurrentSongMeta(titleSlideData),
+          nextSlideData: withCurrentSongMeta(nextSD),
+          totalSlides: data.slides.length,
+          songBpm: live.currentSong.songBpm ?? null,
+          songTimeSig: live.currentSong.songTimeSig ?? null,
+        };
         emitToLiveState('live:state', live.liveState);
         return;
       }
@@ -702,7 +736,18 @@ io.on('connection', async (socket) => {
       live.liveState = { ...live.liveState, backgroundMedia: data.slideData.slideBackground };
     }
     const { slides, ...rest } = data;
-    live.liveState = { ...live.liveState, ...rest, totalSlides: slides?.length ?? null, isBlank: false };
+    const normalizedSlideData = withCurrentSongMeta(rest.slideData ?? null);
+    const normalizedNextSlideData = withCurrentSongMeta(rest.nextSlideData ?? null);
+    live.liveState = {
+      ...live.liveState,
+      ...rest,
+      slideData: normalizedSlideData,
+      nextSlideData: normalizedNextSlideData,
+      totalSlides: slides?.length ?? null,
+      isBlank: false,
+      songBpm: live.currentSong?.songBpm ?? null,
+      songTimeSig: live.currentSong?.songTimeSig ?? null,
+    };
     emitToLiveState('live:state', live.liveState);
   });
 
