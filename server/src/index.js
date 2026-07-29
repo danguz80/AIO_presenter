@@ -629,6 +629,8 @@ io.on('connection', async (socket) => {
           songAuthor:       data.slideData?.songAuthor || live.currentSong?.songAuthor || '',
           songId:           data.slideData?.songId     || live.currentSong?.songId     || null,
           songKey:          data.slideData?.songKey    || live.currentSong?.songKey    || null,
+          songBpm:          data.slideData?.bpm        ?? live.currentSong?.songBpm     ?? null,
+          songTimeSig:      data.slideData?.time_sig   ?? live.currentSong?.songTimeSig ?? null,
           titleSlideActive: true,
           slideIndex:       -1,
         };
@@ -658,6 +660,8 @@ io.on('connection', async (socket) => {
         songAuthor:       data.slideData?.songAuthor || '',
         songId:           data.slideData?.songId     || null,
         songKey:          data.slideData?.songKey    || null,
+        songBpm:          data.slideData?.bpm        ?? null,
+        songTimeSig:      data.slideData?.time_sig   ?? null,
         titleSlideActive: false,
       };
       if (s.outputConfig.titleSlideEnabled && isNewSong && !data.skipTitleIntercept) {
@@ -670,10 +674,22 @@ io.on('connection', async (socket) => {
           songAuthor: live.currentSong.songAuthor,
           songId:     live.currentSong.songId,
           songKey:    live.currentSong.songKey || null,
+          bpm:        live.currentSong.songBpm ?? null,
+          time_sig:   live.currentSong.songTimeSig ?? null,
           slideBackground: s.outputConfig.titleBackground || null,
         };
         const bgMedia = s.outputConfig.titleBackground || null;
-        const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null;
+        const nextSD = firstSlide ? {
+          type: 'song',
+          songId: live.currentSong.songId,
+          songTitle: live.currentSong.songTitle,
+          songAuthor: live.currentSong.songAuthor,
+          songKey: live.currentSong.songKey || null,
+          bpm: live.currentSong.songBpm ?? null,
+          time_sig: live.currentSong.songTimeSig ?? null,
+          label: firstSlide.label,
+          content: firstSlide.content,
+        } : null;
         live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
         emitToLiveState('live:state', live.liveState);
         return;
@@ -804,7 +820,7 @@ io.on('connection', async (socket) => {
   // Navegar: el móvil u otro cliente pide avanzar/retroceder
   socket.on('navigate', (dir) => {
     if (live.currentSong && live.currentSong.slides.length > 0) {
-      const { slides, songId, songTitle, songAuthor, songKey } = live.currentSong;
+      const { slides, songId, songTitle, songAuthor, songKey, songBpm, songTimeSig } = live.currentSong;
 
       if (live.currentSong.titleSlideActive) {
         if (dir === 'next') {
@@ -818,8 +834,29 @@ io.on('connection', async (socket) => {
             backgroundMedia: bgMedia,
             isBlank: false,
             slideIndex: 0,
-            slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content },
-            nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
+            slideData: {
+              type: 'song',
+              songId,
+              slideId: slide.id,
+              songTitle,
+              songAuthor,
+              songKey: songKey || null,
+              bpm: songBpm ?? null,
+              time_sig: songTimeSig ?? null,
+              label: slide.label,
+              content: slide.content,
+            },
+            nextSlideData: nextSlide ? {
+              type: 'song',
+              songId,
+              songTitle,
+              songAuthor,
+              songKey: songKey || null,
+              bpm: songBpm ?? null,
+              time_sig: songTimeSig ?? null,
+              label: nextSlide.label,
+              content: nextSlide.content,
+            } : null,
           };
           emitToLive('live:state', live.liveState);
         }
@@ -839,8 +876,26 @@ io.on('connection', async (socket) => {
           backgroundMedia: s.outputConfig.titleBackground || null,
           isBlank: false,
           slideIndex: -1,
-          slideData: { type: 'title', songTitle, songAuthor, songId, songKey: songKey || null },
-          nextSlideData: { type: 'song', label: slides[0].label, content: slides[0].content },
+          slideData: {
+            type: 'title',
+            songTitle,
+            songAuthor,
+            songId,
+            songKey: songKey || null,
+            bpm: songBpm ?? null,
+            time_sig: songTimeSig ?? null,
+          },
+          nextSlideData: {
+            type: 'song',
+            songId,
+            songTitle,
+            songAuthor,
+            songKey: songKey || null,
+            bpm: songBpm ?? null,
+            time_sig: songTimeSig ?? null,
+            label: slides[0].label,
+            content: slides[0].content,
+          },
         };
         emitToLive('live:state', live.liveState);
         return;
@@ -857,10 +912,28 @@ io.on('connection', async (socket) => {
         isBlank: false,
         slideIndex: newIndex,
         slideData: {
-          type: 'song', songId, slideId: slide.id, songTitle,
-          songKey: songKey || null, label: slide.label, content: slide.content,
+          type: 'song',
+          songId,
+          slideId: slide.id,
+          songTitle,
+          songAuthor,
+          songKey: songKey || null,
+          bpm: songBpm ?? null,
+          time_sig: songTimeSig ?? null,
+          label: slide.label,
+          content: slide.content,
         },
-        nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
+        nextSlideData: nextSlide ? {
+          type: 'song',
+          songId,
+          songTitle,
+          songAuthor,
+          songKey: songKey || null,
+          bpm: songBpm ?? null,
+          time_sig: songTimeSig ?? null,
+          label: nextSlide.label,
+          content: nextSlide.content,
+        } : null,
       };
       emitToLive('live:state', live.liveState);
     } else {
