@@ -182,12 +182,17 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const [timeSig,     setTimeSig]     = useState(song?.time_sig || '');
   const [links,       setLinks]       = useState(initialLinks);
   const [body,        setBody]        = useState(() => slidesToText(song?.slides));
+  const [notes,       setNotes]       = useState(song?.notes || '');
   const [tags,        setTags]        = useState(song?.tags || []);
   const [allTags,     setAllTags]     = useState([]);
   const [tagInput,    setTagInput]    = useState('');
   const [saving,      setSaving]      = useState(false);
   const [error,       setError]       = useState('');
   const [confirmDel,  setConfirmDel]  = useState(false);
+  // Solo se considera "canción" (con letra/acordes/editor completo) si tiene la etiqueta "Canciones".
+  // Cualquier otra presentación (anuncios, videos, etc.) usa el modal simplificado: Título + Notas,
+  // y el contenido (medios/fondos) se agrega directamente en la grilla de diapositivas.
+  const isPresentation = !tags.includes('Canciones');
   const textareaRef     = useRef(null);
   const savedCursorPos  = useRef(null);
   const [cursorPos,     setCursorPos]    = useState(0);
@@ -378,8 +383,11 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
       time_sig: timeSig || null,
       links: cleanedLinks,
       link: cleanedLinks[0]?.url || null,
+      notes: notes || null,
       tags,
-      slides,
+      // En modo presentación (sin etiqueta "Canciones") editando una existente, no tocar las
+      // diapositivas: su contenido/fondos se administran directamente en la grilla, no aquí.
+      ...(isPresentation && isEdit ? {} : { slides }),
     };
     try {
       let savedSong;
@@ -432,7 +440,9 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-surface-700 shrink-0">
           <h2 className="font-semibold text-lg">
-            {isEdit ? 'Editar canción' : 'Nueva canción'}
+            {isEdit
+              ? (isPresentation ? 'Editar presentación' : 'Editar canción')
+              : (isPresentation ? 'Nueva presentación'  : 'Nueva canción')}
           </h2>
           <button onClick={onClose} className="btn-ghost p-1">
             <X size={18} />
@@ -443,7 +453,8 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
           {/* ── 3 columnas en desktop, 1 columna en móvil ── */}
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row min-h-0">
 
-          {/* ── Col 1: Acordes ── */}
+          {/* ── Col 1: Acordes (solo canciones) ── */}
+          {!isPresentation && (
           <div className="hidden lg:block lg:w-52 shrink-0 overflow-y-auto border-b lg:border-b-0 lg:border-r border-surface-700">
             {(() => {
               const groups = buildScaleChords(activeKey);
@@ -485,21 +496,23 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
               );
             })()}
           </div>
+          )}
 
           {/* ── Col 2: Metadatos + Etiquetas + Letra ── */}
           <div className="flex-1 overflow-y-auto min-w-0 min-h-0">
           {/* Campos básicos */}
-          <div className="px-4 sm:px-6 py-4 grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-surface-700">
+          <div className={`px-4 sm:px-6 py-4 grid grid-cols-1 ${isPresentation ? '' : 'sm:grid-cols-2'} gap-4 border-b border-surface-700`}>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Título *</label>
               <input
                 className="input"
                 value={title}
                 onChange={e => setTitle(e.target.value)}
-                placeholder="Título de la canción"
+                placeholder={isPresentation ? 'Título de la presentación' : 'Título de la canción'}
                 autoFocus
               />
             </div>
+            {!isPresentation && (
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Autor / Artista</label>
               <input
@@ -509,8 +522,11 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 placeholder="Compositor"
               />
             </div>
+            )}
           </div>
 
+          {!isPresentation && (
+          <>
           {/* Metadatos */}
           <div className="px-4 sm:px-6 py-3 grid grid-cols-2 sm:grid-cols-3 gap-3 border-b border-surface-700">
             <div>
@@ -588,6 +604,8 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
               </div>
             )}
           </div>
+          </>
+          )}
 
           {/* Etiquetas de categoría */}
           <div className="px-4 sm:px-6 py-3 border-b border-surface-700">
@@ -626,9 +644,32 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 }}
               />
             </div>
+            {isPresentation && (
+              <p className="text-[11px] text-zinc-500 mt-2">
+                Agrega la etiqueta <span className="text-accent font-semibold">Canciones</span> para
+                habilitar el editor completo de letra/acordes.
+              </p>
+            )}
           </div>
 
-          {/* Editor de letra */}
+          {isPresentation ? (
+            /* ── Notas (presentaciones sin etiqueta "Canciones") ── */
+            <div className="px-4 sm:px-6 pt-2 pb-6 flex flex-col gap-2">
+              <label className="text-xs text-zinc-400">Notas</label>
+              <textarea
+                rows={10}
+                className="input resize-none text-sm leading-relaxed min-h-[30vh]"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Notas para el operador (ej: indicaciones del anuncio, duración del video, etc.)"
+              />
+              <p className="text-xs text-zinc-600">
+                El contenido (imágenes, videos, texto por diapositiva) se agrega directamente en la
+                grilla de diapositivas, no aquí.
+              </p>
+            </div>
+          ) : (
+          /* ── Editor de letra ── */
           <div className="px-4 sm:px-6 pt-2 pb-6 flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs text-zinc-400 flex items-center gap-2">
@@ -778,6 +819,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 spellCheck={false}
               />
           </div>{/* end editor */}
+          )}
           </div>{/* end scroll */}
 
             {/* ── Col 3: Labels + Borrar + Cambio de clave ── */}
@@ -792,13 +834,15 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                       ? 'bg-red-600 hover:bg-red-500 text-white'
                       : 'bg-surface-700 hover:bg-red-900/50 text-zinc-400 hover:text-red-400'
                   }`}
-                  title={confirmDel ? 'Haz clic para confirmar' : 'Borrar canción'}
+                  title={confirmDel ? 'Haz clic para confirmar' : 'Borrar'}
                 >
                   <Trash2 size={12} />
                   {confirmDel ? '¿Confirmar?' : 'Borrar'}
                 </button>
               )}
 
+              {!isPresentation && (
+              <>
               {/* Etiquetas */}
               <p className="text-[10px] text-zinc-500 uppercase tracking-wide mt-1">Etiquetas</p>
               <div className="flex flex-col overflow-y-auto flex-1">
@@ -863,6 +907,8 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                   )}
                 </>
               )}
+              </>
+              )}
             </div>
           </div>
 
@@ -874,7 +920,7 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
                 Cancelar
               </button>
               <button type="submit" className="btn-primary" disabled={saving}>
-                {saving ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Crear canción'}
+                {saving ? 'Guardando...' : isEdit ? 'Guardar cambios' : (isPresentation ? 'Crear presentación' : 'Crear canción')}
               </button>
             </div>
           </div>

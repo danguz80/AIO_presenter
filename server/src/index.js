@@ -242,6 +242,7 @@ async function saveOrgSetting(orgId, key, value) {
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS time_sig   VARCHAR(20)`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS link       TEXT`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS song_links JSONB DEFAULT '[]'::jsonb`);
+    await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS notes      TEXT`);
     await pool.query(`ALTER TABLE song_slides ADD COLUMN IF NOT EXISTS slide_background JSONB`);
     // ─── Multi-tenant: tabla organizations ───────────────────────────────────
     await pool.query(`

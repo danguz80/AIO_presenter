@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS songs (
   ccli       VARCHAR(50),
   language   VARCHAR(10) DEFAULT 'es',
   tags       TEXT[],
+  notes      TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );

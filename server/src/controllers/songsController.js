@@ -42,7 +42,7 @@ const getAllSongs = async (req, res) => {
 
     let query = `
       SELECT s.id, s.title, s.author, s.copyright, s.ccli, s.language, s.tags,
-              s.song_key, s.bpm, s.time_sig, s.link,
+              s.song_key, s.bpm, s.time_sig, s.link, s.notes,
               COALESCE(s.song_links, '[]'::jsonb) AS links,
               s.structure, s.created_at,
              s.updated_at, su.email AS updated_by_email, su.display_name AS updated_by_name
@@ -99,7 +99,7 @@ const getSongById = async (req, res) => {
 const createSong = async (req, res) => {
   const client = await pool.connect();
   try {
-    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link, links } = req.body;
+    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link, links, notes } = req.body;
     if (!title) return res.status(400).json({ error: 'El título es requerido' });
     const orgId = req.user.orgId;
     const normalizedLinks = normalizeLinksInput(links);
@@ -108,11 +108,11 @@ const createSong = async (req, res) => {
     await client.query('BEGIN');
 
     const songResult = await client.query(
-      `INSERT INTO songs (title, author, copyright, ccli, language, tags, song_key, bpm, time_sig, link, song_links, organization_id, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13) RETURNING *`,
+      `INSERT INTO songs (title, author, copyright, ccli, language, tags, song_key, bpm, time_sig, link, song_links, notes, organization_id, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13, $14) RETURNING *`,
       [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
        song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, legacyLink,
-       JSON.stringify(normalizedLinks), orgId, req.user?.userId || null]
+       JSON.stringify(normalizedLinks), notes || null, orgId, req.user?.userId || null]
     );
     const song = songResult.rows[0];
 
@@ -147,7 +147,7 @@ const updateSong = async (req, res) => {
   try {
     const { id } = req.params;
     const orgId = req.user.orgId;
-    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link, links } = req.body;
+    const { title, author, copyright, ccli, language, tags, slides, song_key, bpm, time_sig, link, links, notes } = req.body;
 
     const hasLinksField = Object.prototype.hasOwnProperty.call(req.body, 'links');
     const hasLinkField = Object.prototype.hasOwnProperty.call(req.body, 'link');
@@ -179,11 +179,11 @@ const updateSong = async (req, res) => {
 
     const result = await client.query(
       `UPDATE songs SET title=$1, author=$2, copyright=$3, ccli=$4, language=$5, tags=$6,
-       song_key=$7, bpm=$8, time_sig=$9, link=$10, song_links=$11::jsonb, updated_at=NOW(), updated_by=$12
-       WHERE id=$13 AND organization_id=$14 RETURNING *`,
+       song_key=$7, bpm=$8, time_sig=$9, link=$10, song_links=$11::jsonb, notes=$12, updated_at=NOW(), updated_by=$13
+       WHERE id=$14 AND organization_id=$15 RETURNING *`,
       [title, author || null, copyright || null, ccli || null, language || 'es', tags || [],
        song_key || null, bpm ? parseInt(bpm) : null, time_sig || null, legacyLink,
-       JSON.stringify(normalizedLinks), req.user?.userId || null, id, orgId]
+       JSON.stringify(normalizedLinks), notes || null, req.user?.userId || null, id, orgId]
     );
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
