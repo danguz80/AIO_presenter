@@ -169,7 +169,7 @@ export default function SongDetail() {
 
   const isSongLibraryItem = Array.isArray(selectedSong?.tags)
     ? selectedSong.tags.includes('Canciones')
-    : true;
+    : false;
   const showTitleSlide = outputCfg.titleSlideEnabled && isSongLibraryItem;
 
   const orderedSlides = useMemo(() => {
@@ -785,7 +785,7 @@ export default function SongDetail() {
               if (dropBefore === null) handleGroupDrop(lbl, (selectedSong.slides ?? []).length);
             }}
           >
-            {/* ── Thumbnail de título (si está habilitado) ─────────── */}
+            {/* ── Thumbnail de título (solo canciones) ─────────────── */}
             {showTitleSlide && (() => {
               const titleActive = liveState.slideData?.type === 'title'
                 && liveState.slideData?.songId === selectedSong.id
