@@ -354,7 +354,7 @@ export default function LivePreview() {
                   totalSlides={liveState.totalSlides}
                   backgroundMedia={principalBgMedia}
                   bgCacheKey={bgCacheKey}
-                  staticVideoFrame={true}
+                  staticVideoFrame={false}
                 />
                 {/* Overlay timer/mensaje en preview output */}
                 {(() => {
