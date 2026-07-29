@@ -288,7 +288,7 @@ export default function StagePage() {
       {/* ── BARRA SUPERIOR ─────────────────────────────────────────────── */}
       {showTopBar && (
         <div
-          className="relative flex items-center justify-between px-5 py-2.5 bg-black/70 shrink-0 border-b border-white/10 gap-4"
+          className="relative flex items-center justify-between px-5 py-1.5 bg-black/70 shrink-0 border-b border-white/10 gap-4 min-h-[68px] overflow-hidden"
           style={{ fontFamily: fontStyles.fontFamily, zIndex: 1 }}
         >
         <div className="flex items-center min-w-0 flex-1">
@@ -298,7 +298,7 @@ export default function StagePage() {
             </span>
           )}
           {showSongTitle && hasContent && slideData.songTitle && (
-            <div className="absolute left-1/2 -translate-x-1/2 max-w-[70%] flex flex-col items-center">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[70%] flex flex-col items-center leading-tight">
               <span className="text-white font-semibold truncate max-w-full" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
                 {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
               </span>

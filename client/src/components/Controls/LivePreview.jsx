@@ -569,15 +569,15 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
       style={{ ...stageBgStyle, fontSize: fontBase ?? '7px' }}>
 
       {/* Top bar */}
-      <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-b border-white/10 relative"
-        style={{ minHeight: '1.7em' }}>
+      <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-b border-white/10 relative overflow-hidden"
+        style={{ minHeight: '2.4em' }}>
         {showSlideCounter && live && (
           <span style={{ color: '#94a3b8', fontSize: '0.85em' }}>
             {(stageConfig.slideIndex ?? 0) + 1}/{stageConfig.totalSlides ?? 1}
           </span>
         )}
         {showSongTitle && live && slideData?.songTitle && (
-          <div className="absolute left-1/2 -translate-x-1/2 max-w-[70%] flex flex-col items-center">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[70%] flex flex-col items-center leading-tight">
             <span className="font-bold truncate max-w-full" style={{ color: lyricsColor, fontSize: '1em' }}>
               {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
             </span>
@@ -770,7 +770,7 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
           <div className="w-full h-full flex flex-col select-none overflow-hidden relative" style={stageBgStyle}>
             {showTopBar && (
               <div
-                className="relative flex items-center justify-between px-5 py-2.5 bg-black/70 shrink-0 border-b border-white/10 gap-4"
+                className="relative flex items-center justify-between px-5 py-1.5 bg-black/70 shrink-0 border-b border-white/10 gap-4 min-h-[68px] overflow-hidden"
                 style={{ fontFamily: fontStyles.fontFamily, zIndex: 1 }}
               >
                 <div className="flex items-center min-w-0 flex-1">
@@ -780,7 +780,7 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
                     </span>
                   )}
                   {showSongTitle && hasContent && slideData.songTitle && (
-                    <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
+                    <span className="text-white font-semibold truncate absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
                       {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
                     </span>
                   )}
