@@ -86,7 +86,6 @@ export default function StagePage() {
   const {
     slideData, nextSlideData, isBlank,
     slideIndex, totalSlides, backgroundMedia,
-    songBpm: liveSongBpm, songTimeSig: liveSongTimeSig,
   } = liveState;
 
   // Auto-cachear fondos de video locales (soporte multi-PC con OneDrive/Dropbox)
@@ -261,8 +260,8 @@ export default function StagePage() {
   const currentSongFromSchedule = schedule.find((s) => s.song_id === currentSongId) || null;
   const currentSongFromLibrary = songs.find((s) => String(s.id) === String(currentSongId)) || null;
   const currentSongMetaSource = {
-    bpm: slideData?.bpm ?? liveSongBpm ?? currentSongFromSchedule?.bpm ?? currentSongFromLibrary?.bpm ?? null,
-    time_sig: slideData?.time_sig ?? liveSongTimeSig ?? currentSongFromSchedule?.time_sig ?? currentSongFromLibrary?.time_sig ?? null,
+    bpm: slideData?.bpm ?? currentSongFromSchedule?.bpm ?? currentSongFromLibrary?.bpm ?? null,
+    time_sig: slideData?.time_sig ?? currentSongFromSchedule?.time_sig ?? currentSongFromLibrary?.time_sig ?? null,
   };
   const currentSongMeta = getNextSongMeta(currentSongMetaSource, {
     showBpm: showCurrentSongBpm,
@@ -289,7 +288,7 @@ export default function StagePage() {
       {/* ── BARRA SUPERIOR ─────────────────────────────────────────────── */}
       {showTopBar && (
         <div
-          className="relative flex items-center justify-between px-5 py-1.5 bg-black/70 shrink-0 border-b border-white/10 gap-4 min-h-[68px] overflow-hidden"
+          className="relative flex items-center justify-between px-5 py-2.5 bg-black/70 shrink-0 border-b border-white/10 gap-4"
           style={{ fontFamily: fontStyles.fontFamily, zIndex: 1 }}
         >
         <div className="flex items-center min-w-0 flex-1">
@@ -299,7 +298,7 @@ export default function StagePage() {
             </span>
           )}
           {showSongTitle && hasContent && slideData.songTitle && (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-[70%] flex flex-col items-center leading-tight">
+            <div className="absolute left-1/2 -translate-x-1/2 max-w-[70%] flex flex-col items-center">
               <span className="text-white font-semibold truncate max-w-full" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
                 {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
               </span>

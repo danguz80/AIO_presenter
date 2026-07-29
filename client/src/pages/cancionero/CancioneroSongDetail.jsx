@@ -961,8 +961,6 @@ export default function CancioneroSongDetail() {
               songTitle:  song?.title,
               songAuthor: song?.author,
               songKey:    song?.song_key,
-              bpm:        song?.bpm ?? null,
-              time_sig:   song?.time_sig ?? null,
             },
             slides:        allSlides,
             slideIndex:    bestIdx,

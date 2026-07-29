@@ -899,24 +899,8 @@ export default function MobileControllerPage() {
       actions.showSlide({
         type: 'title-direct',
         slides,
-        slideData: {
-          type: 'title',
-          songId: song.id,
-          songTitle: song.title,
-          songKey: song.song_key || null,
-          bpm: song.bpm ?? null,
-          time_sig: song.time_sig ?? null,
-        },
-        nextSlideData: firstSlide ? {
-          type: 'song',
-          songId: song.id,
-          songTitle: song.title,
-          songKey: song.song_key || null,
-          bpm: song.bpm ?? null,
-          time_sig: song.time_sig ?? null,
-          label: firstSlide.label,
-          content: firstSlide.content,
-        } : null,
+        slideData: { type: 'title', songId: song.id, songTitle: song.title, songKey: song.song_key || null },
+        nextSlideData: firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null,
       });
       return;
     }
@@ -931,29 +915,8 @@ export default function MobileControllerPage() {
       slides,
       slideIndex:          idx,
       skipTitleIntercept:  !showTitle,  // true = ir directo al slide sin mostrar título
-      slideData:           {
-        type: 'song',
-        songId: song.id,
-        slideId: slide.id,
-        slideIndex: idx,
-        songTitle: song.title,
-        songKey: song.song_key || null,
-        bpm: song.bpm ?? null,
-        time_sig: song.time_sig ?? null,
-        slideBackground: slide.slide_background || null,
-        label: slide.label,
-        content: slide.content,
-      },
-      nextSlideData:       next ? {
-        type: 'song',
-        songId: song.id,
-        songTitle: song.title,
-        songKey: song.song_key || null,
-        bpm: song.bpm ?? null,
-        time_sig: song.time_sig ?? null,
-        label: next.label,
-        content: next.content,
-      } : null,
+      slideData:           { type: 'song', songId: song.id, slideId: slide.id, slideIndex: idx, songTitle: song.title, songKey: song.song_key || null, slideBackground: slide.slide_background || null, label: slide.label, content: slide.content },
+      nextSlideData:       next ? { type: 'song', label: next.label, content: next.content } : null,
     });
 
   };
