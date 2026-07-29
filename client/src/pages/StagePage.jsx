@@ -297,7 +297,7 @@ export default function StagePage() {
     >
       {debugMode && (
         <div style={{
-          position: 'fixed', top: 4, left: 4, zIndex: 9999,
+          position: 'fixed', bottom: 4, left: 4, zIndex: 9999, pointerEvents: 'none',
           background: 'rgba(0,0,0,0.9)', color: '#0f0', fontFamily: 'monospace',
           fontSize: '11px', padding: '8px 10px', borderRadius: '6px',
           maxWidth: '480px', whiteSpace: 'pre-wrap', lineHeight: 1.4,
