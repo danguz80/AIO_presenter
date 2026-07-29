@@ -443,6 +443,7 @@ export default function MobileControllerPage() {
   const [bibleResults,  setBibleResults]       = useState([]);
   const [bibleSearching,setBibleSearching]     = useState(false);
   const [bibleMode,     setBibleMode]          = useState('nav'); // 'nav' | 'search'
+  const [bibleVerseView, setBibleVerseView]    = useState('grid'); // 'grid' | 'chapter'
   const [activeVerse,   setActiveVerse]        = useState(null);  // verso proyectado actualmente
   const [activeSplit,   setActiveSplit]         = useState(null);  // { verse, part2, list } cuando se divide un verso largo
   const [verseHistory,  setVerseHistory]        = useState([]);    // historial de versículos proyectados
@@ -585,6 +586,7 @@ export default function MobileControllerPage() {
       setBibleChapter(histVerse.chapter);
       setBibleVerses(verses);
       setBibleMode('nav');
+      setBibleVerseView('chapter');
 
       // 6. Proyectar y dejar lista la lista completa del capítulo
       sendVerse(target, verses);
@@ -667,6 +669,7 @@ export default function MobileControllerPage() {
         if (v && v.id !== activeVerse?.id) {
           setActiveVerse(v);
           setActiveVerseList(bibleVerses);
+          setBibleVerseView('chapter');
         }
       }
     }
@@ -2371,6 +2374,7 @@ export default function MobileControllerPage() {
                   const v = bibleVersions.find(b => b.id === parseInt(e.target.value, 10));
                   setBibleVersion(v);
                   setBibleBook(null); setBibleChapter(null); setBibleVerses([]); setActiveVerse(null); setActiveSplit(null);
+                  setBibleVerseView('grid');
                 }}
                 className="flex-1 min-w-0 bg-surface-700 border border-surface-600 rounded-lg px-2 py-1.5 text-xs text-zinc-200 outline-none focus:border-accent"
               >
@@ -2533,16 +2537,24 @@ export default function MobileControllerPage() {
                   <div className="px-4 py-2.5 shrink-0 border-b border-surface-700 flex items-center gap-2">
                     <button
                       onPointerDown={() => {
-                        if (bibleChapter) { setBibleChapter(null); setBibleVerses([]); setActiveVerse(null); setActiveSplit(null); }
+                        if (bibleChapter && bibleVerseView === 'chapter') {
+                          setBibleVerseView('grid');
+                          setActiveSplit(null);
+                        } else if (bibleChapter) {
+                          setBibleChapter(null); setBibleVerses([]); setActiveVerse(null); setActiveSplit(null); setBibleVerseView('grid');
+                        }
                         else { setBibleBook(null); setBibleChapter(null); setBibleVerses([]); setActiveVerse(null); setActiveSplit(null); }
                       }}
                       className="flex items-center gap-1.5 text-accent text-sm font-medium"
                     >
                       <ArrowLeft size={14} />
-                      {bibleChapter ? bibleBook.name : 'Libros'}
+                      {bibleChapter ? (bibleVerseView === 'chapter' ? 'Versículos' : bibleBook.name) : 'Libros'}
                     </button>
                     {bibleChapter && (
                       <span className="text-zinc-500 text-xs">› Cap. {bibleChapter}</span>
+                    )}
+                    {bibleChapter && bibleVerseView === 'chapter' && (
+                      <span className="text-zinc-500 text-xs">› Lectura</span>
                     )}
                   </div>
                 )}
@@ -2566,7 +2578,7 @@ export default function MobileControllerPage() {
                                 {catBooks.map(b => (
                                   <button
                                     key={b.id}
-                                    onClick={() => { setBibleBook(b); setBibleChapter(null); setBibleVerses([]); setActiveVerse(null); setActiveSplit(null); }}
+                                    onClick={() => { setBibleBook(b); setBibleChapter(null); setBibleVerses([]); setActiveVerse(null); setActiveSplit(null); setBibleVerseView('grid'); }}
                                     className={`px-3 py-2.5 rounded-xl border text-left transition-colors active:opacity-60 ${cat.bg}`}
                                   >
                                     <p className={`text-xs font-medium leading-tight ${cat.text}`}>{b.name}</p>
@@ -2584,7 +2596,7 @@ export default function MobileControllerPage() {
                         {bibleChapters.map(c => (
                           <button
                             key={c}
-                            onClick={() => { setBibleChapter(c); setActiveVerse(null); setActiveSplit(null); }}
+                            onClick={() => { setBibleChapter(c); setActiveVerse(null); setActiveSplit(null); setBibleVerseView('grid'); }}
                             className="aspect-square flex items-center justify-center bg-surface-800 active:bg-surface-700 rounded-xl border border-surface-700 text-zinc-200 text-sm font-semibold transition-colors"
                           >
                             {c}
@@ -2595,8 +2607,40 @@ export default function MobileControllerPage() {
                   </div>
                 )}
 
-                {/* Paso 3: lista de versículos con su propio scroll + barra prev/next */}
-                {bibleBook && bibleChapter && (
+                {/* Paso 3A: grilla de números de versículos */}
+                {bibleBook && bibleChapter && bibleVerseView === 'grid' && (
+                  <div className="flex flex-col flex-1 min-h-0">
+                    <div className="shrink-0 px-4 py-2.5 border-b border-surface-700">
+                      <p className="text-xs text-zinc-400">Selecciona versículo para abrir el capítulo</p>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-3">
+                      {bibleVerses.length === 0 ? (
+                        <div className="flex justify-center pt-8">
+                          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-6 gap-1.5">
+                          {bibleVerses.map(v => (
+                            <button
+                              key={v.id}
+                              onClick={() => { sendVerse(v, bibleVerses); setBibleVerseView('chapter'); }}
+                              className={`aspect-square flex items-center justify-center rounded-xl border text-sm font-semibold transition-colors ${
+                                activeVerse?.id === v.id
+                                  ? 'bg-accent/20 border-accent/50 text-accent'
+                                  : 'bg-surface-800 active:bg-surface-700 border-surface-700 text-zinc-200'
+                              }`}
+                            >
+                              {v.verse}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Paso 3B: capítulo completo con versículo activo */}
+                {bibleBook && bibleChapter && bibleVerseView === 'chapter' && (
                   <div className="flex flex-col flex-1 min-h-0">
                     <div ref={verseListRef} className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
                       {bibleVerses.length === 0 && (

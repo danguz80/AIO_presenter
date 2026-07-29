@@ -47,6 +47,9 @@ export default function CancioneroSongs() {
   const [eventTargetSong, setEventTargetSong] = useState(null);
   const [eventActionMsg, setEventActionMsg] = useState('');
   const [activeTagFilter, setActiveTagFilter] = useState(null);
+  const longPressTimerRef = useRef(null);
+  const longPressOpenedRef = useRef(false);
+  const touchStartRef = useRef({ x: 0, y: 0 });
 
   const loadSongs = () => {
     setLoading(true);
@@ -103,9 +106,46 @@ export default function CancioneroSongs() {
   const openContextMenu = (event, song) => {
     event.preventDefault();
     event.stopPropagation();
+    longPressOpenedRef.current = false;
     setEventTargetSong(song);
     setContextMenu({ x: event.clientX, y: event.clientY, song });
   };
+
+  const clearLongPressTimer = () => {
+    if (!longPressTimerRef.current) return;
+    clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  const openContextMenuAt = (x, y, song) => {
+    setEventTargetSong(song);
+    setContextMenu({ x, y, song });
+  };
+
+  const handleSongPointerDown = (event, song) => {
+    if (event.pointerType !== 'touch') return;
+    longPressOpenedRef.current = false;
+    touchStartRef.current = { x: event.clientX, y: event.clientY };
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressOpenedRef.current = true;
+      openContextMenuAt(event.clientX, event.clientY, song);
+      setTimeout(() => { longPressOpenedRef.current = false; }, 900);
+    }, 480);
+  };
+
+  const handleSongPointerMove = (event) => {
+    if (event.pointerType !== 'touch' || !longPressTimerRef.current) return;
+    const dx = Math.abs(event.clientX - touchStartRef.current.x);
+    const dy = Math.abs(event.clientY - touchStartRef.current.y);
+    if (dx > 12 || dy > 12) clearLongPressTimer();
+  };
+
+  const handleSongPointerUp = (event) => {
+    if (event.pointerType === 'touch') clearLongPressTimer();
+  };
+
+  useEffect(() => () => clearLongPressTimer(), []);
 
   const openEventPicker = async () => {
     setEventTargetSong(contextMenu?.song || null);
@@ -273,7 +313,19 @@ export default function CancioneroSongs() {
               <li key={song.id}>
                 <button
                   onContextMenu={(e) => openContextMenu(e, song)}
-                  onClick={() => navigate(`/cancionero/canciones/${song.id}`)}
+                  onPointerDown={(e) => handleSongPointerDown(e, song)}
+                  onPointerMove={handleSongPointerMove}
+                  onPointerUp={handleSongPointerUp}
+                  onPointerCancel={handleSongPointerUp}
+                  onClick={(e) => {
+                    if (longPressOpenedRef.current) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      longPressOpenedRef.current = false;
+                      return;
+                    }
+                    navigate(`/cancionero/canciones/${song.id}`);
+                  }}
                   className="group w-full flex items-center gap-3 px-4 py-3.5 hover:bg-white/5 text-left transition-colors"
                 >
                   <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-yellow-500/15 border border-yellow-400/20 flex items-center justify-center">

@@ -156,6 +156,9 @@ export default function SongLibrary() {
   const [eventPickerEvents, setEventPickerEvents] = useState([]);
   const [eventTargetSong, setEventTargetSong] = useState(null);
   const [eventActionMsg, setEventActionMsg] = useState('');
+  const longPressTimerRef = useRef(null);
+  const longPressOpenedRef = useRef(false);
+  const touchStartRef = useRef({ x: 0, y: 0 });
   const { fn: addToOpenEventFn } = useScheduleAdd() ?? {};
 
   // Cargar todas las etiquetas al montar
@@ -275,9 +278,46 @@ export default function SongLibrary() {
   const openContextMenu = useCallback((event, song) => {
     event.preventDefault();
     event.stopPropagation();
+    longPressOpenedRef.current = false;
     setEventTargetSong(song);
     setContextMenu({ x: event.clientX, y: event.clientY, song });
   }, []);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (!longPressTimerRef.current) return;
+    clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  }, []);
+
+  const openContextMenuAt = useCallback((x, y, song) => {
+    setEventTargetSong(song);
+    setContextMenu({ x, y, song });
+  }, []);
+
+  const handleSongPointerDown = useCallback((event, song) => {
+    if (event.pointerType !== 'touch') return;
+    longPressOpenedRef.current = false;
+    touchStartRef.current = { x: event.clientX, y: event.clientY };
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressOpenedRef.current = true;
+      openContextMenuAt(event.clientX, event.clientY, song);
+      setTimeout(() => { longPressOpenedRef.current = false; }, 900);
+    }, 480);
+  }, [clearLongPressTimer, openContextMenuAt]);
+
+  const handleSongPointerMove = useCallback((event) => {
+    if (event.pointerType !== 'touch' || !longPressTimerRef.current) return;
+    const dx = Math.abs(event.clientX - touchStartRef.current.x);
+    const dy = Math.abs(event.clientY - touchStartRef.current.y);
+    if (dx > 12 || dy > 12) clearLongPressTimer();
+  }, [clearLongPressTimer]);
+
+  const handleSongPointerUp = useCallback((event) => {
+    if (event.pointerType === 'touch') clearLongPressTimer();
+  }, [clearLongPressTimer]);
+
+  useEffect(() => () => clearLongPressTimer(), [clearLongPressTimer]);
 
   const openEventPicker = useCallback(async () => {
     setEventTargetSong(contextMenu?.song || null);
@@ -452,6 +492,10 @@ export default function SongLibrary() {
                   key={song.id}
                   draggable={selectedIds.size === 0}
                   onContextMenu={(e) => openContextMenu(e, song)}
+                  onPointerDown={(e) => handleSongPointerDown(e, song)}
+                  onPointerMove={handleSongPointerMove}
+                  onPointerUp={handleSongPointerUp}
+                  onPointerCancel={handleSongPointerUp}
                   onDragStart={(e) => {
                     if (selectedIds.size > 0) {
                       e.preventDefault();
@@ -468,7 +512,15 @@ export default function SongLibrary() {
                     setDraggingSongId(song.id);
                   }}
                   onDragEnd={() => setDraggingSongId(null)}
-                  onClick={() => handleRowClick(song)}
+                  onClick={(e) => {
+                    if (longPressOpenedRef.current) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      longPressOpenedRef.current = false;
+                      return;
+                    }
+                    handleRowClick(song);
+                  }}
                   className={`group flex items-center gap-2 px-3 py-2.5 cursor-pointer border-b border-surface-700/50
                     hover:bg-surface-700 transition-colors
                     ${isActive && selectedIds.size === 0 ? 'bg-surface-700 border-l-2 border-l-accent' : ''}
