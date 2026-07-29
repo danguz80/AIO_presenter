@@ -404,7 +404,7 @@ function CollapsibleLibrary() {
           className="flex flex-col items-center gap-1.5 text-zinc-500 hover:text-accent transition-colors p-1.5 rounded-lg hover:bg-surface-700"
         >
           <Music size={16} />
-          <span className="text-[9px] [writing-mode:vertical-rl] tracking-widest uppercase font-medium">Canciones</span>
+          <span className="text-[9px] [writing-mode:vertical-rl] tracking-widest uppercase font-medium">Biblioteca</span>
         </button>
       </div>
     );

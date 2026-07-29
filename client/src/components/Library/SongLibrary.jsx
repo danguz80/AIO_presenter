@@ -3,7 +3,7 @@ import { usePresenter }  from '../../context/usePresenter';
 import { useScheduleAdd } from '../../context/ScheduleAddContext';
 import SongFormModal     from './SongFormModal';
 import ImportModal       from './ImportModal';
-import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check, Clock } from 'lucide-react';
+import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check, Clock, Info, GalleryThumbnails } from 'lucide-react';
 import api from '../../hooks/useApi';
 import EventPickerModal from '../shared/EventPickerModal';
 import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions';
@@ -552,7 +552,12 @@ export default function SongLibrary() {
                     {isSelected && <Check size={10} className="text-white" />}
                   </button>
 
-                  <Music size={14} className="text-zinc-500 shrink-0" />
+                  {(() => {
+                    const tags = song.tags || [];
+                    if (tags.includes('Canciones')) return <Music size={14} className="text-zinc-500 shrink-0" />;
+                    if (tags.some(t => t.toLowerCase() === 'info' || t.toLowerCase() === 'información' || t.toLowerCase() === 'informacion')) return <Info size={14} className="text-blue-400 shrink-0" />;
+                    return <GalleryThumbnails size={14} className="text-zinc-500 shrink-0" />;
+                  })()}
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-1.5 min-w-0">
