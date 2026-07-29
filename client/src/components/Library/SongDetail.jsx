@@ -327,6 +327,15 @@ export default function SongDetail() {
     if (!isPresentationItem) return;
     const previewEntry = selectedSlideEntries[0];
     if (!previewEntry) return;
+    // No re-sincronizar si ya está mostrando un slide de esta misma presentación
+    // (puede estar en otro slide por navegación / endAction — respetarlo)
+    if (
+      liveState.slideData?.songId === selectedSong?.id
+      && !liveState.isBlank
+    ) {
+      return;
+    }
+    // Solo sincronizar cuando la presentación no está activa (blank u otra canción)
     if (
       liveState.slideData?.slideId === previewEntry.slide.id
       && liveState.slideIndex === previewEntry.index
