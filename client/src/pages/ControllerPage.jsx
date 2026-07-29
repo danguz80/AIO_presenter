@@ -280,13 +280,13 @@ export default function ControllerPage() {
         </div>
       </header>
 
-      {/* ── Tabs: Canciones / Biblia ── */}
+      {/* ── Tabs: Presentaciones / Biblia ── */}
       <div className="flex gap-1 px-4 pt-2 pb-0 bg-surface-800 border-b border-surface-700 shrink-0">
         <TabButton
           active={activeTab === 'songs'}
           onClick={() => setActiveTab('songs')}
           icon={<Music size={13} />}
-          label="Canciones"
+          label="Presentaciones"
         />
         <TabButton
           active={activeTab === 'bible'}
