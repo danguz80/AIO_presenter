@@ -362,6 +362,18 @@ export default function SongDetail() {
     await saveSong(newSlides);
   };
 
+  const appendMediaSlide = async (mediaObj) => {
+    const newSlides = [
+      ...selectedSong.slides.map(s => ({
+        label:           s.label,
+        content:         s.content,
+        slideBackground: s.slide_background ?? null,
+      })),
+      { label: '', content: '', slideBackground: mediaObj },
+    ];
+    await saveSong(newSlides);
+  };
+
   // Función central de navegación (reutilizada por teclado, relay y móvil)
   const navigate = async (dir) => {
     const slides = orderedSlides;
@@ -777,12 +789,22 @@ export default function SongDetail() {
             ref={gridRef}
             className="grid gap-2"
             style={{ gridTemplateColumns: `repeat(${thumbCols}, minmax(0, 1fr))` }}
-            onDragOver={e => { if (dragLabel) e.preventDefault(); }}
+            onDragOver={e => {
+              if (dragLabel || e.dataTransfer.types.includes('application/aio-media')) e.preventDefault();
+            }}
             onDrop={e => {
               e.preventDefault();
               const lbl = e.dataTransfer.getData('text/plain');
-              // Si soltó en el contenedor (no en un slide específico), agrega al final
-              if (dropBefore === null) handleGroupDrop(lbl, (selectedSong.slides ?? []).length);
+              const raw = e.dataTransfer.getData('application/aio-media');
+              if (raw) {
+                try {
+                  const media = JSON.parse(raw);
+                  appendMediaSlide({ mediaType: media.type, filePath: media.path, fileName: media.name, url: media.url });
+                } catch {}
+                return;
+              }
+              // Si soltó en el contenedor (no en un slide específico), agrega el bloque al final
+              if (dropBefore === null && lbl) handleGroupDrop(lbl, (selectedSong.slides ?? []).length);
             }}
           >
             {/* ── Thumbnail de título (solo canciones) ─────────────── */}
