@@ -305,9 +305,9 @@ function UpdateBanner() {
   );
 }
 
-// ErrorBoundary: captura cualquier crash de render y muestra mensaje en pantalla
-// en vez de pantalla blanca. Imprescindible para diagnosticar y sobrevivir crashes de PWA.
-class MobileErrorBoundary extends Component {
+// ErrorBoundary global: captura cualquier crash de render y muestra mensaje en pantalla
+// en vez de pantalla blanca. También sirve como salida de emergencia si entra un bundle viejo.
+class AppErrorBoundary extends Component {
   constructor(props) {
     super(props);
     this.state = { error: null };
@@ -359,32 +359,34 @@ export default function App() {
       <OAuthCallbackHandler />
       <ThemeApplier />
       <TrialExpiredBanner />
-      <Routes>
-        {/* Páginas públicas (sin PresenterProvider) */}
-        <Route path="/"            element={<LandingPage />} />
-        <Route path="/login"        element={<LoginPage />} />
-        <Route path="/mode-select" element={<ModeSelectPage />} />
-        {/* App principal — requiere autenticación */}
-        <Route path="/app"      element={<RequireAuth><ControllerPage /></RequireAuth>} />
-        <Route path="/mobile"   element={<MobileErrorBoundary><RequireAuth><MobileControllerPage /></RequireAuth></MobileErrorBoundary>} />
-        <Route path="/calendar" element={<RequireAuth><CalendarPage /></RequireAuth>} />
-        {/* Cancionero — requiere autenticación */}
-        <Route path="/cancionero/select-org"         element={<RequireAuth><OrgSelectPage /></RequireAuth>} />
-        <Route path="/cancionero"                    element={<RequireAuth><CancioneroDashboard /></RequireAuth>} />
-        <Route path="/cancionero/canciones"          element={<RequireAuth><CancioneroSongs /></RequireAuth>} />
-        <Route path="/cancionero/canciones/:id"      element={<RequireAuth><CancioneroSongDetail /></RequireAuth>} />
-        <Route path="/cancionero/eventos"            element={<RequireAuth><CancioneroEvents /></RequireAuth>} />
-        <Route path="/cancionero/eventos/:id"        element={<RequireAuth><CancioneroEventDetail /></RequireAuth>} />
-        <Route path="/cancionero/configuracion"         element={<RequireAuth><CancioneroSettings /></RequireAuth>} />
-        {/* Spotify OAuth callback — sin RequireAuth: llega desde redirect de Spotify (127.0.0.1) */}
-        <Route path="/spotify-callback" element={<SpotifyCallbackPage />} />
-        {/* Panel de administración del owner */}
-        <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
-        {/* Páginas de display — abiertas en pantallas secundarias, sin auth */}
-        <Route path="/output"  element={<OutputPage />} />
-        <Route path="/stage"   element={<StagePage />} />
-        <Route path="/virtual" element={<VirtualPage />} />
-      </Routes>
+      <AppErrorBoundary>
+        <Routes>
+          {/* Páginas públicas (sin PresenterProvider) */}
+          <Route path="/"            element={<LandingPage />} />
+          <Route path="/login"        element={<LoginPage />} />
+          <Route path="/mode-select" element={<ModeSelectPage />} />
+          {/* App principal — requiere autenticación */}
+          <Route path="/app"      element={<RequireAuth><ControllerPage /></RequireAuth>} />
+          <Route path="/mobile"   element={<RequireAuth><MobileControllerPage /></RequireAuth>} />
+          <Route path="/calendar" element={<RequireAuth><CalendarPage /></RequireAuth>} />
+          {/* Cancionero — requiere autenticación */}
+          <Route path="/cancionero/select-org"         element={<RequireAuth><OrgSelectPage /></RequireAuth>} />
+          <Route path="/cancionero"                    element={<RequireAuth><CancioneroDashboard /></RequireAuth>} />
+          <Route path="/cancionero/canciones"          element={<RequireAuth><CancioneroSongs /></RequireAuth>} />
+          <Route path="/cancionero/canciones/:id"      element={<RequireAuth><CancioneroSongDetail /></RequireAuth>} />
+          <Route path="/cancionero/eventos"            element={<RequireAuth><CancioneroEvents /></RequireAuth>} />
+          <Route path="/cancionero/eventos/:id"        element={<RequireAuth><CancioneroEventDetail /></RequireAuth>} />
+          <Route path="/cancionero/configuracion"         element={<RequireAuth><CancioneroSettings /></RequireAuth>} />
+          {/* Spotify OAuth callback — sin RequireAuth: llega desde redirect de Spotify (127.0.0.1) */}
+          <Route path="/spotify-callback" element={<SpotifyCallbackPage />} />
+          {/* Panel de administración del owner */}
+          <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
+          {/* Páginas de display — abiertas en pantallas secundarias, sin auth */}
+          <Route path="/output"  element={<OutputPage />} />
+          <Route path="/stage"   element={<StagePage />} />
+          <Route path="/virtual" element={<VirtualPage />} />
+        </Routes>
+      </AppErrorBoundary>
     </PresenterProvider>
   );
 }
