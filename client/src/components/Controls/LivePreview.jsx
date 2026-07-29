@@ -546,6 +546,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
     parseChordLines(nextSlideData.content || '').some(l => l.some(s => s.chord));
 
   const showNextPanel = showNextSlide && slideData?.type !== 'bible';
+  const isSongSlide = slideData?.isSong ?? true;
   const currentSongKey = getSongKey(slideData);
   const currentSongFromSchedule = idx >= 0 ? schedule[idx] : null;
   const currentSongMeta = getNextSongMeta(currentSongFromSchedule, { showBpm: showCurrentSongBpm, showTimeSig: showCurrentSongTimeSig });
@@ -733,6 +734,7 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
 
   const hasContent = !isBlank && !!slideData;
   const showTopBar = showSongTitle || showSlideCounter || showSectionLabel;
+  const isSongSlide = slideData?.isSong ?? true;
   const slideNum = (stageConfig.slideIndex ?? 0) + 1;
   const sectionColor = getLabelColor(slideData?.label);
   const fontStyles = {
