@@ -228,16 +228,26 @@ export default function SongDetail() {
   // Resetear cuando cambia la canción (nueva canción = ningún slide seleccionado)
   useEffect(() => {
     setLocalSelectedKey(null);
+    setSelectedSlideKeys(new Set());
+    selectionAnchorRef.current = null;
     seenSlideIds.current = new Set();
   }, [selectedSong?.id]);
 
   // Deseleccionar cuando la pantalla se pone en negro
   useEffect(() => {
-    if (liveState.isBlank) setLocalSelectedKey(null);
+    if (liveState.isBlank) {
+      setLocalSelectedKey(null);
+      setSelectedSlideKeys(new Set());
+      selectionAnchorRef.current = null;
+    }
   }, [liveState.isBlank]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Estado local de selección (para el toggle deseleccionar) ────────────
   const [localSelectedKey, setLocalSelectedKey] = useState(null);
+  const [selectedSlideKeys, setSelectedSlideKeys] = useState(() => new Set());
+  const selectionAnchorRef = useRef(null);
+
+  const getSlideKey = (slide, index) => `${slide.id}-${index}`;
 
   // ── Historial deshacer ────────────────────────────────────────────────────
   const undoStack = useRef([]);
@@ -275,6 +285,38 @@ export default function SongDetail() {
     setUndoCount(undoStack.current.length);
     await saveSong(prev, false);
   }, [saveSong]);
+
+  const selectedSlideEntries = useMemo(() => {
+    if (selectedSlideKeys.size === 0) return [];
+    return orderedSlides
+      .map((slide, index) => ({ slide, index, key: getSlideKey(slide, index) }))
+      .filter(entry => selectedSlideKeys.has(entry.key));
+  }, [orderedSlides, selectedSlideKeys]);
+  const previewSlideEntry = selectedSlideEntries[0] ?? null;
+  const selectedVideoEntries = selectedSlideEntries.filter(({ slide }) => slide.slide_background?.mediaType === 'video');
+
+  const replaceSelection = (entries, anchorIndex = null) => {
+    setSelectedSlideKeys(new Set(entries.map(({ key }) => key)));
+    selectionAnchorRef.current = anchorIndex;
+  };
+
+  const clearSelection = () => {
+    setSelectedSlideKeys(new Set());
+    selectionAnchorRef.current = null;
+  };
+
+  const applySelectedVideoBehavior = async (endAction) => {
+    if (!selectedVideoEntries.length) return;
+    const selectedIndexSet = new Set(selectedSlideEntries.map(({ index }) => index));
+    const newSlides = selectedSong.slides.map((s, i) => ({
+      label: s.label,
+      content: s.content,
+      slideBackground: selectedIndexSet.has(i) && s.slide_background?.mediaType === 'video'
+        ? { ...s.slide_background, endAction }
+        : (s.slide_background ?? null),
+    }));
+    await saveSong(newSlides);
+  };
 
   // ── Menú contextual ───────────────────────────────────────────────────────
   const [ctxMenu,  setCtxMenu]  = useState(null);
@@ -554,18 +596,50 @@ export default function SongDetail() {
     );
   }
 
-  const handleSlideClick = (slide, index) => {
-    const isAlreadySelected = localSelectedKey === `${slide.id}-${index}`;
+  const handleSlideClick = (event, slide, index) => {
+    const key = getSlideKey(slide, index);
+    const isAlreadySelected = selectedSlideKeys.has(key);
     const isAlreadyLive     = isLive(slide, index);
+    const hasModifier = event.metaKey || event.ctrlKey;
 
-    if (isAlreadySelected || isAlreadyLive) {
+    if (event.shiftKey) {
+      const anchorIndex = selectionAnchorRef.current ?? index;
+      const start = Math.min(anchorIndex, index);
+      const end = Math.max(anchorIndex, index);
+      const entries = orderedSlides.slice(start, end + 1).map((entry, idx) => ({
+        slide: entry,
+        index: start + idx,
+        key: getSlideKey(entry, start + idx),
+      }));
+      replaceSelection(entries, anchorIndex);
+      setLocalSelectedKey(key);
+      actions.selectSlide(slide);
+      return;
+    }
+
+    if (hasModifier) {
+      const next = new Set(selectedSlideKeys);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      setSelectedSlideKeys(next);
+      selectionAnchorRef.current = index;
+      setLocalSelectedKey(key);
+      actions.selectSlide(slide);
+      if (next.size === 0 && isAlreadyLive) actions.toggleBlank(true);
+      return;
+    }
+
+    if (isAlreadySelected && selectedSlideKeys.size === 1) {
       // Deseleccionar y apagar live si estaba proyectando
       setLocalSelectedKey(null);
+      clearSelection();
       actions.selectSlide(null);
       if (isAlreadyLive) actions.toggleBlank(true);
       return;
     }
-    setLocalSelectedKey(`${slide.id}-${index}`);
+
+    setLocalSelectedKey(key);
+    replaceSelection([{ slide, index, key }], index);
     const slides    = orderedSlides;
     const nextSlide = slides[index + 1] || null;
     const isSongLike = !isPresentationItem;
@@ -779,6 +853,96 @@ export default function SongDetail() {
         </div>
       </div>
 
+      {isPresentationItem && (
+        <div className="px-3 pt-3">
+          <div className="rounded-xl border border-surface-700 bg-black/40 overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-surface-700">
+              <div className="min-w-0">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500">Vista previa</p>
+                <p className="text-xs text-zinc-300 truncate">
+                  {selectedSlideEntries.length > 0 ? `${selectedSlideEntries.length} seleccionada${selectedSlideEntries.length !== 1 ? 's' : ''}` : 'Selecciona una diapo'}
+                </p>
+              </div>
+              {selectedSlideEntries.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearSelection}
+                  className="text-[10px] text-zinc-400 hover:text-zinc-200"
+                >
+                  Limpiar selección
+                </button>
+              )}
+            </div>
+            <div className="relative w-full" style={{ aspectRatio: '16 / 9' }}>
+              {previewSlideEntry ? (
+                <OutputRenderer
+                  cfg={outputCfg}
+                  slideData={{
+                    type:            'song',
+                    songId:          selectedSong.id,
+                    slideId:         previewSlideEntry.slide.id,
+                    songTitle:       selectedSong.title,
+                    songAuthor:      selectedSong.author || '',
+                    isSong:          false,
+                    songKey:         selectedSong.song_key || null,
+                    label:           previewSlideEntry.slide.label,
+                    content:         previewSlideEntry.slide.content,
+                    slideBackground: previewSlideEntry.slide.slide_background ?? null,
+                  }}
+                  isBlank={false}
+                  background={previewSlideEntry.slide.slide_background ? { type: 'color', color: '#000000' } : (liveState.background ?? { type: 'color', color: '#000000' })}
+                  backgroundMedia={previewSlideEntry.slide.slide_background ?? null}
+                  bgCacheKey={thumbBgCacheKey}
+                  staticVideoFrame={false}
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-zinc-500 text-sm">
+                  Selecciona una diapo para previsualizar
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedSlideEntries.length > 0 && (
+        <div className="px-3 pt-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-surface-700 bg-surface-800 px-3 py-2 text-xs">
+            <span className="text-zinc-300 font-semibold">{selectedSlideEntries.length} seleccionada{selectedSlideEntries.length !== 1 ? 's' : ''}</span>
+            {selectedVideoEntries.length > 0 && isPresentationItem && (
+              <>
+                <span className="text-zinc-500">Comportamiento</span>
+                {[
+                  ['loop', 'Loop'],
+                  ['continue', 'Continuar'],
+                  ['stop', 'Parar'],
+                  ['first', 'Ir al principio'],
+                ].map(([value, label]) => {
+                  const active = selectedVideoEntries.every(({ slide }) => (slide.slide_background?.endAction || 'loop') === value);
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`px-2 py-1 rounded border transition-colors ${active ? 'bg-accent/20 border-accent text-accent' : 'bg-surface-700 border-surface-600 text-zinc-300 hover:bg-surface-600'}`}
+                      onClick={() => applySelectedVideoBehavior(value)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+            <button
+              type="button"
+              className="px-2 py-1 rounded border border-surface-600 bg-surface-700 text-zinc-300 hover:bg-surface-600"
+              onClick={clearSelection}
+            >
+              Limpiar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Panel de grupos / etiquetas */}
       {(() => {
         const seen = new Set();
@@ -916,7 +1080,7 @@ export default function SongDetail() {
 
             {orderedSlides.map((slide, index) => {
               const active   = isLive(slide, index);
-              const selected = localSelectedKey === `${slide.id}-${index}`;
+              const selected = selectedSlideKeys.has(getSlideKey(slide, index));
               const labelColor = getLabelColor(slide.label);
               // Preprocesar líneas igual que el proyector: respetar saltos, filtrar comentarios
               const rawLines = (slide.content || '').split('\n');
@@ -946,7 +1110,7 @@ export default function SongDetail() {
               return (
                 <div key={`${slide.id}-${index}`} style={{ display: 'contents' }}>
                   <div
-                    onClick={() => handleSlideClick(slide, index)}
+                    onClick={(e) => handleSlideClick(e, slide, index)}
                     onContextMenu={e => openCtx(e, slide, index)}
                     onDragOver={e => {
                       // Media drag tiene prioridad
@@ -1110,7 +1274,7 @@ export default function SongDetail() {
             })()}
             {orderedSlides.map((slide, index) => {
               const active     = isLive(slide, index);
-              const selected   = localSelectedKey === `${slide.id}-${index}`;
+              const selected   = selectedSlideKeys.has(getSlideKey(slide, index));
               const labelColor = getLabelColor(slide.label);
               const visibleLines = (slide.content || '').split('\n')
                 .map(line => {
@@ -1122,7 +1286,7 @@ export default function SongDetail() {
               return (
                 <div
                   key={`${slide.id}-${index}`}
-                  onClick={() => handleSlideClick(slide, index)}
+                  onClick={(e) => handleSlideClick(e, slide, index)}
                   onContextMenu={(e) => openCtx(e, slide, index)}
                   className={`flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors hover:bg-surface-700/40 select-none ${
                     active   ? 'bg-green-950/30 border-l-2 border-l-green-500'
