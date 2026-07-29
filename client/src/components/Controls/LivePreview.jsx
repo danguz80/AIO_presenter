@@ -24,7 +24,7 @@ function getNextSongMeta(song, { showBpm = true, showTimeSig = true } = {}) {
 }
 
 export default function LivePreview() {
-  const { state } = usePresenter();
+  const { state, actions } = usePresenter();
   const { liveState, stageConfig, virtualConfig, schedule, eventPlays, reservasMode } = state;
   const outputCfg    = state.outputConfig  ?? {};
   const displayCfg   = state.displayConfig ?? {};
@@ -70,6 +70,20 @@ export default function LivePreview() {
   }, [outputCfg.fontFamily, outputCfg.commentFontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
   const { slideData, nextSlideData, isBlank, background } = liveState;
   const principalBgMedia = liveState.slideData?.slideBackground || liveState.backgroundMedia;
+
+  // Guard para evitar doble-navegación si la ventana de salida también dispara navigate
+  const lastNavigateRef = useRef(0);
+  const handlePreviewVideoEnded = () => {
+    const endAction = liveState.backgroundMedia?.endAction
+      || liveState.slideData?.slideBackground?.endAction
+      || 'loop';
+    if (endAction === 'loop' || endAction === 'stop') return;
+    const now = Date.now();
+    if (now - lastNavigateRef.current < 1000) return; // evitar doble-disparo
+    lastNavigateRef.current = now;
+    if (endAction === 'continue') actions.navigate('next');
+    else if (endAction === 'first') actions.navigate('first');
+  };
 
   // Pre-cachear fondos locales para que el preview principal refleje el output incluso en /local-media/*
   useEffect(() => {
@@ -355,6 +369,7 @@ export default function LivePreview() {
                   backgroundMedia={principalBgMedia}
                   bgCacheKey={bgCacheKey}
                   staticVideoFrame={false}
+                  onVideoEnded={handlePreviewVideoEnded}
                 />
                 {/* Overlay timer/mensaje en preview output */}
                 {(() => {
