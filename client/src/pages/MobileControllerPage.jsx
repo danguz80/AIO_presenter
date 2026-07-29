@@ -899,7 +899,7 @@ export default function MobileControllerPage() {
       actions.showSlide({
         type: 'title-direct',
         slides,
-        slideData: { type: 'title', songId: song.id, songTitle: song.title, songKey: song.song_key || null },
+        slideData: { type: 'title', songId: song.id, songTitle: song.title, songKey: song.song_key || null, isSong: Array.isArray(song?.tags) ? song.tags.includes('Canciones') : true },
         nextSlideData: firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null,
       });
       return;
@@ -915,7 +915,7 @@ export default function MobileControllerPage() {
       slides,
       slideIndex:          idx,
       skipTitleIntercept:  !showTitle,  // true = ir directo al slide sin mostrar título
-      slideData:           { type: 'song', songId: song.id, slideId: slide.id, slideIndex: idx, songTitle: song.title, songKey: song.song_key || null, slideBackground: slide.slide_background || null, label: slide.label, content: slide.content },
+      slideData:           { type: 'song', songId: song.id, slideId: slide.id, slideIndex: idx, songTitle: song.title, songKey: song.song_key || null, slideBackground: slide.slide_background || null, label: slide.label, content: slide.content, isSong: Array.isArray(song?.tags) ? song.tags.includes('Canciones') : true },
       nextSlideData:       next ? { type: 'song', label: next.label, content: next.content } : null,
     });
 

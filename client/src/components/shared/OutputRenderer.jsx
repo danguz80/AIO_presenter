@@ -93,6 +93,7 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
 
   const showProgress = progressEnabled && !isBlank && slideData?.type === 'song'
     && totalSlides != null && totalSlides > 0;
+  const currentSlideIsSong = slideData?.type === 'title' ? true : (slideData?.isSong ?? true);
 
   const progressPosStyle = (() => {
     const base = {
@@ -362,7 +363,7 @@ function SlideContent({ slideData, cfg, cw = null, ch = null }) {
             );
           })}
         </div>
-        {showSongTitle && slideData.songTitle && (
+        {showSongTitle && currentSlideIsSong && slideData.songTitle && (
           <p className="text-zinc-400 text-base mt-6" style={{ fontFamily }}>{slideData.songTitle}</p>
         )}
       </div>

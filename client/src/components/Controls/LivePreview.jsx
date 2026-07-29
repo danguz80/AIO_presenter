@@ -91,6 +91,7 @@ export default function LivePreview() {
   }, [principalBgMedia?.url, outputCfg.titleBackground?.url, outputCfg.bibleBackground?.url]);
 
   const live = !isBlank && !!slideData;
+  const currentSlideIsSong = slideData?.isSong ?? true;
   const stageShowNextPanel = (stageConfig?.showNextSlide ?? true) && slideData?.type !== 'bible';
 
   const stageBgStyle = stageConfig.background.type === 'color'
@@ -576,7 +577,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
             {(stageConfig.slideIndex ?? 0) + 1}/{stageConfig.totalSlides ?? 1}
           </span>
         )}
-        {showSongTitle && live && slideData?.songTitle && (
+        {showSongTitle && live && currentSlideIsSong && slideData?.songTitle && (
           <div className="absolute left-1/2 -translate-x-1/2 max-w-[70%] flex flex-col items-center">
             <span className="font-bold truncate max-w-full" style={{ color: lyricsColor, fontSize: '1em' }}>
               {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
@@ -779,7 +780,7 @@ function ExactStageBiblePreview({ stageBgStyle, slideData, isBlank, live, stageC
                       {slideNum}/{stageConfig.totalSlides}
                     </span>
                   )}
-                  {showSongTitle && hasContent && slideData.songTitle && (
+                  {showSongTitle && currentSlideIsSong && hasContent && slideData.songTitle && (
                     <span className="text-white font-semibold truncate absolute left-1/2 -translate-x-1/2" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
                       {slideData.songTitle}{currentSongKey ? ` - ${currentSongKey}` : ''}
                     </span>

@@ -429,6 +429,7 @@ export default function SongDetail() {
             slideId:         firstSlide.id,
             songTitle:       nextSong.title,
             songAuthor:      nextSong.author || '',
+            isSong:          Array.isArray(nextSong?.tags) ? nextSong.tags.includes('Canciones') : true,
             songKey:         nextSong.song_key || null,
             label:           firstSlide.label,
             content:         firstSlide.content,
@@ -505,6 +506,7 @@ export default function SongDetail() {
     setLocalSelectedKey(`${slide.id}-${index}`);
     const slides    = orderedSlides;
     const nextSlide = slides[index + 1] || null;
+    const isSongLike = Array.isArray(selectedSong?.tags) ? selectedSong.tags.includes('Canciones') : true;
     actions.selectSlide(slide);
     actions.showSlide({
       type:       'song',
@@ -516,6 +518,7 @@ export default function SongDetail() {
         slideId:         slide.id,
         songTitle:       selectedSong.title,
         songAuthor:      selectedSong.author || '',
+        isSong:          isSongLike,
         songKey:         selectedSong.song_key || null,
         label:           slide.label,
         content:         slide.content,
@@ -547,6 +550,7 @@ export default function SongDetail() {
         songId:          selectedSong?.id,
         songTitle:       selectedSong?.title,
         songAuthor:      selectedSong?.author || '',
+        isSong:          Array.isArray(selectedSong?.tags) ? selectedSong.tags.includes('Canciones') : true,
         songKey:         selectedSong?.song_key || null,
         slideBackground: outputCfg?.titleBackground || null,
       },
