@@ -807,6 +807,24 @@ io.on('connection', async (socket) => {
     if (live.currentSong && live.currentSong.slides.length > 0) {
       const { slides, songId, songTitle, songAuthor, songKey } = live.currentSong;
 
+      if (dir === 'first') {
+        live.currentSong.titleSlideActive = false;
+        live.currentSong.slideIndex = 0;
+        const slide     = slides[0];
+        const nextSlide = slides[1] || null;
+        const bgMedia = slide.slide_background || null;
+        live.liveState = {
+          ...live.liveState,
+          backgroundMedia: bgMedia,
+          isBlank: false,
+          slideIndex: 0,
+          slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content, slideBackground: bgMedia },
+          nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
+        };
+        emitToLive('live:state', live.liveState);
+        return;
+      }
+
       if (live.currentSong.titleSlideActive) {
         if (dir === 'next') {
           live.currentSong.titleSlideActive = false;

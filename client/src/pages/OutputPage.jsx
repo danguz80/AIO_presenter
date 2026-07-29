@@ -13,7 +13,7 @@ import { ensureMediaCached } from '../utils/fsaUtils';
  * para enviar a proyector o segunda pantalla.
  */
 export default function OutputPage() {
-  const { state } = usePresenter();
+  const { state, actions } = usePresenter();
   const { liveState } = state;
   const cfg = state.outputConfig ?? {};
   const navigate = useNavigate();
@@ -81,6 +81,12 @@ export default function OutputPage() {
     if (name && cfg.bibleBackground?.url?.startsWith('/local-media/'))
       ensureMediaCached(name).then(ok => { if (ok) setBgCacheKey(k => k + 1); }).catch(() => {});
   }, [cfg.bibleBackground?.url]);
+
+  const handleVideoEnded = () => {
+    const endAction = liveState.backgroundMedia?.endAction || liveState.slideData?.slideBackground?.endAction || 'loop';
+    if (endAction === 'continue') actions.navigate('next');
+    else if (endAction === 'first') actions.navigate('first');
+  };
   const timerSeconds = useTimerDisplay(state.timerState);
   const smStrobe = useStrobe(!!(state.screenMessage?.visible && state.screenMessage?.strobe &&
     (state.screenMessage.target === 'output' || state.screenMessage.target === 'both')));
@@ -113,6 +119,7 @@ export default function OutputPage() {
         totalSlides={totalSlides}
         backgroundMedia={backgroundMedia}
         bgCacheKey={bgCacheKey}
+        onVideoEnded={handleVideoEnded}
       />
       {/* Overlay: mensaje a pantalla */}
       {(() => {

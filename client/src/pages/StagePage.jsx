@@ -56,7 +56,7 @@ function normTitle(s) {
 }
 
 export default function StagePage() {
-  const { state } = usePresenter();
+  const { state, actions } = usePresenter();
   const { liveState, stageConfig, schedule, songs, eventPlays, reservasMode } = state;
   const outputCfg = state.outputConfig ?? {};
   const [time, setTime] = useState(new Date());
@@ -287,6 +287,11 @@ export default function StagePage() {
   }) : '';
   const nextSongKey = getSongKey(nextSong);
   const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
+  const currentSlideEndAction = liveState.backgroundMedia?.endAction || liveState.slideData?.slideBackground?.endAction || 'loop';
+  const handleBackgroundVideoEnded = () => {
+    if (currentSlideEndAction === 'continue') actions.navigate('next');
+    else if (currentSlideEndAction === 'first') actions.navigate('first');
+  };
 
   return (
     <div
@@ -297,7 +302,7 @@ export default function StagePage() {
       {hasBgMedia && (
         backgroundMedia.mediaType === 'video'
           ? showVideo
-            ? <video key={backgroundMedia.url + bgCacheKey} src={backgroundMedia.url} autoPlay loop muted playsInline data-bg-video="1"
+            ? <video key={backgroundMedia.url + bgCacheKey} src={backgroundMedia.url} autoPlay loop={currentSlideEndAction === 'loop'} onEnded={currentSlideEndAction === 'loop' ? undefined : handleBackgroundVideoEnded} muted playsInline data-bg-video="1"
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
             : null
           : <img key={backgroundMedia.url + bgCacheKey} src={backgroundMedia.url} alt=""

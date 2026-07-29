@@ -279,6 +279,7 @@ export default function SongDetail() {
   // ── Menú contextual ───────────────────────────────────────────────────────
   const [ctxMenu,  setCtxMenu]  = useState(null);
   const [renaming, setRenaming] = useState(null);
+  const isPresentationItem = !Array.isArray(selectedSong?.tags) || !selectedSong.tags.includes('Canciones');
 
   const openCtx  = (e, slide, index) => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, slide, index }); };
   const closeCtx = () => { setCtxMenu(null); setRenaming(null); };
@@ -357,7 +358,9 @@ export default function SongDetail() {
     const newSlides = selectedSong.slides.map((s, i) => ({
       label:           s.label,
       content:         s.content,
-      slideBackground: i === slideIndex ? mediaObj : (s.slide_background ?? null),
+      slideBackground: i === slideIndex
+        ? (mediaObj ? { ...mediaObj, endAction: s.slide_background?.endAction || 'loop' } : null)
+        : (s.slide_background ?? null),
     }));
     await saveSong(newSlides);
   };
@@ -369,8 +372,19 @@ export default function SongDetail() {
         content:         s.content,
         slideBackground: s.slide_background ?? null,
       })),
-      { label: '', content: '', slideBackground: mediaObj },
+      { label: '', content: '', slideBackground: { ...mediaObj, endAction: 'loop' } },
     ];
+    await saveSong(newSlides);
+  };
+
+  const setSlideEndAction = async (slideIndex, endAction) => {
+    const newSlides = selectedSong.slides.map((s, i) => ({
+      label: s.label,
+      content: s.content,
+      slideBackground: i === slideIndex && s.slide_background
+        ? { ...s.slide_background, endAction }
+        : (s.slide_background ?? null),
+    }));
     await saveSong(newSlides);
   };
 
@@ -378,6 +392,37 @@ export default function SongDetail() {
   const navigate = async (dir) => {
     const slides = orderedSlides;
     if (!slides || slides.length === 0) return;
+    if (dir === 'first') {
+      const firstSlide = slides[0];
+      const secondSlide = slides[1] || null;
+      if (!firstSlide) return;
+      setLocalSelectedKey(`${firstSlide.id}-0`);
+      actions.selectSlide(firstSlide);
+      actions.showSlide({
+        type: 'song',
+        slides,
+        slideIndex: 0,
+        slideData: {
+          type:            'song',
+          songId:          selectedSong.id,
+          slideId:         firstSlide.id,
+          songTitle:       selectedSong.title,
+          songAuthor:      selectedSong.author || '',
+          isSong:          !isPresentationItem,
+          songKey:         selectedSong.song_key || null,
+          label:           firstSlide.label,
+          content:         firstSlide.content,
+          slideBackground: firstSlide.slide_background ?? null,
+        },
+        nextSlideData: secondSlide ? {
+          type:    'song',
+          label:   secondSlide.label,
+          content: secondSlide.content,
+        } : null,
+      });
+      trackSlide(firstSlide.id);
+      return;
+    }
     const currentIndex = selectedSlide
       ? slides.findIndex(s => s.id === selectedSlide.id)
       : -1;
@@ -523,7 +568,7 @@ export default function SongDetail() {
     setLocalSelectedKey(`${slide.id}-${index}`);
     const slides    = orderedSlides;
     const nextSlide = slides[index + 1] || null;
-    const isSongLike = Array.isArray(selectedSong?.tags) ? selectedSong.tags.includes('Canciones') : true;
+    const isSongLike = !isPresentationItem;
     actions.selectSlide(slide);
     actions.showSlide({
       type:       'song',
@@ -567,7 +612,7 @@ export default function SongDetail() {
         songId:          selectedSong?.id,
         songTitle:       selectedSong?.title,
         songAuthor:      selectedSong?.author || '',
-        isSong:          Array.isArray(selectedSong?.tags) ? selectedSong.tags.includes('Canciones') : true,
+        isSong:          !isPresentationItem,
         songKey:         selectedSong?.song_key || null,
         slideBackground: outputCfg?.titleBackground || null,
       },
@@ -1134,6 +1179,32 @@ export default function SongDetail() {
               >
                 ✏️ Renombrar "{ctxMenu.slide.label}"
               </button>
+            )}
+            {isPresentationItem && ctxMenu.slide.slide_background?.mediaType === 'video' && (
+              <div className="px-3 py-1.5">
+                <p className="text-[10px] uppercase tracking-wider text-zinc-500 mb-2">Al terminar el video</p>
+                {[
+                  ['loop', 'Loop'],
+                  ['continue', 'Continuar'],
+                  ['stop', 'Parar'],
+                  ['first', 'Ir al principio'],
+                ].map(([value, label]) => {
+                  const active = (ctxMenu.slide.slide_background?.endAction || 'loop') === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      className={`w-full text-left px-2 py-1.5 rounded mb-1 transition-colors ${active ? 'bg-accent/20 text-accent' : 'hover:bg-surface-700 text-zinc-200'}`}
+                      onClick={async () => {
+                        await setSlideEndAction(ctxMenu.index, value);
+                        closeCtx();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             )}
             {renaming && (
               <div className="px-3 py-1.5 flex gap-1">

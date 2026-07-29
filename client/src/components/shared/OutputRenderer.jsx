@@ -68,7 +68,7 @@ function StaticVideoFrame({ src, fit = 'contain', bg = '#000' }) {
  *  - background: { type, color, url }
  *  - slideIndex, totalSlides: para indicador de progreso
  */
-export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia, containerWidth = null, containerHeight = null, bgCacheKey = 0, staticVideoFrame = false }) {
+export default function OutputRenderer({ cfg = {}, slideData, isBlank, background = {}, slideIndex, totalSlides, backgroundMedia, containerWidth = null, containerHeight = null, bgCacheKey = 0, staticVideoFrame = false, onVideoEnded = null }) {
   // Inyectar Google Fonts
   useEffect(() => {
     injectGoogleFont(cfg.fontFamily);
@@ -138,6 +138,7 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
   const titleBgActive = !isBlank && slideData?.type === 'title' && !!cfg.titleBackground;
   const effectiveBgMedia = bibleTemplateActive ? cfg.bibleBackground : titleBgActive ? cfg.titleBackground : (hasBgMedia ? backgroundMedia : null);
   const hasBg = !!effectiveBgMedia && (effectiveBgMedia.mediaType !== 'video' || (cfg.showVideo ?? true));
+  const bgEndAction = effectiveBgMedia?.endAction || 'loop';
 
   // Logo en pantalla en negro
   const logoEnabled  = cfg.logoEnabled  ?? false;
@@ -174,7 +175,7 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
           ? (
             staticVideoFrame
               ? <StaticVideoFrame key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} fit={bgFit} bg="#000" />
-              : <video key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} autoPlay loop muted playsInline preload="auto" data-bg-video="1"
+              : <video key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} autoPlay loop={bgEndAction === 'loop'} onEnded={bgEndAction === 'loop' ? undefined : onVideoEnded} muted playsInline preload="auto" data-bg-video="1"
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: bgFit, background: '#000', zIndex: 0 }} />
           )
           : <img key={effectiveBgMedia.url + bgCacheKey} src={effectiveBgMedia.url} alt=""
