@@ -117,6 +117,7 @@ export default function StagePage() {
   const {
     background,
     showClock        = true,
+    showNextSlide    = true,
     showSlideCounter = true,
     showSectionLabel = true,
     showSideLabel    = true,
