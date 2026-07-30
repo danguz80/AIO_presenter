@@ -288,6 +288,43 @@ export default function StagePage() {
   const nextSongKey = getSongKey(nextSong);
   const nextSongMeta = getNextSongMeta(nextSong, { showBpm: showNextSongBpm, showTimeSig: showNextSongTimeSig });
   const currentSlideEndAction = liveState.backgroundMedia?.endAction || liveState.slideData?.slideBackground?.endAction || 'loop';
+  const stageVideoTrackerRef = useRef(null);
+  const [videoRemainingSec, setVideoRemainingSec] = useState(null);
+  const stageVideoName = backgroundMedia?.fileName || backgroundMedia?.name || 'Video';
+  const showVideoAssist = !isBlank && !showVideo && backgroundMedia?.mediaType === 'video';
+  const showVideoCountdownInNextPanel = showNextPanel && showVideoAssist;
+
+  useEffect(() => {
+    if (!showVideoAssist) {
+      setVideoRemainingSec(null);
+      return;
+    }
+
+    const videoEl = stageVideoTrackerRef.current;
+    if (!videoEl) return;
+
+    const updateRemaining = () => {
+      const duration = Number.isFinite(videoEl.duration) ? videoEl.duration : 0;
+      const current = Number.isFinite(videoEl.currentTime) ? videoEl.currentTime : 0;
+      if (duration <= 0) {
+        setVideoRemainingSec(null);
+        return;
+      }
+      setVideoRemainingSec(Math.max(0, Math.ceil(duration - current)));
+    };
+
+    updateRemaining();
+    videoEl.addEventListener('loadedmetadata', updateRemaining);
+    videoEl.addEventListener('timeupdate', updateRemaining);
+    videoEl.addEventListener('ended', updateRemaining);
+
+    return () => {
+      videoEl.removeEventListener('loadedmetadata', updateRemaining);
+      videoEl.removeEventListener('timeupdate', updateRemaining);
+      videoEl.removeEventListener('ended', updateRemaining);
+    };
+  }, [showVideoAssist, backgroundMedia?.url]);
+
   const handleBackgroundVideoEnded = () => {
     if (currentSlideEndAction === 'continue') actions.navigate('next');
     else if (currentSlideEndAction === 'first') actions.navigate('first');
@@ -307,6 +344,19 @@ export default function StagePage() {
             : null
           : <img key={backgroundMedia.url + bgCacheKey} src={backgroundMedia.url} alt=""
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+      )}
+      {showVideoAssist && (
+        <video
+          ref={stageVideoTrackerRef}
+          key={`stage-video-tracker-${backgroundMedia.url}`}
+          src={backgroundMedia.url}
+          autoPlay
+          loop={currentSlideEndAction === 'loop'}
+          muted
+          playsInline
+          preload="auto"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', zIndex: -1 }}
+        />
       )}
       {/* ── BARRA SUPERIOR ─────────────────────────────────────────────── */}
       {showTopBar && (
@@ -331,6 +381,13 @@ export default function StagePage() {
                   {currentSongMeta}
                 </span>
               )}
+            </div>
+          )}
+          {!showVideo && hasContent && backgroundMedia?.mediaType === 'video' && (
+            <div className="flex flex-col items-center leading-tight max-w-full min-w-0">
+              <span className="text-white font-semibold truncate max-w-full" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
+                ▶ {stageVideoName}
+              </span>
             </div>
           )}
           <div />
@@ -366,7 +423,7 @@ export default function StagePage() {
             </div>
           )}
 
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-hidden relative">
             {!hasContent ? (
               <div className="w-full h-full flex items-center justify-center">
                 <span className="text-white/20 text-2xl font-light">Pantalla vacía</span>
@@ -390,6 +447,13 @@ export default function StagePage() {
                 showVideo={showVideo}
                 stageCfg={stageConfig}
               />
+            )}
+            {showVideoAssist && (
+              <div className="absolute bottom-2 right-3 px-2 py-1 rounded bg-black/55 border border-white/10">
+                <span className="text-white/85" style={{ fontSize: '0.78rem', fontFamily: fontStyles.fontFamily }}>
+                  ▶ {stageVideoName}
+                </span>
+              </div>
             )}
           </div>
         </div>
@@ -421,7 +485,19 @@ export default function StagePage() {
 
             {/* Contenido del panel inferior */}
             <div className="flex-1 overflow-hidden">
-              {nextSlideData && !isBlank ? (
+              {showVideoCountdownInNextPanel ? (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 px-8 text-center">
+                  <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: nextColor }}>
+                    Video en reproducción
+                  </span>
+                  <span className="font-mono font-bold tabular-nums" style={{ color: nextColor, fontSize: sz(fontSizeNextSong + 20) }}>
+                    {videoRemainingSec == null ? '--:--' : fmtTimer(videoRemainingSec)}
+                  </span>
+                  <span className="truncate max-w-full" style={{ color: `${nextColor}bb`, fontSize: sz(fontSizeNextSong) }}>
+                    ▶ {stageVideoName}
+                  </span>
+                </div>
+              ) : nextSlideData && !isBlank ? (
                 <StageSlideContent
                   slideData={nextSlideData}
                   fontSize={fontSizeNextLyrics}
