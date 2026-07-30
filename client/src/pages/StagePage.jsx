@@ -146,6 +146,7 @@ export default function StagePage() {
     fontSizeNextLyrics = 32,
     fontSizeChords     = 18,
     fontFamilyTitle    = 'sans',
+    fontStrokeWidth    = 0,
     fontStrokeColor    = '#000000',
     showComments       = false,
     commentColor       = '#facc15',
