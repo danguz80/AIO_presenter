@@ -587,7 +587,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
   const nextStageMedia = nextSlideData?.slideBackground || null;
   const nextStageMediaName = nextStageMedia?.fileName || nextStageMedia?.name || 'Sin media siguiente';
   const nextStageMediaPrefix = nextStageMedia?.mediaType === 'video' ? '▶' : (nextStageMedia?.mediaType === 'image' ? '▪' : '•');
-  const showVideoAssist = !isBlank && !showVideo && backgroundMedia?.mediaType === 'video';
+  const showVideoAssist = !isBlank && !showVideo && backgroundMedia?.mediaType === 'video' && !isSongSlide;
   const showVideoCountdownInNextPanel = showNextPanel && showVideoAssist;
   const stageVideoTrackerRef = useRef(null);
   const [videoRemainingSec, setVideoRemainingSec] = useState(null);
