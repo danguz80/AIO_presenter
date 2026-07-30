@@ -652,11 +652,12 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
     });
 
     // Parsear acordes solo sobre la parte visible de cada línea
-    const chordLines = parseChordLines(lineData.map(ld => ld.visible).join('\n'));
+    const chordLinesRaw = parseChordLines(lineData.map(ld => ld.visible).join('\n'));
+    const chordLines = Array.isArray(chordLinesRaw) ? chordLinesRaw : [];
 
     // Contar líneas reales (sin comentarios puros, sin vacías) para autosize
     const lineCount     = lineData.filter(ld => !ld.isFullComment && stripChords(ld.visible).trim()).length;
-    const hasAnyChords  = chordLines.some(line => line.some(seg => seg.chord));
+    const hasAnyChords  = chordLines.some(line => Array.isArray(line) && line.some(seg => seg.chord));
     const effectiveLines = hasAnyChords ? Math.ceil(lineCount * 1.6) : lineCount;
 
     const autoSize =
@@ -703,7 +704,7 @@ export function StageSlideContent({ slideData, fontSize, fontStyles, titleFontFa
               );
             }
 
-            const line     = chordLines[li];
+            const line     = Array.isArray(chordLines[li]) ? chordLines[li] : [];
             const lineText = line.map(s => s.text).join('');
             const hasChords = line.some(seg => seg.chord);
 
