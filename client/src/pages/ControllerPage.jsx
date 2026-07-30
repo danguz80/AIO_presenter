@@ -79,6 +79,18 @@ function fmtDate(d) {
   return `${day}-${m}-${y}`;
 }
 
+function toDateTimeLocalValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${day}T${hh}:${mm}`;
+}
+
 export default function ControllerPage() {
   const { state, actions } = usePresenter();
   const navigate = useNavigate();
@@ -141,6 +153,7 @@ export default function ControllerPage() {
   const [showMessages, setShowMessages] = useState(false);
   const [showSchedules, setShowSchedules] = useState(false);
   const [presentationSchedules, setPresentationSchedules] = useState(() => loadPresentationSchedules());
+  const [editingSchedule, setEditingSchedule] = useState(null);
   const scheduleRunnerBusyRef = useRef(false);
   const { width: previewWidth, onMouseDown: onPreviewResize } = useResizablePanel(384, 220, 700, true);
 
@@ -229,6 +242,20 @@ export default function ControllerPage() {
 
   const handleDeleteSchedule = useCallback((id) => {
     setPresentationSchedules(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  const handleUpdateSchedule = useCallback((updated) => {
+    setPresentationSchedules(prev => prev.map(s => (
+      s.id === updated.id
+        ? {
+            ...s,
+            ...updated,
+            lastTriggeredAt: null,
+            updatedAt: new Date().toISOString(),
+          }
+        : s
+    )));
+    setEditingSchedule(null);
   }, []);
 
   // ── Toast: mensajes internos entrantes ────────────────────────────────────
@@ -504,6 +531,15 @@ export default function ControllerPage() {
           onClose={() => setShowSchedules(false)}
           onToggle={handleToggleSchedule}
           onDelete={handleDeleteSchedule}
+          onEdit={(schedule) => setEditingSchedule(schedule)}
+        />
+      )}
+
+      {editingSchedule && (
+        <EditScheduleModal
+          schedule={editingSchedule}
+          onClose={() => setEditingSchedule(null)}
+          onSave={handleUpdateSchedule}
         />
       )}
     </div>
@@ -2087,7 +2123,99 @@ function EventsPanel() {
   );
 }
 
-function SchedulesPanel({ schedules, onClose, onToggle, onDelete }) {
+function EditScheduleModal({ schedule, onClose, onSave }) {
+  const [startAtLocal, setStartAtLocal] = useState(() => toDateTimeLocalValue(schedule?.startAt));
+  const [recurring, setRecurring] = useState(!!schedule?.recurring?.enabled);
+  const [pattern, setPattern] = useState(schedule?.recurring?.pattern || 'weekly');
+  const [interval, setIntervalValue] = useState(Math.max(1, Number(schedule?.recurring?.interval) || 1));
+  const [untilLocal, setUntilLocal] = useState(() => toDateTimeLocalValue(schedule?.recurring?.until));
+
+  const handleSave = () => {
+    if (!startAtLocal) return;
+    onSave({
+      ...schedule,
+      startAt: new Date(startAtLocal).toISOString(),
+      recurring: {
+        enabled: !!recurring,
+        pattern,
+        interval: Math.max(1, Number(interval) || 1),
+        until: recurring && untilLocal ? new Date(untilLocal).toISOString() : null,
+      },
+      active: true,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65" onClick={onClose}>
+      <div className="w-[430px] max-w-[95vw] bg-surface-800 border border-surface-600 rounded-xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-surface-700">
+          <p className="text-xs text-zinc-400 uppercase tracking-wider">Editar programación</p>
+          <p className="text-sm text-zinc-100 font-semibold truncate">{schedule?.songTitle}</p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-xs text-zinc-400 block mb-1">Fecha y hora de inicio</label>
+            <input
+              type="datetime-local"
+              value={startAtLocal}
+              onChange={e => setStartAtLocal(e.target.value)}
+              className="w-full bg-surface-700 border border-surface-600 rounded px-3 py-2 text-sm text-zinc-100"
+            />
+          </div>
+          <div className="rounded-lg border border-surface-700 p-3 space-y-3">
+            <label className="flex items-center gap-2 text-sm text-zinc-200">
+              <input type="checkbox" checked={recurring} onChange={e => setRecurring(e.target.checked)} />
+              Programación recurrente
+            </label>
+            {recurring && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Patrón</label>
+                    <select
+                      value={pattern}
+                      onChange={e => setPattern(e.target.value)}
+                      className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-2 text-sm text-zinc-100"
+                    >
+                      <option value="daily">Diario</option>
+                      <option value="weekly">Semanal</option>
+                      <option value="monthly">Mensual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Cada</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={interval}
+                      onChange={e => setIntervalValue(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-2 text-sm text-zinc-100"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Finaliza (opcional)</label>
+                  <input
+                    type="datetime-local"
+                    value={untilLocal}
+                    onChange={e => setUntilLocal(e.target.value)}
+                    className="w-full bg-surface-700 border border-surface-600 rounded px-3 py-2 text-sm text-zinc-100"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="px-4 py-3 border-t border-surface-700 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs rounded bg-surface-700 text-zinc-300 hover:bg-surface-600">Cancelar</button>
+          <button onClick={handleSave} className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/90">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SchedulesPanel({ schedules, onClose, onToggle, onDelete, onEdit }) {
   const activeSchedules = (schedules || []).filter(s => s?.active);
 
   return (
@@ -2125,6 +2253,12 @@ function SchedulesPanel({ schedules, onClose, onToggle, onDelete }) {
                 <p>Siguiente: {nextAt ? formatScheduleDate(nextAt.toISOString()) : '—'}</p>
               </div>
               <div className="mt-3 flex items-center justify-end">
+                <button
+                  onClick={() => onEdit(s)}
+                  className="text-xs px-2.5 py-1 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10 mr-2"
+                >
+                  Editar
+                </button>
                 <button
                   onClick={() => onToggle(s.id)}
                   className="text-xs px-2.5 py-1 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
