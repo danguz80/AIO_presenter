@@ -8,6 +8,7 @@ import api from '../../hooks/useApi';
 import EventPickerModal from '../shared/EventPickerModal';
 import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions';
 import { buildPresentationSchedule, getPresentationScheduleBadgeMap, getActiveOrgId } from '../../utils/presentationSchedules';
+import { getCurrentUserIsAdmin, syncCurrentUserAdmin } from '../../utils/auth';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
