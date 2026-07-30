@@ -998,13 +998,31 @@ export default function SongDetail() {
       })()}
 
       {/* Grid / Lista de slides */}
-      <div className={`flex-1 overflow-y-auto ${viewMode === 'grid' ? 'p-3' : ''}`}>
+      <div
+        className={`flex-1 overflow-y-auto ${viewMode === 'grid' ? 'p-3' : ''}`}
+        onDragOver={e => {
+          if (viewMode !== 'grid') return;
+          if (e.dataTransfer.types.includes('application/aio-media')) e.preventDefault();
+        }}
+        onDrop={e => {
+          if (viewMode !== 'grid') return;
+          const raw = e.dataTransfer.getData('application/aio-media');
+          if (!raw) return;
+          e.preventDefault();
+          try {
+            const media = JSON.parse(raw);
+            if (isPresentationItem) {
+              appendMediaSlide({ mediaType: media.type, filePath: media.path, fileName: media.name, url: media.url });
+            }
+          } catch {}
+        }}
+      >
         {orderedSlides.length === 0 ? (
           <p className="text-zinc-600 text-sm p-4">Esta canción no tiene secciones.</p>
         ) : viewMode === 'grid' ? (
           <div
             ref={gridRef}
-            className="grid gap-2"
+            className="grid gap-2 min-h-full content-start"
             style={{ gridTemplateColumns: `repeat(${thumbCols}, minmax(0, 1fr))` }}
             onDragOver={e => {
               if (dragLabel || e.dataTransfer.types.includes('application/aio-media')) e.preventDefault();
