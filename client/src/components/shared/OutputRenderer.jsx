@@ -222,6 +222,7 @@ export default function OutputRenderer({ cfg = {}, slideData, isBlank, backgroun
 // ─── Contenido del slide ──────────────────────────────────────────────────────
 function SlideContent({ slideData, cfg, cw = null, ch = null }) {
   const { type } = slideData;
+  const isSongSlide = slideData?.isSong ?? (type === 'song' || type === 'title');
 
   if (type === 'title') {
     return <TitleSlide slideData={slideData} cfg={cfg} />;
