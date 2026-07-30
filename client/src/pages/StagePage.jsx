@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, Fragment } from 'react';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
+import { useOrgPlanAccess } from '../hooks/useOrgPlanAccess';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
 import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
 import { ensureMediaCached } from '../utils/fsaUtils';
+import PlanBlockedScreen from '../components/shared/PlanBlockedScreen';
 
 const FONT_PRESETS = {
   sans:      'system-ui, -apple-system, sans-serif',
@@ -58,6 +60,7 @@ export default function StagePage() {
   const { state, actions } = usePresenter();
   const { liveState, stageConfig, schedule, songs, eventPlays, reservasMode } = state;
   const outputCfg = state.outputConfig ?? {};
+  const { ready: planReady, blocked: planBlocked } = useOrgPlanAccess();
   const [time, setTime] = useState(new Date());
   const [lastLabel, setLastLabel] = useState(null);
   const timerSeconds = useTimerDisplay(state.timerState);
@@ -150,6 +153,19 @@ export default function StagePage() {
     stageBibleRefShowBg       = false,
     stageBibleVersionColor    = '#999999',
   } = stageConfig;
+
+  if (!planReady) {
+    return <PlanBlockedScreen loading title="Verificando acceso a escenario" />;
+  }
+
+  if (planBlocked) {
+    return (
+      <PlanBlockedScreen
+        title="Escenario bloqueado por tu plan"
+        message="Actualiza tu suscripción para volver a abrir la ventana de escenario."
+      />
+    );
+  }
 
   // ── Inyectar Google Fonts (aquí, después del destructuring) ──────────────
   useEffect(() => {

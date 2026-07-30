@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { setPlanBlocked } from '../utils/planAccess';
 
 // En producción VITE_API_URL = 'https://api.aiopresenter.com'
 // En desarrollo queda vacío y Vite hace proxy de /api → localhost:3001
@@ -26,6 +27,7 @@ api.interceptors.response.use(
   err => {
     if (err.response?.status === 402) {
       const code = err.response.data?.code;
+      setPlanBlocked(true);
       window.dispatchEvent(new CustomEvent('aio:plan-required', { detail: { code } }));
     }
     return Promise.reject(err);

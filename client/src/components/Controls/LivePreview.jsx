@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePresenter } from '../../context/usePresenter';
+import { useOrgPlanAccess } from '../../hooks/useOrgPlanAccess';
 import { stripChords, parseChordLines, isCommentLine, stripComments, extractInlineComment } from '../../utils/chordUtils';
 import { injectGoogleFont, resolveFont } from '../../utils/fontUtils';
 import VirtualRenderer from '../shared/VirtualRenderer';
@@ -28,6 +29,7 @@ export default function LivePreview() {
   const { liveState, stageConfig, virtualConfig, schedule, eventPlays, reservasMode } = state;
   const outputCfg    = state.outputConfig  ?? {};
   const displayCfg   = state.displayConfig ?? {};
+  const { ready: planReady, blocked: planBlocked } = useOrgPlanAccess();
   const timerSeconds = useTimerDisplay(state.timerState);
   const [bgCacheKey, setBgCacheKey] = useState(0);
 
@@ -184,8 +186,10 @@ export default function LivePreview() {
   // Principal abre si está configurado, o si nada está configurado (fallback popup)
   const principalWillOpen = hasPrincipal || (!hasPrincipal && !hasEscenario);
   const escenarioWillOpen = hasEscenario;
+  const outputsLocked = !planReady || planBlocked;
 
   const activateOutputs = () => {
+    if (outputsLocked) return false;
     // Leer config directamente del state en el momento del click (evita cualquier closure stale)
     const cfg = state.displayConfig ?? {};
     const principal = cfg.principalScreenId || null;
@@ -303,17 +307,29 @@ export default function LivePreview() {
       {/* ── Botón toggle Activar / Desactivar salidas ─────────────────── */}
       <button
         onClick={toggleOutputs}
-        title={outputsActive ? 'Cerrar salidas' : 'Activar salidas configuradas en pantalla completa'}
+        disabled={outputsLocked && !outputsActive}
+        title={outputsLocked && !outputsActive
+          ? 'Salidas bloqueadas por el plan actual'
+          : outputsActive
+            ? 'Cerrar salidas'
+            : 'Activar salidas configuradas en pantalla completa'}
         className={`shrink-0 flex items-center justify-center gap-2 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
-          outputsActive
+          outputsLocked && !outputsActive
+            ? 'bg-surface-700 border-red-500/40 text-red-300 opacity-70 cursor-not-allowed'
+            : outputsActive
             ? 'bg-orange-500/20 border-orange-400 text-orange-300 hover:bg-orange-500/30'
             : 'bg-surface-700 border-surface-600 text-zinc-400 hover:border-accent hover:text-accent'
         }`}
       >
         {outputsActive ? <Monitor size={13} /> : <MonitorOff size={13} />}
-        {outputsActive ? 'Desactivar salidas' : 'Activar salidas'}
+        {outputsActive ? 'Desactivar salidas' : outputsLocked ? 'Salidas bloqueadas' : 'Activar salidas'}
         {outputsActive && <span className="w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse" />}
       </button>
+      {outputsLocked && !outputsActive && (
+        <p className="text-[10px] text-red-300 leading-snug px-1">
+          Tu plan actual no permite abrir salidas.
+        </p>
+      )}
       {/* Indicador de qué salidas se abrirán */}
       {!outputsActive && (
         <div className="flex flex-col gap-1">
@@ -342,7 +358,7 @@ export default function LivePreview() {
         dotColor="bg-orange-400"
         borderColor={live ? 'border-orange-400' : 'border-surface-600'}
         live={live}
-        onClick={() => openWindow('/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution)}
+        onClick={() => { if (!outputsLocked) openWindow('/output', displayCfg.principalScreenId, 'aio-output', displayCfg.principalResolution); }}
       >
         {/* Canvas escalado: object-fit:contain — escala para caber en ancho Y alto */}
         <div
@@ -411,7 +427,7 @@ export default function LivePreview() {
         dotColor="bg-orange-400"
         borderColor={live ? 'border-orange-400' : 'border-surface-600'}
         live={live}
-        onClick={() => openWindow('/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution)}
+        onClick={() => { if (!outputsLocked) openWindow('/stage', displayCfg.escenarioScreenId, 'aio-stage', displayCfg.escenarioResolution); }}
       >
         <div className="relative w-full h-full">
           <StagePreview

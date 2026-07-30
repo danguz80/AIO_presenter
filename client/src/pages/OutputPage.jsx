@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { usePresenter } from '../context/usePresenter';
 import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
+import { useOrgPlanAccess } from '../hooks/useOrgPlanAccess';
 import { injectGoogleFont } from '../utils/fontUtils';
 import OutputRenderer from '../components/shared/OutputRenderer';
 import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
 import { Smartphone } from 'lucide-react';
 import { ensureMediaCached } from '../utils/fsaUtils';
+import PlanBlockedScreen from '../components/shared/PlanBlockedScreen';
 
 /**
  * Ventana de salida — se abre en una pestaña/ventana separada
@@ -18,6 +20,7 @@ export default function OutputPage() {
   const cfg = state.outputConfig ?? {};
   const navigate = useNavigate();
   const [showBtn, setShowBtn] = useState(false);
+  const { ready: planReady, blocked: planBlocked } = useOrgPlanAccess();
 
   useKeyboardRelay();
 
@@ -92,6 +95,19 @@ export default function OutputPage() {
     (state.screenMessage.target === 'output' || state.screenMessage.target === 'both')));
   const tmStrobe = useStrobe(!!(state.timerState?.running && state.timerState?.strobe &&
     (!state.timerState.target || state.timerState.target === 'output' || state.timerState.target === 'both')));
+
+  if (!planReady) {
+    return <PlanBlockedScreen loading title="Verificando acceso a salidas" />;
+  }
+
+  if (planBlocked) {
+    return (
+      <PlanBlockedScreen
+        title="Salidas bloqueadas por tu plan"
+        message="Actualiza tu suscripción para volver a abrir la ventana principal de salida."
+      />
+    );
+  }
 
   return (
     <div
