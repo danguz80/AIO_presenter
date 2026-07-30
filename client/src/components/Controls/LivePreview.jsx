@@ -516,28 +516,36 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
     return next >= 0 ? next : schedule.length;
   })();
 
-  const currentSongId = slideData?.songId;
-  const idx = currentSongId ? schedule.findIndex(s => s.song_id === currentSongId) : -1;
+  const isScheduleSongItem = (it) => {
+    if (!it || it.item_type === 'separator' || it.item_type === 'media' || !it.song_id) return false;
+    if (!Array.isArray(it.tags)) return true;
+    return it.tags.includes('Canciones');
+  };
+  const isCurrentSongSlide = slideData?.type === 'song' && (slideData?.isSong ?? true);
+  const currentSongId = isCurrentSongSlide ? slideData?.songId : null;
+  const idx = currentSongId
+    ? schedule.findIndex(s => isScheduleSongItem(s) && s.song_id === currentSongId)
+    : -1;
   const currentInReservas = reservasIdx >= 0 && idx > reservasIdx && idx < reservasEndIdx;
 
   const nextSong = (() => {
-    if (reservasMode && reservasIdx >= 0) {
+    if (reservasMode && reservasIdx >= 0 && isCurrentSongSlide) {
       if (!currentInReservas) {
         for (let i = reservasIdx + 1; i < reservasEndIdx; i++) {
           const it = schedule[i];
-          if (!it.song_id) continue;
+          if (!isScheduleSongItem(it)) continue;
           if (!eventPlays?.has(it.song_id)) return it;
         }
       } else {
         for (let i = idx + 1; i < reservasEndIdx; i++) {
           const it = schedule[i];
-          if (!it.song_id) continue;
+          if (!isScheduleSongItem(it)) continue;
           if (!eventPlays?.has(it.song_id)) return it;
         }
         // Reservas agotadas → primera no tocada de secciones ANTERIORES a reservas
         for (let i = 0; i < reservasIdx; i++) {
           const it = schedule[i];
-          if (it.item_type === 'separator' || !it.song_id) continue;
+          if (!isScheduleSongItem(it)) continue;
           if (!eventPlays?.has(it.song_id)) return it;
         }
         return null;
@@ -546,8 +554,8 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
     // Lógica normal: primera no tocada en todo el schedule (excluyendo la actual)
     for (let i = 0; i < schedule.length; i++) {
       const it = schedule[i];
-      if (it.item_type === 'separator' || !it.song_id) continue;
-      if (it.song_id === currentSongId) continue; // saltar la actual
+      if (!isScheduleSongItem(it)) continue;
+      if (isCurrentSongSlide && it.song_id === currentSongId) continue; // saltar la actual solo si es canción
       if (eventPlays?.has(it.song_id)) continue;
       return it;
     }

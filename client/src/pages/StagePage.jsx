@@ -117,8 +117,6 @@ export default function StagePage() {
   const {
     background,
     showClock        = true,
-    showNextSlide    = true,
-    showSongTitle    = true,
     showSlideCounter = true,
     showSectionLabel = true,
     showSideLabel    = true,
@@ -138,7 +136,6 @@ export default function StagePage() {
     fontItalic   = false,
     fontSizeCounter    = 14,
     fontSizeTitle      = 16,
-    fontSizeLabel      = 11,
     fontSizeSideLabel  = 13,
     fontSizeClock      = 22,
     fontSizeNextSong   = 16,
@@ -146,13 +143,11 @@ export default function StagePage() {
     fontSizeNextLyrics = 32,
     fontSizeChords     = 18,
     fontFamilyTitle    = 'sans',
-    fontStrokeWidth    = 0,
     fontStrokeColor    = '#000000',
     showComments       = false,
     commentColor       = '#facc15',
     commentFontFamily  = 'sans',
     commentFontSize    = 16,
-    showVideo          = true,
     stageBibleTemplateEnabled = false,
     stageBibleFontFamily      = 'sans',
     stageBibleFontSize        = 48,
@@ -162,8 +157,6 @@ export default function StagePage() {
     stageBibleRefColor        = '#cccccc',
     stageBibleRefFontSize     = 24,
     stageBibleRefShowBg       = false,
-    stageBibleRefBgColor      = '#000000',
-    stageBibleRefBgOpacity    = 0.6,
     stageBibleVersionColor    = '#999999',
   } = stageConfig;
 
@@ -211,9 +204,17 @@ export default function StagePage() {
   const sectionColor = getLabelColor(effectiveLabel);
   const slideNum     = (slideIndex ?? 0) + 1;
 
-  // Siguiente canción del listado del día (saltando separadores y ya tocadas)
-  const currentSongId = slideData?.songId;
-  const currentIdx    = schedule.findIndex(s => sameSongId(s.song_id, currentSongId));
+  // Siguiente canción del listado del día (solo canciones con tag "Canciones")
+  const isScheduleSongItem = (it) => {
+    if (!it || it.item_type === 'separator' || it.item_type === 'media' || !it.song_id) return false;
+    if (!Array.isArray(it.tags)) return true;
+    return it.tags.includes('Canciones');
+  };
+  const isCurrentSongSlide = slideData?.type === 'song' && (slideData?.isSong ?? true);
+  const currentSongId = isCurrentSongSlide ? slideData?.songId : null;
+  const currentIdx = currentSongId
+    ? schedule.findIndex(s => isScheduleSongItem(s) && sameSongId(s.song_id, currentSongId))
+    : -1;
 
   // Helper: normalizar label para buscar "reservas" sin importar acento/case
   const normLabel = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -228,12 +229,12 @@ export default function StagePage() {
   const currentInReservas = reservasIdx >= 0 && currentIdx > reservasIdx && currentIdx < reservasEndIdx;
 
   const nextSong = (() => {
-    if (reservasMode && reservasIdx >= 0) {
+    if (reservasMode && reservasIdx >= 0 && isCurrentSongSlide) {
       if (!currentInReservas) {
         // Aún no estamos en reservas: mostrar la primera no tocada de reservas
         for (let i = reservasIdx + 1; i < reservasEndIdx; i++) {
           const it = schedule[i];
-          if (!it.song_id) continue;
+          if (!isScheduleSongItem(it)) continue;
           if (!eventPlays?.has(it.song_id)) return it;
         }
         // Todas las reservas tocadas → caer a lógica normal desde posición actual
@@ -241,13 +242,13 @@ export default function StagePage() {
         // Dentro de reservas: siguiente no tocada dentro de la sección
         for (let i = currentIdx + 1; i < reservasEndIdx; i++) {
           const it = schedule[i];
-          if (!it.song_id) continue;
+          if (!isScheduleSongItem(it)) continue;
           if (!eventPlays?.has(it.song_id)) return it;
         }
         // Reservas agotadas → primera no tocada de secciones ANTERIORES a reservas
         for (let i = 0; i < reservasIdx; i++) {
           const it = schedule[i];
-          if (it.item_type === 'separator' || !it.song_id) continue;
+          if (!isScheduleSongItem(it)) continue;
           if (!eventPlays?.has(it.song_id)) return it;
         }
         return null;
@@ -256,8 +257,8 @@ export default function StagePage() {
     // Lógica normal: primera no tocada en todo el schedule (excluyendo la actual)
     for (let i = 0; i < schedule.length; i++) {
       const it = schedule[i];
-      if (it.item_type === 'separator' || !it.song_id) continue;
-      if (sameSongId(it.song_id, currentSongId)) continue; // saltar la actual
+      if (!isScheduleSongItem(it)) continue;
+      if (isCurrentSongSlide && sameSongId(it.song_id, currentSongId)) continue; // saltar la actual solo si es canción
       if (eventPlays?.has(it.song_id)) continue;
       return it;
     }
