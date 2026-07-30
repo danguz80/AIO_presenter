@@ -313,7 +313,7 @@ export default function SongDetail() {
         slideId:         slide.id,
         songTitle:       selectedSong.title,
         songAuthor:      selectedSong.author || '',
-        isSong:          false,
+        isSong:          !isPresentationItem,
         songKey:         selectedSong.song_key || null,
         label:           slide.label,
         content:         slide.content,
@@ -594,6 +594,7 @@ export default function SongDetail() {
           slideId:         slide.id,
           songTitle:       selectedSong.title,
           songAuthor:      selectedSong.author || '',
+          isSong:          !isPresentationItem,
           songKey:         selectedSong.song_key || null,
           label:           slide.label,
           content:         slide.content,
@@ -603,6 +604,7 @@ export default function SongDetail() {
           type:    'song',
           label:   nextSlide.label,
           content: nextSlide.content,
+          slideBackground: nextSlide.slide_background ?? null,
         } : null,
       });
       trackSlide(slide.id);
