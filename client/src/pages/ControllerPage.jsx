@@ -552,10 +552,20 @@ function EventsPanel() {
     }
   }, [open]); // eslint-disable-line
 
+  const reloadTemplates = useCallback(async () => {
+    try {
+      const r = await authFetch('/api/event-templates');
+      const data = await r.json();
+      setTemplates(Array.isArray(data) ? data : []);
+    } catch {
+      setTemplates([]);
+    }
+  }, []);
+
   // Cargar plantillas de eventos
   useEffect(() => {
-    authFetch('/api/event-templates').then(r => r.json()).then(setTemplates).catch(() => {});
-  }, []);
+    reloadTemplates();
+  }, [reloadTemplates]);
 
   const fetchEvents = useCallback((y, m) => {
     const lastDay = new Date(y, m + 1, 0).getDate();
@@ -787,6 +797,8 @@ function EventsPanel() {
         author:          s.author          || null,
         separator_label: s.separator_label || null,
         separator_color: s.separator_color || null,
+        media_name:      s.media_name      || null,
+        media_type:      s.media_type      || null,
       }));
       const res  = await authFetch('/api/event-templates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -800,6 +812,7 @@ function EventsPanel() {
       setActiveTemplate({ id: tpl.id, name: tpl.name });
       setTemplateDirty(false);
       setTemplateName(''); setShowSaveTemplate(false);
+      await reloadTemplates();
     } catch (e) { console.error(e); }
     finally { setSavingTemplate(false); }
   };
@@ -815,6 +828,8 @@ function EventsPanel() {
         author:          s.author          || null,
         separator_label: s.separator_label || null,
         separator_color: s.separator_color || null,
+        media_name:      s.media_name      || null,
+        media_type:      s.media_type      || null,
       }));
       const res = await authFetch('/api/event-templates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -826,6 +841,7 @@ function EventsPanel() {
       setTemplateDirty(false);
       setTemplateSaveSuccess(true);
       setTimeout(() => setTemplateSaveSuccess(false), 2500);
+      await reloadTemplates();
     } catch (e) { console.error(e); }
     finally { setSavingTemplate(false); }
   };
@@ -841,6 +857,8 @@ function EventsPanel() {
         author:          s.author          || null,
         separator_label: s.separator_label || null,
         separator_color: s.separator_color || null,
+        media_name:      s.media_name      || null,
+        media_type:      s.media_type      || null,
       }));
       const res = await authFetch('/api/event-templates', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -857,6 +875,7 @@ function EventsPanel() {
       setShowAltNameInput(false);
       setTemplateSaveSuccess(true);
       setTimeout(() => setTemplateSaveSuccess(false), 2500);
+      await reloadTemplates();
     } catch (e) { console.error(e); }
     finally { setSavingTemplate(false); }
   };
@@ -1412,7 +1431,13 @@ function EventsPanel() {
                   {/* Cargar plantilla en evento existente */}
                   {templates.length > 0 && (
                     <button
-                      onClick={() => setShowLoadTemplate(s => !s)}
+                      onClick={() => {
+                        setShowLoadTemplate(s => {
+                          const next = !s;
+                          if (next) reloadTemplates();
+                          return next;
+                        });
+                      }}
                       className={['p-1 rounded transition-colors',
                         showLoadTemplate ? 'text-accent bg-accent/15' : 'text-zinc-400 hover:text-white hover:bg-surface-700'
                       ].join(' ')}
