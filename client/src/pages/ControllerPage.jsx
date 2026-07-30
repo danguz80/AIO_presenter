@@ -804,6 +804,10 @@ function EventsPanel() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: templateName.trim(), items }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
       const tpl = await res.json();
       setTemplates(ts => {
         const filtered = ts.filter(t => t.name !== tpl.name);
@@ -835,6 +839,10 @@ function EventsPanel() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: activeTemplate.name, items }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
       const tpl = await res.json();
       setTemplates(ts => ts.map(t => t.id === tpl.id || t.name === tpl.name ? tpl : t));
       setActiveTemplate({ id: tpl.id, name: tpl.name });
@@ -864,6 +872,10 @@ function EventsPanel() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: altTemplateName.trim(), items }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
       const tpl = await res.json();
       setTemplates(ts => {
         const filtered = ts.filter(t => t.name !== tpl.name);

@@ -326,6 +326,17 @@ async function saveOrgSetting(orgId, key, value) {
     // Campos multimedia en ítems de eventos
     await pool.query(`ALTER TABLE event_songs ADD COLUMN IF NOT EXISTS media_name TEXT`);
     await pool.query(`ALTER TABLE event_songs ADD COLUMN IF NOT EXISTS media_type TEXT`);
+    // Plantillas de evento
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS event_templates (
+        id              SERIAL PRIMARY KEY,
+        name            VARCHAR(255) NOT NULL,
+        items           JSONB NOT NULL DEFAULT '[]',
+        organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await pool.query(`ALTER TABLE event_templates ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) ON DELETE CASCADE`);
     // Migraciones sync con Google Drive
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_file_id  TEXT`);
     await pool.query(`ALTER TABLE songs ADD COLUMN IF NOT EXISTS drive_synced_at TIMESTAMPTZ`);
