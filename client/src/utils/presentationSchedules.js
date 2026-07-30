@@ -40,8 +40,29 @@ export function buildPresentationSchedule({ song, startAtLocal, recurring, patte
   const nowIso = new Date().toISOString();
   return {
     id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    kind: 'presentation',
     songId: song.id,
     songTitle: song.title || 'Presentacion',
+    active: true,
+    startAt: toIso(startAtLocal),
+    recurring: {
+      enabled: !!recurring,
+      pattern: pattern || 'weekly',
+      interval: Math.max(1, Number(interval) || 1),
+      until: recurring ? toIso(untilLocal) : null,
+    },
+    lastTriggeredAt: null,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+}
+
+export function buildOutputsActivationSchedule({ startAtLocal, recurring, pattern, interval, untilLocal }) {
+  const nowIso = new Date().toISOString();
+  return {
+    id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+    kind: 'outputs',
+    title: 'Activar salidas',
     active: true,
     startAt: toIso(startAtLocal),
     recurring: {
@@ -59,6 +80,8 @@ export function buildPresentationSchedule({ song, startAtLocal, recurring, patte
 export function getPresentationScheduleBadgeMap(schedules) {
   const map = new Map();
   for (const s of schedules || []) {
+    const kind = s?.kind || 'presentation';
+    if (kind !== 'presentation') continue;
     if (!s?.active || !s?.songId) continue;
     const key = String(s.songId);
     map.set(key, (map.get(key) || 0) + 1);

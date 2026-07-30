@@ -225,6 +225,13 @@ export default function LivePreview() {
 
   const toggleOutputs = () => outputsActive ? deactivateOutputs() : activateOutputs();
 
+  // Permite disparar exactamente la misma lógica del botón "Activar salidas" desde programaciones.
+  useEffect(() => {
+    const onActivateOutputs = () => activateOutputs();
+    window.addEventListener('aio:activate-outputs', onActivateOutputs);
+    return () => window.removeEventListener('aio:activate-outputs', onActivateOutputs);
+  }, [state.displayConfig]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Cuando la ventana de output entra a fullscreen, hacer focus a la de escenario
   // para que el siguiente spacebar la ponga en fullscreen también.
   useEffect(() => {

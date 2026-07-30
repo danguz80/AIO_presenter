@@ -12,7 +12,7 @@ import SongFormModal   from '../components/Library/SongFormModal';
 import { ScheduleAddProvider } from '../context/ScheduleAddContext';
 import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck, MessageSquare, CalendarClock, Trash2 } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck, MessageSquare, CalendarClock, Trash2, Monitor } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import OrgSwitcher from '../components/shared/OrgSwitcher';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
@@ -20,6 +20,7 @@ import { APP_VERSION } from '../version';
 import {
   loadPresentationSchedules,
   savePresentationSchedules,
+  buildOutputsActivationSchedule,
   getDueOccurrence,
   getNextOccurrence,
   describeRecurrence,
@@ -197,6 +198,11 @@ export default function ControllerPage() {
     return true;
   }, [actions]);
 
+  const activateOutputsFromSchedule = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('aio:activate-outputs'));
+    return true;
+  }, []);
+
   useEffect(() => {
     const runDueSchedules = async () => {
       if (scheduleRunnerBusyRef.current) return;
@@ -211,7 +217,10 @@ export default function ControllerPage() {
           const dueAt = getDueOccurrence(sch, now);
           if (!dueAt) continue;
 
-          const ok = await projectScheduledPresentation(sch.songId);
+          const kind = sch?.kind || 'presentation';
+          const ok = kind === 'outputs'
+            ? activateOutputsFromSchedule()
+            : await projectScheduledPresentation(sch.songId);
           if (!ok) continue;
 
           changed = true;
@@ -232,9 +241,14 @@ export default function ControllerPage() {
     runDueSchedules();
     const id = setInterval(runDueSchedules, 10000);
     return () => clearInterval(id);
-  }, [presentationSchedules, projectScheduledPresentation]);
+  }, [presentationSchedules, projectScheduledPresentation, activateOutputsFromSchedule]);
 
   const handleCreatePresentationSchedule = useCallback((schedule) => {
+    setPresentationSchedules(prev => [schedule, ...prev]);
+  }, []);
+
+  const handleCreateOutputsSchedule = useCallback((scheduleData) => {
+    const schedule = buildOutputsActivationSchedule(scheduleData);
     setPresentationSchedules(prev => [schedule, ...prev]);
   }, []);
 
@@ -534,6 +548,7 @@ export default function ControllerPage() {
           onToggle={handleToggleSchedule}
           onDelete={handleDeleteSchedule}
           onEdit={(schedule) => setEditingSchedule(schedule)}
+          onCreateOutputsSchedule={handleCreateOutputsSchedule}
         />
       )}
 
@@ -2152,7 +2167,7 @@ function EditScheduleModal({ schedule, onClose, onSave }) {
       <div className="w-[430px] max-w-[95vw] bg-surface-800 border border-surface-600 rounded-xl shadow-2xl" onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 border-b border-surface-700">
           <p className="text-xs text-zinc-400 uppercase tracking-wider">Editar programación</p>
-          <p className="text-sm text-zinc-100 font-semibold truncate">{schedule?.songTitle}</p>
+          <p className="text-sm text-zinc-100 font-semibold truncate">{schedule?.songTitle || schedule?.title || 'Programación'}</p>
         </div>
         <div className="p-4 space-y-4">
           <div>
@@ -2217,8 +2232,91 @@ function EditScheduleModal({ schedule, onClose, onSave }) {
   );
 }
 
-function SchedulesPanel({ schedules, onClose, onToggle, onDelete, onEdit }) {
+function CreateOutputsScheduleModal({ onClose, onCreate }) {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  const defaultLocal = new Date(now.getTime() + 5 * 60 * 1000).toISOString().slice(0, 16);
+  const [startAtLocal, setStartAtLocal] = useState(defaultLocal);
+  const [recurring, setRecurring] = useState(false);
+  const [pattern, setPattern] = useState('weekly');
+  const [interval, setIntervalValue] = useState(1);
+  const [untilLocal, setUntilLocal] = useState('');
+
+  const handleCreate = () => {
+    if (!startAtLocal) return;
+    onCreate({ startAtLocal, recurring, pattern, interval, untilLocal: untilLocal || null });
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/65" onClick={onClose}>
+      <div className="w-[430px] max-w-[95vw] bg-surface-800 border border-surface-600 rounded-xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-surface-700">
+          <p className="text-xs text-zinc-400 uppercase tracking-wider">Programar activación</p>
+          <p className="text-sm text-zinc-100 font-semibold truncate">Salidas (Principal/Escenario)</p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-xs text-zinc-400 block mb-1">Fecha y hora</label>
+            <input
+              type="datetime-local"
+              value={startAtLocal}
+              onChange={e => setStartAtLocal(e.target.value)}
+              className="w-full bg-surface-700 border border-surface-600 rounded px-3 py-2 text-sm text-zinc-100"
+            />
+          </div>
+          <div className="rounded-lg border border-surface-700 p-3 space-y-3">
+            <label className="flex items-center gap-2 text-sm text-zinc-200">
+              <input type="checkbox" checked={recurring} onChange={e => setRecurring(e.target.checked)} />
+              Programación recurrente
+            </label>
+            {recurring && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Patrón</label>
+                    <select value={pattern} onChange={e => setPattern(e.target.value)} className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-2 text-sm text-zinc-100">
+                      <option value="daily">Diario</option>
+                      <option value="weekly">Semanal</option>
+                      <option value="monthly">Mensual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Cada</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={interval}
+                      onChange={e => setIntervalValue(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-2 text-sm text-zinc-100"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Finaliza (opcional)</label>
+                  <input
+                    type="datetime-local"
+                    value={untilLocal}
+                    onChange={e => setUntilLocal(e.target.value)}
+                    className="w-full bg-surface-700 border border-surface-600 rounded px-3 py-2 text-sm text-zinc-100"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="px-4 py-3 border-t border-surface-700 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs rounded bg-surface-700 text-zinc-300 hover:bg-surface-600">Cancelar</button>
+          <button onClick={handleCreate} className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/90">Guardar programación</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SchedulesPanel({ schedules, onClose, onToggle, onDelete, onEdit, onCreateOutputsSchedule }) {
   const activeSchedules = (schedules || []).filter(s => s?.active);
+  const [showCreateOutputsModal, setShowCreateOutputsModal] = useState(false);
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 w-[380px] max-w-[96vw] bg-surface-800 border-l border-surface-700 flex flex-col shadow-2xl">
@@ -2227,7 +2325,15 @@ function SchedulesPanel({ schedules, onClose, onToggle, onDelete, onEdit }) {
           <p className="text-sm font-semibold text-white">Programaciones</p>
           <p className="text-xs text-zinc-500">{activeSchedules.length} activas</p>
         </div>
-        <button onClick={onClose} className="text-zinc-400 hover:text-white"><X size={16} /></button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCreateOutputsModal(true)}
+            className="text-xs px-2 py-1 rounded border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/10"
+          >
+            + Salidas
+          </button>
+          <button onClick={onClose} className="text-zinc-400 hover:text-white"><X size={16} /></button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -2239,7 +2345,7 @@ function SchedulesPanel({ schedules, onClose, onToggle, onDelete, onEdit }) {
             <div key={s.id} className="rounded-xl border border-surface-600 bg-surface-900/40 p-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="text-sm text-zinc-100 font-semibold truncate">{s.songTitle}</p>
+                  <p className="text-sm text-zinc-100 font-semibold truncate">{s.kind === 'outputs' ? (s.title || 'Activar salidas') : s.songTitle}</p>
                   <p className="text-xs text-zinc-500 mt-0.5">{describeRecurrence(s)}</p>
                 </div>
                 <button
@@ -2272,6 +2378,13 @@ function SchedulesPanel({ schedules, onClose, onToggle, onDelete, onEdit }) {
           );
         })}
       </div>
+
+      {showCreateOutputsModal && (
+        <CreateOutputsScheduleModal
+          onClose={() => setShowCreateOutputsModal(false)}
+          onCreate={onCreateOutputsSchedule}
+        />
+      )}
     </div>
   );
 }
