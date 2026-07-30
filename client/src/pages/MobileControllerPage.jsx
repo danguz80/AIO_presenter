@@ -276,7 +276,6 @@ export default function MobileControllerPage() {
   const [pinDetecting, setPinDetecting] = useState(false);
   // currentPin: el PIN del presentador objetivo (aio_target_pin, lo setea el usuario)
   const currentPin = localStorage.getItem('aio_target_pin') || '';
-  const touchStart      = useRef(null);
   const songEditBodyRef  = useRef(null);
   const savedCursorPos   = useRef(null);
   const slideGridRef     = useRef(null);
@@ -857,22 +856,6 @@ export default function MobileControllerPage() {
 
   const handleBlank = () => trigger(() => actions.toggleBlank(!isBlank), 'blank');
 
-  // Swipe + tap: tap izquierdo = anterior, tap derecho = siguiente
-  const onTouchStart = (e) => {
-    if (tab !== 'live') return;
-    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  };
-  const onTouchEnd = (e) => {
-    if (touchStart.current === null) return;
-    const dx = e.changedTouches[0].clientX - touchStart.current.x;
-    const dy = e.changedTouches[0].clientY - touchStart.current.y;
-    if (Math.abs(dx) > 60) {
-      // Swipe horizontal
-      dx < 0 ? handleNext() : handlePrev();
-    }
-    touchStart.current = null;
-  };
-
   // ── Canciones ────────────────────────────────────────────────────────────
   const openSong = async (id) => {
     setActiveSongSlideIndex(null);   // limpiar indicador activo al cambiar canción
@@ -1329,8 +1312,6 @@ export default function MobileControllerPage() {
   return (
     <div
       className="h-[100dvh] bg-surface-900 flex flex-col select-none overflow-hidden mobile-controller-root"
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
     >
       {/* ── Drawer: MessagesPanel ── */}
       {showMessages && (
