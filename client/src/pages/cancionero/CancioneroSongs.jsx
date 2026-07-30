@@ -7,6 +7,7 @@ import DemoPackBanner from '../../components/shared/DemoPackBanner';
 import EventPickerModal from '../../components/shared/EventPickerModal';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
 import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions';
+import { getCurrentUserIsAdmin, syncCurrentUserAdmin } from '../../utils/auth';
 
 const API = import.meta.env.VITE_API_URL || '';
 function authHeaders() {
@@ -21,15 +22,7 @@ function norm(str) {
 
 export default function CancioneroSongs() {
   const navigate  = useNavigate();
-  const isAdmin = (() => {
-    try {
-      const token = localStorage.getItem('aio_sync_token');
-      if (!token) return false;
-      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
-    } catch {
-      return false;
-    }
-  })();
+  const [isAdmin, setIsAdmin] = useState(getCurrentUserIsAdmin());
   const scrollRef = useRef(null);
   useVolumeKeys(
     () => scrollRef.current?.scrollBy({ top: -150, behavior: 'smooth' }),
@@ -64,7 +57,18 @@ export default function CancioneroSongs() {
       .catch(() => setLoading(false));
   };
 
-  useEffect(() => { loadSongs(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadSongs();
+    fetch(`${API}/auth/me`, { headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          syncCurrentUserAdmin(data);
+          setIsAdmin(Boolean(data?.is_admin ?? data?.isAdmin));
+        }
+      })
+      .catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const availableTags = useMemo(() => {
     const set = new Set();

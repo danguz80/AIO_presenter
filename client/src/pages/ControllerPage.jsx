@@ -17,6 +17,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import OrgSwitcher from '../components/shared/OrgSwitcher';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
 import { APP_VERSION } from '../version';
+import { getCurrentUserIsAdmin, syncCurrentUserAdmin } from '../utils/auth';
 import {
   getActiveOrgId,
   loadPresentationSchedules,
@@ -623,15 +624,7 @@ function CollapsibleLibrary({ presentationSchedules = [], onCreatePresentationSc
 function EventsPanel() {
   const today = new Date();
   const { state, actions } = usePresenter();
-  const isAdmin = (() => {
-    try {
-      const token = localStorage.getItem('aio_sync_token');
-      if (!token) return false;
-      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
-    } catch {
-      return false;
-    }
-  })();
+  const [isAdmin, setIsAdmin] = useState(getCurrentUserIsAdmin());
   const [open,       setOpen]       = useState(false);
   const { width: panelWidth, onMouseDown: onResizeMouseDown } = useResizablePanel(280, 160, 480);
   const [year,       setYear]       = useState(today.getFullYear());

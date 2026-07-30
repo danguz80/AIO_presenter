@@ -219,15 +219,7 @@ function formatRelativeDate(dateStr) {
 export default function SongLibrary({ presentationSchedules = [], onCreatePresentationSchedule = null }) {
   const { state, actions } = usePresenter();
   const activeOrgId = getActiveOrgId();
-  const isAdmin = (() => {
-    try {
-      const token = localStorage.getItem('aio_sync_token');
-      if (!token) return false;
-      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
-    } catch {
-      return false;
-    }
-  })();
+  const [isAdmin, setIsAdmin] = useState(getCurrentUserIsAdmin());
   const [search,      setSearch]      = useState('');
   const [showForm,    setShowForm]    = useState(false);
   const [showImport,  setShowImport]  = useState(false);
@@ -261,6 +253,12 @@ export default function SongLibrary({ presentationSchedules = [], onCreatePresen
   // Cargar todas las etiquetas al montar
   useEffect(() => {
     api.get('/songs/tags').then(r => setAllTags(r.data)).catch(() => {});
+    api.get('/auth/me')
+      .then(r => {
+        syncCurrentUserAdmin(r.data);
+        setIsAdmin(Boolean(r?.data?.is_admin ?? r?.data?.isAdmin));
+      })
+      .catch(() => {});
   }, []);
 
   const refreshTags = useCallback(async () => {

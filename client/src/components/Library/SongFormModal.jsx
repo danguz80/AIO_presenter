@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { usePresenterOptional } from '../../context/usePresenter';
+import { getCurrentUserIsAdmin } from '../../utils/auth';
 import { X, Trash2, Tag, Plus, Music2 } from 'lucide-react';
 import api from '../../hooks/useApi';
 import { getLabelColor } from '../../utils/labelColors';
@@ -153,15 +154,7 @@ function findNextSyllablePos(text, pos) {
 export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
   const presenter = usePresenterOptional(); // null fuera del PresenterProvider
   const isEdit = Boolean(song?.id);
-  const isAdmin = useMemo(() => {
-    try {
-      const token = localStorage.getItem('aio_sync_token');
-      if (!token) return false;
-      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
-    } catch {
-      return false;
-    }
-  }, []);
+  const [isAdmin, setIsAdmin] = useState(getCurrentUserIsAdmin());
 
   const initialLinks = useMemo(() => {
     const fromLinks = Array.isArray(song?.links)
@@ -293,6 +286,12 @@ export default function SongFormModal({ song, onClose, onSaved, onDeleted }) {
 
   useEffect(() => {
     api.get('/songs/tags').then(r => setAllTags(r.data)).catch(() => {});
+    api.get('/auth/me')
+      .then(r => {
+        const nextAdmin = Boolean(r?.data?.is_admin ?? r?.data?.isAdmin);
+        setIsAdmin(nextAdmin);
+      })
+      .catch(() => {});
   }, []);
 
   // Labels únicos: primero los del texto editado, luego los del song.slides original

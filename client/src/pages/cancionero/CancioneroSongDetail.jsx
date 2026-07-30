@@ -11,6 +11,7 @@ import AnnotationCanvas from '../../components/cancionero/AnnotationCanvas';
 import CancioneroNavbar from './CancioneroNavbar';
 import useVolumeKeys from '../../hooks/useVolumeKeys';
 import SongRecentPlays from '../../components/shared/SongRecentPlays';
+import { getCurrentUserIsAdmin, syncCurrentUserAdmin } from '../../utils/auth';
 
 const API = import.meta.env.VITE_API_URL || '';
 const SOCKET_URL = import.meta.env.VITE_API_URL || window.location.origin;
@@ -489,15 +490,7 @@ export default function CancioneroSongDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdmin = (() => {
-    try {
-      const token = localStorage.getItem('aio_sync_token');
-      if (!token) return false;
-      return JSON.parse(atob(token.split('.')[1]))?.isAdmin === true;
-    } catch {
-      return false;
-    }
-  })();
+  const [isAdmin, setIsAdmin] = useState(getCurrentUserIsAdmin());
 
   // Contexto de evento: lista de canciones para navegar prev/next
   const songList   = location.state?.songList   ?? null; // [{id, title}, ...]

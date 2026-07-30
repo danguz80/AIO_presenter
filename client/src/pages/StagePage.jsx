@@ -154,19 +154,6 @@ export default function StagePage() {
     stageBibleVersionColor    = '#999999',
   } = stageConfig;
 
-  if (!planReady) {
-    return <PlanBlockedScreen loading title="Verificando acceso a escenario" />;
-  }
-
-  if (planBlocked) {
-    return (
-      <PlanBlockedScreen
-        title="Escenario bloqueado por tu plan"
-        message="Actualiza tu suscripción para volver a abrir la ventana de escenario."
-      />
-    );
-  }
-
   // ── Inyectar Google Fonts (aquí, después del destructuring) ──────────────
   useEffect(() => {
     customFonts.forEach(injectGoogleFont);
@@ -340,6 +327,19 @@ export default function StagePage() {
     if (currentSlideEndAction === 'continue') actions.navigate('next');
     else if (currentSlideEndAction === 'first') actions.navigate('first');
   };
+
+  if (!planReady) {
+    return <PlanBlockedScreen loading title="Verificando acceso a escenario" />;
+  }
+
+  if (planBlocked) {
+    return (
+      <PlanBlockedScreen
+        title="Escenario bloqueado por tu plan"
+        message="Actualiza tu suscripción para volver a abrir la ventana de escenario."
+      />
+    );
+  }
 
   return (
     <div
