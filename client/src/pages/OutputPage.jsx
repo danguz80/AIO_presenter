@@ -5,7 +5,7 @@ import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { injectGoogleFont } from '../utils/fontUtils';
 import OutputRenderer from '../components/shared/OutputRenderer';
 import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
-import { Smartphone, Maximize2 } from 'lucide-react';
+import { Smartphone } from 'lucide-react';
 import { ensureMediaCached } from '../utils/fsaUtils';
 
 /**
@@ -93,18 +93,6 @@ export default function OutputPage() {
   const tmStrobe = useStrobe(!!(state.timerState?.running && state.timerState?.strobe &&
     (!state.timerState.target || state.timerState.target === 'output' || state.timerState.target === 'both')));
 
-  // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
-  // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
-  const [showFsHint, setShowFsHint] = useState(() =>
-    new URLSearchParams(window.location.search).get('fs') === '1' && !document.fullscreenElement
-  );
-  useEffect(() => {
-    if (!showFsHint) return;
-    const onFsChange = () => { if (document.fullscreenElement) setShowFsHint(false); };
-    document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, [showFsHint]);
-
   return (
     <div
       className="w-screen h-screen select-none overflow-hidden"
@@ -154,22 +142,6 @@ export default function OutputPage() {
         }
         return null;
       })()}
-      {/* Overlay pantalla completa (si auto-fullscreen falló) */}
-      {showFsHint && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center cursor-pointer select-none"
-          style={{ background: 'rgba(0,0,0,0.92)' }}
-          onClick={() => { document.documentElement.requestFullscreen?.().catch(() => {}); setShowFsHint(false); }}
-        >
-          <div className="flex flex-col items-center gap-4 px-12 py-8 bg-black rounded-2xl border-2 border-white/30">
-            <Maximize2 size={40} className="text-white" />
-            <p className="text-white text-xl font-bold">Clic para pantalla completa</p>
-            <p className="text-white/50 text-sm">
-              {/Mac/i.test(navigator.platform) ? 'o presiona Ctrl + Cmd + F' : 'o presiona F11'}
-            </p>
-          </div>
-        </div>
-      )}
       {/* Botón flotante — solo visible en móvil, aparece al tocar */}
       <div
         className={`md:hidden fixed bottom-6 right-4 z-50 flex flex-col gap-2 transition-opacity duration-300 ${

@@ -149,7 +149,7 @@ export default function LivePreview() {
   const openOneOutput = (ref, path, screenId, windowName, resolution) => {
     if (ref.current && !ref.current.closed) { ref.current.focus(); return; }
     const res = resolution ?? { width: 1920, height: 1080 };
-    const url = `${path}?fs=1`;
+    const url = path;
 
     // Si hay una pantalla específica configurada, obtener sus coordenadas async
     // y abrir la ventana maximizada en esa pantalla.

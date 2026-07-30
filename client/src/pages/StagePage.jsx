@@ -4,7 +4,6 @@ import { useKeyboardRelay } from '../hooks/useKeyboardRelay';
 import { stripChords, parseChordLines, isCommentLine, extractInlineComment } from '../utils/chordUtils';
 import { getLabelColor } from '../utils/labelColors';
 import { useTimerDisplay, fmtTimer, useStrobe } from '../hooks/useTimerDisplay';
-import { Maximize2 } from 'lucide-react';
 import { ensureMediaCached } from '../utils/fsaUtils';
 
 const FONT_PRESETS = {
@@ -66,18 +65,6 @@ export default function StagePage() {
     !!(state.screenMessage?.visible && state.screenMessage?.strobe &&
       (state.screenMessage.target === 'stage' || state.screenMessage.target === 'both'))
   );
-
-  // El script inline en index.html ya intentó requestFullscreen() antes de que React monte.
-  // Aquí solo gestionamos el estado del hint: visible hasta que fullscreen confirme éxito.
-  const [showFsHint, setShowFsHint] = useState(() =>
-    new URLSearchParams(window.location.search).get('fs') === '1' && !document.fullscreenElement
-  );
-  useEffect(() => {
-    if (!showFsHint) return;
-    const onFsChange = () => { if (document.fullscreenElement) setShowFsHint(false); };
-    document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, [showFsHint]);
 
   useKeyboardRelay();
 
@@ -630,22 +617,6 @@ export default function StagePage() {
                 {time.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false })}
               </span>
             )}
-          </div>
-        </div>
-      )}
-      {/* Overlay pantalla completa (si auto-fullscreen falló) */}
-      {showFsHint && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center cursor-pointer select-none"
-          style={{ background: 'rgba(0,0,0,0.92)' }}
-          onClick={() => { document.documentElement.requestFullscreen?.().catch(() => {}); setShowFsHint(false); }}
-        >
-          <div className="flex flex-col items-center gap-4 px-12 py-8 bg-black rounded-2xl border-2 border-white/30">
-            <Maximize2 size={40} className="text-white" />
-            <p className="text-white text-xl font-bold">Clic para pantalla completa</p>
-            <p className="text-white/50 text-sm">
-              {/Mac/i.test(navigator.platform) ? 'o presiona Ctrl + Cmd + F' : 'o presiona F11'}
-            </p>
           </div>
         </div>
       )}
