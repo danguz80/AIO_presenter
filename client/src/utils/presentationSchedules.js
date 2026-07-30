@@ -1,10 +1,15 @@
 const STORAGE_KEY = 'aio_presentation_schedules_v1';
 
-function getActiveOrgId() {
+export function getActiveOrgId() {
   try {
+    const token = localStorage.getItem('aio_sync_token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload?.orgId != null) return String(payload.orgId);
+    }
     return localStorage.getItem('aio_org_id') || 'default';
   } catch {
-    return 'default';
+    return localStorage.getItem('aio_org_id') || 'default';
   }
 }
 

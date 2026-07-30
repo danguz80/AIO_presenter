@@ -18,6 +18,7 @@ import OrgSwitcher from '../components/shared/OrgSwitcher';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
 import { APP_VERSION } from '../version';
 import {
+  getActiveOrgId,
   loadPresentationSchedules,
   savePresentationSchedules,
   buildOutputsActivationSchedule,
@@ -95,7 +96,7 @@ function toDateTimeLocalValue(iso) {
 export default function ControllerPage() {
   const { state, actions } = usePresenter();
   const navigate = useNavigate();
-  const activeOrgId = localStorage.getItem('aio_org_id') || 'default';
+  const activeOrgId = getActiveOrgId();
 
   // ── Redirigir a /mobile en móvil ──────────────────────────────────────────
   // 3 capas para cubrir Samsung Fold, iPhone, y UA inusuales:

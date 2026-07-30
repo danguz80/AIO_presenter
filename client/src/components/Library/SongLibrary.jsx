@@ -7,7 +7,7 @@ import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check, Clock, Inf
 import api from '../../hooks/useApi';
 import EventPickerModal from '../shared/EventPickerModal';
 import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions';
-import { buildPresentationSchedule, getPresentationScheduleBadgeMap } from '../../utils/presentationSchedules';
+import { buildPresentationSchedule, getPresentationScheduleBadgeMap, getActiveOrgId } from '../../utils/presentationSchedules';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -218,7 +218,7 @@ function formatRelativeDate(dateStr) {
 
 export default function SongLibrary({ presentationSchedules = [], onCreatePresentationSchedule = null }) {
   const { state, actions } = usePresenter();
-  const activeOrgId = localStorage.getItem('aio_org_id') || 'default';
+  const activeOrgId = getActiveOrgId();
   const isAdmin = (() => {
     try {
       const token = localStorage.getItem('aio_sync_token');
