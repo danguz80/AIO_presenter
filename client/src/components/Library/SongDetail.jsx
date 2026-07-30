@@ -1025,10 +1025,25 @@ export default function SongDetail() {
             className="grid gap-2 min-h-full content-start"
             style={{ gridTemplateColumns: `repeat(${thumbCols}, minmax(0, 1fr))` }}
             onDragOver={e => {
-              if (dragLabel || e.dataTransfer.types.includes('application/aio-media')) e.preventDefault();
+              if (dragLabel || e.dataTransfer.types.includes('application/aio-media') || e.dataTransfer.types.includes('application/aio-slide-reorder')) {
+                e.preventDefault();
+              }
+              // Si se arrastra un slide sobre zona vacía del grid, la inserción será al final.
+              if (e.dataTransfer.types.includes('application/aio-slide-reorder') && e.target === e.currentTarget) {
+                setReorderDropIdx(orderedSlides.length);
+              }
             }}
             onDrop={e => {
               e.preventDefault();
+              const reorderRaw = e.dataTransfer.getData('application/aio-slide-reorder');
+              if (reorderRaw !== '') {
+                const fromIdx = parseInt(reorderRaw, 10);
+                const toIdx = reorderDropIdx ?? orderedSlides.length;
+                handleSlideReorder(fromIdx, toIdx);
+                setDragSlideIdx(null);
+                setReorderDropIdx(null);
+                return;
+              }
               const lbl = e.dataTransfer.getData('text/plain');
               const raw = e.dataTransfer.getData('application/aio-media');
               if (raw) {
@@ -1135,6 +1150,12 @@ export default function SongDetail() {
 
               return (
                 <div key={`${slide.id}-${index}`} style={{ display: 'contents' }}>
+                  {dragSlideIdx !== null && reorderDropIdx === index && (
+                    <div
+                      className="rounded-md border-2 border-dashed border-yellow-400 bg-yellow-500/15"
+                      style={{ aspectRatio: '16/10' }}
+                    />
+                  )}
                   <div
                     onClick={(e) => handleSlideClick(e, slide, index)}
                     onContextMenu={e => openCtx(e, slide, index)}
@@ -1150,7 +1171,9 @@ export default function SongDetail() {
                       if (e.dataTransfer.types.includes('application/aio-slide-reorder')) {
                         e.preventDefault();
                         e.dataTransfer.dropEffect = 'move';
-                        setReorderDropIdx(index);
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const insertAfter = e.clientX > (rect.left + rect.width / 2);
+                        setReorderDropIdx(insertAfter ? index + 1 : index);
                         return;
                       }
                       // Media drag
@@ -1171,7 +1194,8 @@ export default function SongDetail() {
                       const reorderRaw = e.dataTransfer.getData('application/aio-slide-reorder');
                       if (reorderRaw !== '') {
                         const fromIdx = parseInt(reorderRaw, 10);
-                        handleSlideReorder(fromIdx, index);
+                        const toIdx = reorderDropIdx ?? index;
+                        handleSlideReorder(fromIdx, toIdx);
                         setDragSlideIdx(null);
                         setReorderDropIdx(null);
                         return;
@@ -1316,6 +1340,13 @@ export default function SongDetail() {
                 </div>
               );
             })}
+
+            {dragSlideIdx !== null && reorderDropIdx === orderedSlides.length && (
+              <div
+                className="rounded-md border-2 border-dashed border-yellow-400 bg-yellow-500/15"
+                style={{ aspectRatio: '16/10' }}
+              />
+            )}
           </div>
         ) : (
           /* ── Vista de lista ── */
