@@ -316,9 +316,10 @@ export default function SongDetail() {
         slideBackground: getSlideBackground(slide),
       },
       nextSlideData: nextSlide ? {
-        type:    'song',
-        label:   nextSlide.label,
-        content: nextSlide.content,
+        type:            'song',
+        label:           nextSlide.label,
+        content:         nextSlide.content,
+        slideBackground: getSlideBackground(nextSlide),
       } : null,
     });
   }, [actions, orderedSlides, selectedSong?.author, selectedSong?.id, selectedSong?.song_key, selectedSong?.title]);

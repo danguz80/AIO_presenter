@@ -674,7 +674,7 @@ io.on('connection', async (socket) => {
           slideBackground: s.outputConfig.titleBackground || null,
         };
         const bgMedia = s.outputConfig.titleBackground || null;
-        const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content } : null;
+        const nextSD = firstSlide ? { type: 'song', label: firstSlide.label, content: firstSlide.content, slideBackground: firstSlide.slide_background || null } : null;
         live.liveState = { ...live.liveState, backgroundMedia: bgMedia, isBlank: false, slideIndex: -1, slideData: titleSlideData, nextSlideData: nextSD, totalSlides: data.slides.length };
         emitToLiveState('live:state', live.liveState);
         return;
@@ -819,7 +819,7 @@ io.on('connection', async (socket) => {
           isBlank: false,
           slideIndex: 0,
           slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content, slideBackground: bgMedia },
-          nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
+          nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content, slideBackground: nextSlide.slide_background || null } : null,
         };
         emitToLive('live:state', live.liveState);
         return;
@@ -838,7 +838,7 @@ io.on('connection', async (socket) => {
             isBlank: false,
             slideIndex: 0,
             slideData: { type: 'song', songId, slideId: slide.id, songTitle, songKey: songKey || null, label: slide.label, content: slide.content },
-            nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
+            nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content, slideBackground: nextSlide.slide_background || null } : null,
           };
           emitToLive('live:state', live.liveState);
         }
@@ -859,7 +859,7 @@ io.on('connection', async (socket) => {
           isBlank: false,
           slideIndex: -1,
           slideData: { type: 'title', songTitle, songAuthor, songId, songKey: songKey || null },
-          nextSlideData: { type: 'song', label: slides[0].label, content: slides[0].content },
+          nextSlideData: { type: 'song', label: slides[0].label, content: slides[0].content, slideBackground: slides[0].slide_background || null },
         };
         emitToLive('live:state', live.liveState);
         return;
@@ -879,7 +879,7 @@ io.on('connection', async (socket) => {
           type: 'song', songId, slideId: slide.id, songTitle,
           songKey: songKey || null, label: slide.label, content: slide.content,
         },
-        nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content } : null,
+        nextSlideData: nextSlide ? { type: 'song', label: nextSlide.label, content: nextSlide.content, slideBackground: nextSlide.slide_background || null } : null,
       };
       emitToLive('live:state', live.liveState);
     } else {

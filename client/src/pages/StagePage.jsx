@@ -291,6 +291,9 @@ export default function StagePage() {
   const stageVideoTrackerRef = useRef(null);
   const [videoRemainingSec, setVideoRemainingSec] = useState(null);
   const stageVideoName = backgroundMedia?.fileName || backgroundMedia?.name || 'Video';
+  const nextStageMedia = nextSlideData?.slideBackground || null;
+  const nextStageMediaName = nextStageMedia?.fileName || nextStageMedia?.name || 'Sin media siguiente';
+  const nextStageMediaPrefix = nextStageMedia?.mediaType === 'video' ? '▶' : (nextStageMedia?.mediaType === 'image' ? '▪' : '•');
   const showVideoAssist = !isBlank && !showVideo && backgroundMedia?.mediaType === 'video';
   const showVideoCountdownInNextPanel = showNextPanel && showVideoAssist;
 
@@ -383,13 +386,6 @@ export default function StagePage() {
               )}
             </div>
           )}
-          {!showVideo && hasContent && backgroundMedia?.mediaType === 'video' && (
-            <div className="flex flex-col items-center leading-tight max-w-full min-w-0">
-              <span className="text-white font-semibold truncate max-w-full" style={{ fontSize: sz(fontSizeTitle), fontFamily: titleFontFamily }}>
-                ▶ {stageVideoName}
-              </span>
-            </div>
-          )}
           <div />
         </div>
       )}
@@ -449,8 +445,11 @@ export default function StagePage() {
               />
             )}
             {showVideoAssist && (
-              <div className="absolute bottom-2 right-3 px-2 py-1 rounded bg-black/55 border border-white/10">
-                <span className="text-white/85" style={{ fontSize: '0.78rem', fontFamily: fontStyles.fontFamily }}>
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center px-10">
+                <span
+                  className="text-white/88 font-semibold truncate max-w-full"
+                  style={{ fontSize: sz(fontSizeNextSong + 8), fontFamily: titleFontFamily, textShadow: '0 2px 10px rgba(0,0,0,0.75)' }}
+                >
                   ▶ {stageVideoName}
                 </span>
               </div>
@@ -494,7 +493,7 @@ export default function StagePage() {
                     {videoRemainingSec == null ? '--:--' : fmtTimer(videoRemainingSec)}
                   </span>
                   <span className="truncate max-w-full" style={{ color: `${nextColor}bb`, fontSize: sz(fontSizeNextSong) }}>
-                    ▶ {stageVideoName}
+                    {nextStageMediaPrefix} {nextStageMediaName}
                   </span>
                 </div>
               ) : nextSlideData && !isBlank ? (
