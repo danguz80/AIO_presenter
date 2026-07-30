@@ -1,12 +1,13 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { usePresenter }  from '../../context/usePresenter';
 import { useScheduleAdd } from '../../context/ScheduleAddContext';
 import SongFormModal     from './SongFormModal';
 import ImportModal       from './ImportModal';
-import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check, Clock, Info, GalleryThumbnails } from 'lucide-react';
+import { Search, Plus, Music, Trash2, Upload, Loader2, Tag, X, Check, Clock, Info, GalleryThumbnails, CalendarClock } from 'lucide-react';
 import api from '../../hooks/useApi';
 import EventPickerModal from '../shared/EventPickerModal';
 import { addSongToEvent, fetchEventsAround } from '../../utils/eventSongActions';
+import { buildPresentationSchedule, getPresentationScheduleBadgeMap } from '../../utils/presentationSchedules';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -109,6 +110,99 @@ function LabelPickerModal({ selectedSongs, allTags, onClose, onApply, onRefreshT
   );
 }
 
+function SchedulePresentationModal({ song, onClose, onSave }) {
+  const now = new Date();
+  now.setSeconds(0, 0);
+  const defaultLocal = new Date(now.getTime() + 5 * 60 * 1000).toISOString().slice(0, 16);
+  const [startAtLocal, setStartAtLocal] = useState(defaultLocal);
+  const [recurring, setRecurring] = useState(false);
+  const [pattern, setPattern] = useState('weekly');
+  const [interval, setIntervalValue] = useState(1);
+  const [untilLocal, setUntilLocal] = useState('');
+
+  const handleSave = () => {
+    if (!startAtLocal) return;
+    onSave(buildPresentationSchedule({
+      song,
+      startAtLocal,
+      recurring,
+      pattern,
+      interval,
+      untilLocal: untilLocal || null,
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div className="w-[430px] max-w-[95vw] bg-surface-800 border border-surface-600 rounded-xl shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-surface-700">
+          <p className="text-xs text-zinc-400 uppercase tracking-wider">Programar presentación</p>
+          <p className="text-sm text-zinc-100 font-semibold truncate">{song?.title}</p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-xs text-zinc-400 block mb-1">Fecha y hora de inicio</label>
+            <input
+              type="datetime-local"
+              value={startAtLocal}
+              onChange={e => setStartAtLocal(e.target.value)}
+              className="w-full bg-surface-700 border border-surface-600 rounded px-3 py-2 text-sm text-zinc-100"
+            />
+          </div>
+
+          <div className="rounded-lg border border-surface-700 p-3 space-y-3">
+            <label className="flex items-center gap-2 text-sm text-zinc-200">
+              <input type="checkbox" checked={recurring} onChange={e => setRecurring(e.target.checked)} />
+              Programación recurrente
+            </label>
+            {recurring && (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Patrón</label>
+                    <select
+                      value={pattern}
+                      onChange={e => setPattern(e.target.value)}
+                      className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-2 text-sm text-zinc-100"
+                    >
+                      <option value="daily">Diario</option>
+                      <option value="weekly">Semanal</option>
+                      <option value="monthly">Mensual</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-zinc-400 block mb-1">Cada</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={interval}
+                      onChange={e => setIntervalValue(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-full bg-surface-700 border border-surface-600 rounded px-2 py-2 text-sm text-zinc-100"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-zinc-400 block mb-1">Finaliza (opcional)</label>
+                  <input
+                    type="datetime-local"
+                    value={untilLocal}
+                    onChange={e => setUntilLocal(e.target.value)}
+                    className="w-full bg-surface-700 border border-surface-600 rounded px-3 py-2 text-sm text-zinc-100"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="px-4 py-3 border-t border-surface-700 flex items-center justify-end gap-2">
+          <button onClick={onClose} className="px-3 py-1.5 text-xs rounded bg-surface-700 text-zinc-300 hover:bg-surface-600">Cancelar</button>
+          <button onClick={handleSave} className="px-3 py-1.5 text-xs rounded bg-accent text-white hover:bg-accent/90">Guardar programación</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Componente principal ─────────────────────────────────────────────────────
 function formatRelativeDate(dateStr) {
   if (!dateStr) return null;
@@ -122,7 +216,7 @@ function formatRelativeDate(dateStr) {
   return d.toLocaleDateString('es', { day: 'numeric', month: 'short', year: diff > 86400 * 365 ? 'numeric' : undefined });
 }
 
-export default function SongLibrary() {
+export default function SongLibrary({ presentationSchedules = [], onCreatePresentationSchedule = null }) {
   const { state, actions } = usePresenter();
   const isAdmin = (() => {
     try {
@@ -156,10 +250,12 @@ export default function SongLibrary() {
   const [eventPickerEvents, setEventPickerEvents] = useState([]);
   const [eventTargetSong, setEventTargetSong] = useState(null);
   const [eventActionMsg, setEventActionMsg] = useState('');
+  const [scheduleTargetSong, setScheduleTargetSong] = useState(null);
   const longPressTimerRef = useRef(null);
   const longPressOpenedRef = useRef(false);
   const touchStartRef = useRef({ x: 0, y: 0 });
   const { fn: addToOpenEventFn } = useScheduleAdd() ?? {};
+  const scheduleBadgeMap = useMemo(() => getPresentationScheduleBadgeMap(presentationSchedules), [presentationSchedules]);
 
   // Cargar todas las etiquetas al montar
   useEffect(() => {
@@ -388,6 +484,22 @@ export default function SongLibrary() {
     }
   }, [eventTargetSong, contextMenu]);
 
+  const openScheduleModal = useCallback(() => {
+    const song = contextMenu?.song;
+    if (!song) return;
+    const tags = song.tags || [];
+    const isSongItem = tags.includes('Canciones');
+    if (isSongItem) return;
+    setScheduleTargetSong(song);
+    setContextMenu(null);
+  }, [contextMenu]);
+
+  const handleSaveSchedule = useCallback((schedule) => {
+    onCreatePresentationSchedule?.(schedule);
+    setScheduleTargetSong(null);
+    setEventActionMsg(`Programación guardada para "${schedule.songTitle}"`);
+  }, [onCreatePresentationSchedule]);
+
   useEffect(() => {
     if (!eventActionMsg) return;
     const t = setTimeout(() => setEventActionMsg(''), 2400);
@@ -602,6 +714,13 @@ export default function SongLibrary() {
                     )}
                   </div>
 
+                  {scheduleBadgeMap.get(String(song.id)) ? (
+                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 flex items-center gap-1">
+                      <CalendarClock size={10} />
+                      {scheduleBadgeMap.get(String(song.id))}
+                    </span>
+                  ) : null}
+
                   {/* Acciones hover (solo cuando no hay selección activa) */}
                   {selectedIds.size === 0 && isAdmin && (
                     <div className="hidden group-hover:flex items-center gap-1">
@@ -658,7 +777,7 @@ export default function SongLibrary() {
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-3 py-2 border-b border-surface-700">
-            <p className="text-xs text-zinc-400">Canción</p>
+            <p className="text-xs text-zinc-400">{(contextMenu.song?.tags || []).includes('Canciones') ? 'Canción' : 'Presentación'}</p>
             <p className="text-sm text-zinc-100 font-medium truncate">{contextMenu.song?.title}</p>
           </div>
           <button
@@ -676,6 +795,14 @@ export default function SongLibrary() {
           >
             Elegir evento por fecha...
           </button>
+          {!((contextMenu.song?.tags || []).includes('Canciones')) && (
+            <button
+              onClick={openScheduleModal}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-surface-700 text-cyan-300 border-t border-surface-700"
+            >
+              Programar...
+            </button>
+          )}
         </div>
       )}
 
@@ -686,6 +813,14 @@ export default function SongLibrary() {
           loading={eventPickerLoading}
           onClose={() => setEventPickerOpen(false)}
           onPick={addToPickedEvent}
+        />
+      )}
+
+      {scheduleTargetSong && (
+        <SchedulePresentationModal
+          song={scheduleTargetSong}
+          onClose={() => setScheduleTargetSong(null)}
+          onSave={handleSaveSchedule}
         />
       )}
     </>

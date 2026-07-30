@@ -12,11 +12,19 @@ import SongFormModal   from '../components/Library/SongFormModal';
 import { ScheduleAddProvider } from '../context/ScheduleAddContext';
 import { useScheduleAdd }      from '../context/ScheduleAddContext';
 import { QRCodeSVG } from 'qrcode.react';
-import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck, MessageSquare } from 'lucide-react';
+import { Wifi, WifiOff, Music, BookOpen, Film, Smartphone, X, CalendarDays, ChevronLeft, ChevronRight, Clock, RefreshCw, Plus, Pencil, ChevronUp, ChevronDown, Settings, Bookmark, Minus, LayoutTemplate, GripVertical, CheckCircle2, Circle, SkipForward, Save, Check, Home, Music2, ShieldCheck, MessageSquare, CalendarClock, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import OrgSwitcher from '../components/shared/OrgSwitcher';
 import { forceRefreshApp } from '../utils/forceRefreshApp';
 import { APP_VERSION } from '../version';
+import {
+  loadPresentationSchedules,
+  savePresentationSchedules,
+  getDueOccurrence,
+  getNextOccurrence,
+  describeRecurrence,
+  formatScheduleDate,
+} from '../utils/presentationSchedules';
 
 const BUILD_VERSION = APP_VERSION;
 
@@ -72,7 +80,7 @@ function fmtDate(d) {
 }
 
 export default function ControllerPage() {
-  const { state } = usePresenter();
+  const { state, actions } = usePresenter();
   const navigate = useNavigate();
 
   // ── Redirigir a /mobile en móvil ──────────────────────────────────────────
@@ -131,7 +139,97 @@ export default function ControllerPage() {
   const [mobileUrl, setMobileUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
+  const [showSchedules, setShowSchedules] = useState(false);
+  const [presentationSchedules, setPresentationSchedules] = useState(() => loadPresentationSchedules());
+  const scheduleRunnerBusyRef = useRef(false);
   const { width: previewWidth, onMouseDown: onPreviewResize } = useResizablePanel(384, 220, 700, true);
+
+  useEffect(() => {
+    savePresentationSchedules(presentationSchedules);
+  }, [presentationSchedules]);
+
+  const projectScheduledPresentation = useCallback(async (songId) => {
+    const detail = await actions.loadSongDetail(songId, { broadcast: true });
+    if (!detail?.slides?.length) return false;
+
+    const slides = detail.slides;
+    const first = slides[0];
+    const second = slides[1] || null;
+    actions.selectSlide(first);
+    actions.showSlide({
+      type: 'song',
+      slides,
+      slideIndex: 0,
+      slideData: {
+        type: 'song',
+        songId: detail.id,
+        slideId: first.id,
+        songTitle: detail.title,
+        songAuthor: detail.author || '',
+        isSong: Array.isArray(detail.tags) ? detail.tags.includes('Canciones') : true,
+        songKey: detail.song_key || null,
+        label: first.label,
+        content: first.content,
+        slideBackground: first.slide_background ?? null,
+      },
+      nextSlideData: second ? {
+        type: 'song',
+        label: second.label,
+        content: second.content,
+        slideBackground: second.slide_background ?? null,
+      } : null,
+    });
+    return true;
+  }, [actions]);
+
+  useEffect(() => {
+    const runDueSchedules = async () => {
+      if (scheduleRunnerBusyRef.current) return;
+      scheduleRunnerBusyRef.current = true;
+      try {
+        const now = new Date();
+        let changed = false;
+        const nextSchedules = [...presentationSchedules];
+
+        for (let i = 0; i < nextSchedules.length; i += 1) {
+          const sch = nextSchedules[i];
+          const dueAt = getDueOccurrence(sch, now);
+          if (!dueAt) continue;
+
+          const ok = await projectScheduledPresentation(sch.songId);
+          if (!ok) continue;
+
+          changed = true;
+          nextSchedules[i] = {
+            ...sch,
+            lastTriggeredAt: dueAt.toISOString(),
+            active: sch?.recurring?.enabled ? sch.active : false,
+            updatedAt: new Date().toISOString(),
+          };
+        }
+
+        if (changed) setPresentationSchedules(nextSchedules);
+      } finally {
+        scheduleRunnerBusyRef.current = false;
+      }
+    };
+
+    runDueSchedules();
+    const id = setInterval(runDueSchedules, 10000);
+    return () => clearInterval(id);
+  }, [presentationSchedules, projectScheduledPresentation]);
+
+  const handleCreatePresentationSchedule = useCallback((schedule) => {
+    setPresentationSchedules(prev => [schedule, ...prev]);
+  }, []);
+
+  const handleToggleSchedule = useCallback((id) => {
+    setPresentationSchedules(prev => prev.map(s => s.id === id ? { ...s, active: !s.active, updatedAt: new Date().toISOString() } : s));
+  }, []);
+
+  const handleDeleteSchedule = useCallback((id) => {
+    setPresentationSchedules(prev => prev.filter(s => s.id !== id));
+  }, []);
 
   // ── Toast: mensajes internos entrantes ────────────────────────────────────
   const [msgToast, setMsgToast] = useState(null);
@@ -294,6 +392,17 @@ export default function ControllerPage() {
           icon={<BookOpen size={13} />}
           label="Biblia"
         />
+        <button
+          onClick={() => setShowSchedules(v => !v)}
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-t transition-colors border-b-2 -mb-px ${
+            showSchedules
+              ? 'text-cyan-300 border-cyan-300 bg-surface-900/50'
+              : 'text-zinc-400 border-transparent hover:text-zinc-200 hover:border-zinc-600'
+          }`}
+        >
+          <CalendarClock size={13} />
+          Programaciones
+        </button>
       </div>
 
       {/* ── Layout principal ── */}
@@ -304,7 +413,10 @@ export default function ControllerPage() {
         {activeTab === 'songs' ? (
           <>
             {/* Columna 1: Biblioteca de canciones (colapsable) */}
-            <CollapsibleLibrary />
+            <CollapsibleLibrary
+              presentationSchedules={presentationSchedules}
+              onCreatePresentationSchedule={handleCreatePresentationSchedule}
+            />
 
             {/* Columna 2: Detalle / Slides + panel multimedia inferior */}
             <main className="flex-1 flex flex-col overflow-hidden border-r border-surface-700">
@@ -385,13 +497,22 @@ export default function ControllerPage() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      {showSchedules && (
+        <SchedulesPanel
+          schedules={presentationSchedules}
+          onClose={() => setShowSchedules(false)}
+          onToggle={handleToggleSchedule}
+          onDelete={handleDeleteSchedule}
+        />
+      )}
     </div>
     </ScheduleAddProvider>
   );
 }
 
 // ─── CollapsibleLibrary ───────────────────────────────────────────
-function CollapsibleLibrary() {
+function CollapsibleLibrary({ presentationSchedules = [], onCreatePresentationSchedule = null }) {
   const [open, setOpen] = useState(false);
   const { width, onMouseDown } = useResizablePanel(288, 160, 520);
 
@@ -424,7 +545,10 @@ function CollapsibleLibrary() {
           <ChevronLeft size={14} />
         </button>
       </div>
-      <SongLibrary />
+      <SongLibrary
+        presentationSchedules={presentationSchedules}
+        onCreatePresentationSchedule={onCreatePresentationSchedule}
+      />
       {/* Handle de redimensionado */}
       <div
         onMouseDown={onMouseDown}
@@ -1960,6 +2084,59 @@ function EventsPanel() {
       />
     )}
     </>
+  );
+}
+
+function SchedulesPanel({ schedules, onClose, onToggle, onDelete }) {
+  const activeSchedules = (schedules || []).filter(s => s?.active);
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-50 w-[380px] max-w-[96vw] bg-surface-800 border-l border-surface-700 flex flex-col shadow-2xl">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-surface-700">
+        <div>
+          <p className="text-sm font-semibold text-white">Programaciones</p>
+          <p className="text-xs text-zinc-500">{activeSchedules.length} activas</p>
+        </div>
+        <button onClick={onClose} className="text-zinc-400 hover:text-white"><X size={16} /></button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {activeSchedules.length === 0 ? (
+          <div className="text-center text-zinc-500 text-sm py-10">No hay programaciones activas</div>
+        ) : activeSchedules.map(s => {
+          const nextAt = getNextOccurrence(s, new Date());
+          return (
+            <div key={s.id} className="rounded-xl border border-surface-600 bg-surface-900/40 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm text-zinc-100 font-semibold truncate">{s.songTitle}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{describeRecurrence(s)}</p>
+                </div>
+                <button
+                  onClick={() => onDelete(s.id)}
+                  className="shrink-0 text-zinc-500 hover:text-red-400"
+                  title="Eliminar programación"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="mt-2 text-xs text-zinc-400">
+                <p>Inicio: {formatScheduleDate(s.startAt)}</p>
+                <p>Siguiente: {nextAt ? formatScheduleDate(nextAt.toISOString()) : '—'}</p>
+              </div>
+              <div className="mt-3 flex items-center justify-end">
+                <button
+                  onClick={() => onToggle(s.id)}
+                  className="text-xs px-2.5 py-1 rounded border border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+                >
+                  Desactivar
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
