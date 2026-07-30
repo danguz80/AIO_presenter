@@ -387,6 +387,22 @@ export default function SongDetail() {
     await saveSong(newSlides);
   };
 
+  const deleteSelectedSlides = async () => {
+    const count = selectedSlideEntries.length;
+    if (!count) return;
+    const ok = window.confirm(`¿Eliminar ${count} diapositiva${count !== 1 ? 's' : ''} seleccionada${count !== 1 ? 's' : ''}?`);
+    if (!ok) return;
+
+    const selectedIds = new Set(selectedSlideEntries.map(({ slide }) => slide?.id).filter(Boolean));
+    const selectedRefs = new Set(selectedSlideEntries.map(({ slide }) => slide));
+    const newSlides = selectedSong.slides
+      .filter(s => !(selectedIds.has(s.id) || selectedRefs.has(s)))
+      .map(s => ({ label: s.label, content: s.content, slideBackground: s.slide_background ?? null }));
+
+    await saveSong(newSlides);
+    clearSelection();
+  };
+
   // ── Menú contextual ───────────────────────────────────────────────────────
   const [ctxMenu,  setCtxMenu]  = useState(null);
   const [renaming, setRenaming] = useState(null);
@@ -949,6 +965,13 @@ export default function SongDetail() {
                 })}
               </>
             )}
+            <button
+              type="button"
+              className="px-2 py-1 rounded border border-red-500/40 bg-red-950/30 text-red-300 hover:bg-red-900/40"
+              onClick={deleteSelectedSlides}
+            >
+              Eliminar seleccionadas
+            </button>
             <button
               type="button"
               className="px-2 py-1 rounded border border-surface-600 bg-surface-700 text-zinc-300 hover:bg-surface-600"
