@@ -1163,7 +1163,10 @@ export default function SongDetail() {
                       if (raw) {
                         try {
                           const media = JSON.parse(raw);
-                          handleSlideMediaDrop(index, { mediaType: media.type, filePath: media.path, fileName: media.name, url: media.url });
+                          const mediaObj = { mediaType: media.type, filePath: media.path, fileName: media.name, url: media.url };
+                          // En presentaciones no-canción: cualquier drop de media en la grilla se agrega al final.
+                          if (isPresentationItem) appendMediaSlide(mediaObj);
+                          else handleSlideMediaDrop(index, mediaObj);
                         } catch {}
                         return;
                       }
