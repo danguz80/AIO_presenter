@@ -1839,7 +1839,8 @@ function EventsPanel() {
                     );
                   }
 
-                  // Canción normal
+                  const isSongItem = Array.isArray(s.tags) ? s.tags.includes('Canciones') : s.item_type === 'song';
+
                   const isPlayed   = playedIds.has(s.song_id);
                   const canMark    = isAfterEventTime(selectedEv);
                   return (
@@ -1859,7 +1860,11 @@ function EventsPanel() {
                         className="flex items-center gap-2 px-1.5 py-2 flex-1 min-w-0 hover:bg-accent/15 transition-colors text-left"
                       >
                         <span className="text-[11px] text-zinc-600 w-4 text-right shrink-0">{i + 1}</span>
-                        <Music size={12} className="text-accent shrink-0" />
+                        {isSongItem ? (
+                          <Music size={12} className="text-accent shrink-0" />
+                        ) : (
+                          <LayoutTemplate size={12} className="text-cyan-400 shrink-0" />
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="flex items-baseline gap-1.5 min-w-0">
                             <p className="text-[13px] truncate leading-tight group-hover:text-white transition-colors flex-1 min-w-0">{s.title}</p>
