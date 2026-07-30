@@ -164,6 +164,7 @@ export default function ControllerPage() {
   const projectScheduledPresentation = useCallback(async (songId) => {
     const detail = await actions.loadSongDetail(songId, { broadcast: true });
     if (!detail?.slides?.length) return false;
+    const isSongItem = Array.isArray(detail.tags) ? detail.tags.includes('Canciones') : true;
 
     const slides = detail.slides;
     const first = slides[0];
@@ -173,13 +174,14 @@ export default function ControllerPage() {
       type: 'song',
       slides,
       slideIndex: 0,
+      skipTitleIntercept: !isSongItem,
       slideData: {
         type: 'song',
         songId: detail.id,
         slideId: first.id,
         songTitle: detail.title,
         songAuthor: detail.author || '',
-        isSong: Array.isArray(detail.tags) ? detail.tags.includes('Canciones') : true,
+        isSong: isSongItem,
         songKey: detail.song_key || null,
         label: first.label,
         content: first.content,
