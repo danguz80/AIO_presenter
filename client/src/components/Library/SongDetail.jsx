@@ -297,7 +297,11 @@ export default function SongDetail() {
   const selectedVideoEntries = selectedSlideEntries.filter(({ slide }) => getSlideBackground(slide)?.mediaType === 'video');
 
   const showSelectedSlide = useCallback((slide, index) => {
-    const nextSlide = orderedSlides[index + 1] || null;
+    let nextSlide = orderedSlides[index + 1] || null;
+    const endAction = getSlideBackground(slide)?.endAction || 'loop';
+    if (!nextSlide && endAction === 'first') {
+      nextSlide = orderedSlides[0] || null;
+    }
     actions.selectSlide(slide);
     actions.showSlide({
       type:       'song',
@@ -557,7 +561,11 @@ export default function SongDetail() {
     // Si hay siguiente slide en la misma canción, navegar normalmente
     if (nextIndex !== null && nextIndex !== currentIndex) {
       const slide = slides[nextIndex];
-      const nextSlide = slides[nextIndex + 1] || null;
+      let nextSlide = slides[nextIndex + 1] || null;
+      const endAction = (slide.slide_background?.endAction || slide.slideBackground?.endAction || 'loop');
+      if (!nextSlide && endAction === 'first') {
+        nextSlide = slides[0] || null;
+      }
       setLocalSelectedKey(`${slide.id}-${nextIndex}`);
       actions.selectSlide(slide);
       actions.showSlide({

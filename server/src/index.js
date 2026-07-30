@@ -868,7 +868,11 @@ io.on('connection', async (socket) => {
       if (newIndex === slideIndex) return;
       live.currentSong.slideIndex = newIndex;
       const slide     = slides[newIndex];
-      const nextSlide = slides[newIndex + 1] || null;
+      let nextSlide = slides[newIndex + 1] || null;
+      const endAction = slide.slide_background?.endAction || 'loop';
+      if (!nextSlide && endAction === 'first') {
+        nextSlide = slides[0] || null;
+      }
       const bgMedia = slide.slide_background || live.liveState.backgroundMedia;
       live.liveState = {
         ...live.liveState,
