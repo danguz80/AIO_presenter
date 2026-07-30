@@ -95,6 +95,7 @@ function toDateTimeLocalValue(iso) {
 export default function ControllerPage() {
   const { state, actions } = usePresenter();
   const navigate = useNavigate();
+  const activeOrgId = localStorage.getItem('aio_org_id') || 'default';
 
   // ── Redirigir a /mobile en móvil ──────────────────────────────────────────
   // 3 capas para cubrir Samsung Fold, iPhone, y UA inusuales:
@@ -153,14 +154,18 @@ export default function ControllerPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showSchedules, setShowSchedules] = useState(false);
-  const [presentationSchedules, setPresentationSchedules] = useState(() => loadPresentationSchedules());
+  const [presentationSchedules, setPresentationSchedules] = useState(() => loadPresentationSchedules(activeOrgId));
   const [editingSchedule, setEditingSchedule] = useState(null);
   const scheduleRunnerBusyRef = useRef(false);
   const { width: previewWidth, onMouseDown: onPreviewResize } = useResizablePanel(384, 220, 700, true);
 
   useEffect(() => {
-    savePresentationSchedules(presentationSchedules);
-  }, [presentationSchedules]);
+    savePresentationSchedules(presentationSchedules, activeOrgId);
+  }, [presentationSchedules, activeOrgId]);
+
+  useEffect(() => {
+    setPresentationSchedules(loadPresentationSchedules(activeOrgId));
+  }, [activeOrgId]);
 
   const projectScheduledPresentation = useCallback(async (songId) => {
     const detail = await actions.loadSongDetail(songId, { broadcast: true });
@@ -244,13 +249,13 @@ export default function ControllerPage() {
   }, [presentationSchedules, projectScheduledPresentation, activateOutputsFromSchedule]);
 
   const handleCreatePresentationSchedule = useCallback((schedule) => {
-    setPresentationSchedules(prev => [schedule, ...prev]);
-  }, []);
+    setPresentationSchedules(prev => [{ ...schedule, orgId: schedule?.orgId || activeOrgId }, ...prev]);
+  }, [activeOrgId]);
 
   const handleCreateOutputsSchedule = useCallback((scheduleData) => {
-    const schedule = buildOutputsActivationSchedule(scheduleData);
+    const schedule = buildOutputsActivationSchedule({ ...scheduleData, orgId: activeOrgId });
     setPresentationSchedules(prev => [schedule, ...prev]);
-  }, []);
+  }, [activeOrgId]);
 
   const handleToggleSchedule = useCallback((id) => {
     setPresentationSchedules(prev => prev.map(s => s.id === id ? { ...s, active: !s.active, updatedAt: new Date().toISOString() } : s));
@@ -266,13 +271,14 @@ export default function ControllerPage() {
         ? {
             ...s,
             ...updated,
+            orgId: s.orgId || activeOrgId,
             lastTriggeredAt: null,
             updatedAt: new Date().toISOString(),
           }
         : s
     )));
     setEditingSchedule(null);
-  }, []);
+  }, [activeOrgId]);
 
   // ── Toast: mensajes internos entrantes ────────────────────────────────────
   const [msgToast, setMsgToast] = useState(null);

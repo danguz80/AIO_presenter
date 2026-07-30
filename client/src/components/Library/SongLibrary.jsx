@@ -218,6 +218,7 @@ function formatRelativeDate(dateStr) {
 
 export default function SongLibrary({ presentationSchedules = [], onCreatePresentationSchedule = null }) {
   const { state, actions } = usePresenter();
+  const activeOrgId = localStorage.getItem('aio_org_id') || 'default';
   const isAdmin = (() => {
     try {
       const token = localStorage.getItem('aio_sync_token');
@@ -495,10 +496,10 @@ export default function SongLibrary({ presentationSchedules = [], onCreatePresen
   }, [contextMenu]);
 
   const handleSaveSchedule = useCallback((schedule) => {
-    onCreatePresentationSchedule?.(schedule);
+    onCreatePresentationSchedule?.({ ...schedule, orgId: activeOrgId });
     setScheduleTargetSong(null);
     setEventActionMsg(`Programación guardada para "${schedule.songTitle}"`);
-  }, [onCreatePresentationSchedule]);
+  }, [onCreatePresentationSchedule, activeOrgId]);
 
   useEffect(() => {
     if (!eventActionMsg) return;

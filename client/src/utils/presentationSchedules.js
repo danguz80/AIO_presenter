@@ -1,5 +1,17 @@
 const STORAGE_KEY = 'aio_presentation_schedules_v1';
 
+function getActiveOrgId() {
+  try {
+    return localStorage.getItem('aio_org_id') || 'default';
+  } catch {
+    return 'default';
+  }
+}
+
+function getOrgStorageKey(orgId = getActiveOrgId()) {
+  return `${STORAGE_KEY}:${String(orgId || 'default')}`;
+}
+
 function toIso(value) {
   if (!value) return null;
   const d = value instanceof Date ? value : new Date(value);
@@ -22,25 +34,47 @@ function addByPattern(date, pattern, interval) {
   return next;
 }
 
-export function loadPresentationSchedules() {
+export function loadPresentationSchedules(orgId = getActiveOrgId()) {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    const scopedKey = getOrgStorageKey(orgId);
+    const raw = localStorage.getItem(scopedKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+
+    // Migración suave desde el storage legado global a la org activa.
+    const legacyRaw = localStorage.getItem(STORAGE_KEY);
+    if (!legacyRaw) return [];
+    const parsed = JSON.parse(legacyRaw);
+    const legacy = Array.isArray(parsed) ? parsed : [];
+    const migrated = legacy.map(schedule => ({
+      ...schedule,
+      orgId: schedule?.orgId || orgId || 'default',
+    }));
+    localStorage.setItem(scopedKey, JSON.stringify(migrated));
+    localStorage.removeItem(STORAGE_KEY);
+    return migrated;
   } catch {
     return [];
   }
 }
 
-export function savePresentationSchedules(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.isArray(list) ? list : []));
+export function savePresentationSchedules(list, orgId = getActiveOrgId()) {
+  const scopedKey = getOrgStorageKey(orgId);
+  const normalized = (Array.isArray(list) ? list : []).map(schedule => ({
+    ...schedule,
+    orgId: schedule?.orgId || orgId || 'default',
+  }));
+  localStorage.setItem(scopedKey, JSON.stringify(normalized));
 }
 
-export function buildPresentationSchedule({ song, startAtLocal, recurring, pattern, interval, untilLocal }) {
+export function buildPresentationSchedule({ song, startAtLocal, recurring, pattern, interval, untilLocal, orgId = getActiveOrgId() }) {
   const nowIso = new Date().toISOString();
   return {
     id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
     kind: 'presentation',
+    orgId: orgId || 'default',
     songId: song.id,
     songTitle: song.title || 'Presentacion',
     active: true,
@@ -57,11 +91,12 @@ export function buildPresentationSchedule({ song, startAtLocal, recurring, patte
   };
 }
 
-export function buildOutputsActivationSchedule({ startAtLocal, recurring, pattern, interval, untilLocal }) {
+export function buildOutputsActivationSchedule({ startAtLocal, recurring, pattern, interval, untilLocal, orgId = getActiveOrgId() }) {
   const nowIso = new Date().toISOString();
   return {
     id: (crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`),
     kind: 'outputs',
+    orgId: orgId || 'default',
     title: 'Activar salidas',
     active: true,
     startAt: toIso(startAtLocal),
