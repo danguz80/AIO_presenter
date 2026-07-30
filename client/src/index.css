@@ -23,10 +23,10 @@ html.theme-oscuro {
   --accent-light: 165 180 252;
   --bg-root: #0f0f11;
   /* Colores de etiquetas de sección */
-  --label-a: #9333ea;
-  --label-b: #2563eb;
-  --label-c: #c026d3;
-  --label-d: #e11d48;
+  --label-a: #5f5448;
+  --label-b: #4b5563;
+  --label-c: #6c6258;
+  --label-d: #2f2a24;
   --label-n: #52525b;
 }
 

@@ -49,6 +49,6 @@ export function getLabelColor(label) {
     if (val) return val;
   }
   // Fallback hardcoded (tema oscuro)
-  const fallback = { a: '#9333ea', b: '#2563eb', c: '#c026d3', d: '#e11d48', n: '#52525b' };
+  const fallback = { a: '#5f5448', b: '#4b5563', c: '#6c6258', d: '#2f2a24', n: '#52525b' };
   return fallback[role] ?? '#52525b';
 }
