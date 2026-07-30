@@ -1050,7 +1050,7 @@ export default function SongDetail() {
         }}
       >
         {orderedSlides.length === 0 ? (
-          <p className="text-zinc-600 text-sm p-4">Esta canción no tiene secciones.</p>
+          <p className="text-zinc-600 text-sm p-4">{isPresentationItem ? 'Esta presentación no tiene secciones.' : 'Esta canción no tiene secciones.'}</p>
         ) : viewMode === 'grid' ? (
           <div
             ref={gridRef}

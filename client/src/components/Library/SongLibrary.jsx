@@ -394,12 +394,16 @@ export default function SongLibrary() {
     return () => clearTimeout(t);
   }, [eventActionMsg]);
 
+  const headerLabel = activeTagFilter && activeTagFilter.toLowerCase() !== 'canciones'
+    ? 'Presentaciones'
+    : 'Canciones';
+
   return (
     <>
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-3 border-b border-surface-700">
         <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
-          Canciones
+          {headerLabel}
           <span className="bg-surface-600 text-zinc-300 text-xs font-bold px-1.5 py-0.5 rounded-full">
             {state.songs.length}
           </span>
