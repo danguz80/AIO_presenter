@@ -70,6 +70,7 @@ export default function LivePreview() {
   }, [outputCfg.fontFamily, outputCfg.commentFontFamily, outputCfg.titleFontFamily, outputCfg.artistFontFamily]);
   const { slideData, nextSlideData, isBlank, background } = liveState;
   const principalBgMedia = liveState.slideData?.slideBackground || liveState.backgroundMedia;
+  const stageBgMedia = liveState.slideData?.slideBackground || liveState.backgroundMedia;
 
   // Guard para evitar doble-navegación si la ventana de salida también dispara navigate
   const lastNavigateRef = useRef(0);
@@ -416,6 +417,7 @@ export default function LivePreview() {
             schedule={schedule}
             eventPlays={eventPlays}
             reservasMode={reservasMode}
+            backgroundMedia={stageBgMedia}
           />
           {/* Overlay timer/mensaje en preview escenario — replica StagePage: ocupa la mitad inferior */}
           {(() => {
@@ -491,15 +493,17 @@ export default function LivePreview() {
 }
 
 // ─── Preview fiel al StagePage ────────────────────────────────────────────────
-export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, stageConfig, schedule, eventPlays, reservasMode, fontBase }) {
+export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, live, stageConfig, schedule, eventPlays, reservasMode, fontBase, backgroundMedia }) {
   const {
     lyricsColor = '#ffffff', nextLyricsColor = '#ffffff',
     chordsColor = '#fde047',
+    nextColor = '#22c55e',
     showSideLabel = true, showSongTitle = true, showSlideCounter = true,
     showClock = true, showNextSlide = true, showSectionLabel = true,
     showNextSongBpm = true, showNextSongTimeSig = true,
     showCurrentSongBpm = true, showCurrentSongTimeSig = true,
     currentSongMetaColor = '#a5b4fc',
+    showVideo = true,
     fontSizeCurrentSongMeta = 12,
     slideIndex, totalSlides,
   } = stageConfig;
@@ -562,6 +566,44 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
 
   const showNextPanel = showNextSlide && slideData?.type !== 'bible';
   const isSongSlide = slideData?.isSong ?? true;
+  const hasBgMedia = !isBlank && !!backgroundMedia;
+  const currentSlideEndAction = backgroundMedia?.endAction || slideData?.slideBackground?.endAction || 'loop';
+  const stageVideoName = backgroundMedia?.fileName || backgroundMedia?.name || 'Video';
+  const nextStageMedia = nextSlideData?.slideBackground || null;
+  const nextStageMediaName = nextStageMedia?.fileName || nextStageMedia?.name || 'Sin media siguiente';
+  const nextStageMediaPrefix = nextStageMedia?.mediaType === 'video' ? '▶' : (nextStageMedia?.mediaType === 'image' ? '▪' : '•');
+  const showVideoAssist = !isBlank && !showVideo && backgroundMedia?.mediaType === 'video';
+  const showVideoCountdownInNextPanel = showNextPanel && showVideoAssist;
+  const stageVideoTrackerRef = useRef(null);
+  const [videoRemainingSec, setVideoRemainingSec] = useState(null);
+
+  useEffect(() => {
+    if (!showVideoAssist) {
+      setVideoRemainingSec(null);
+      return;
+    }
+    const videoEl = stageVideoTrackerRef.current;
+    if (!videoEl) return;
+    const updateRemaining = () => {
+      const duration = Number.isFinite(videoEl.duration) ? videoEl.duration : 0;
+      const current = Number.isFinite(videoEl.currentTime) ? videoEl.currentTime : 0;
+      if (duration <= 0) {
+        setVideoRemainingSec(null);
+        return;
+      }
+      setVideoRemainingSec(Math.max(0, Math.ceil(duration - current)));
+    };
+    updateRemaining();
+    videoEl.addEventListener('loadedmetadata', updateRemaining);
+    videoEl.addEventListener('timeupdate', updateRemaining);
+    videoEl.addEventListener('ended', updateRemaining);
+    return () => {
+      videoEl.removeEventListener('loadedmetadata', updateRemaining);
+      videoEl.removeEventListener('timeupdate', updateRemaining);
+      videoEl.removeEventListener('ended', updateRemaining);
+    };
+  }, [showVideoAssist, backgroundMedia?.url]);
+
   const currentSongKey = getSongKey(slideData);
   const currentSongFromSchedule = idx >= 0 ? schedule[idx] : null;
   const currentSongMeta = getNextSongMeta(currentSongFromSchedule, { showBpm: showCurrentSongBpm, showTimeSig: showCurrentSongTimeSig });
@@ -583,11 +625,35 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
 
   return (
     <div className="w-full h-full flex flex-col select-none overflow-hidden"
-      style={{ ...stageBgStyle, fontSize: fontBase ?? '7px' }}>
+      style={{ ...stageBgStyle, fontSize: fontBase ?? '7px', position: 'relative' }}>
+
+      {hasBgMedia && (
+        backgroundMedia.mediaType === 'video'
+          ? (showVideo
+            ? <video key={(backgroundMedia.url || '') + '-stage-preview'} src={backgroundMedia.url} autoPlay loop={currentSlideEndAction === 'loop'} muted playsInline
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+            : null)
+          : <img key={(backgroundMedia.url || '') + '-stage-preview'} src={backgroundMedia.url} alt=""
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000', zIndex: 0 }} />
+      )}
+
+      {showVideoAssist && (
+        <video
+          ref={stageVideoTrackerRef}
+          key={`stage-preview-tracker-${backgroundMedia?.url || ''}`}
+          src={backgroundMedia?.url}
+          autoPlay
+          loop={currentSlideEndAction === 'loop'}
+          muted
+          playsInline
+          preload="auto"
+          style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none', zIndex: -1 }}
+        />
+      )}
 
       {/* Top bar */}
       <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-b border-white/10 relative"
-        style={{ minHeight: '1.7em' }}>
+        style={{ minHeight: '1.7em', zIndex: 1 }}>
         {showSlideCounter && live && (
           <span style={{ color: '#94a3b8', fontSize: '0.85em' }}>
             {(stageConfig.slideIndex ?? 0) + 1}/{stageConfig.totalSlides ?? 1}
@@ -608,7 +674,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
       </div>
 
       {/* Main area: 2 halves */}
-      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0" style={{ position: 'relative', zIndex: 1 }}>
 
         {/* Top half — slide actual */}
         <div className={`flex-1 flex overflow-hidden min-h-0 ${showNextPanel ? 'border-b border-white/10' : ''}`}>
@@ -630,6 +696,16 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
                 stageConfig={stageConfig}
               />
             )}
+            {showVideoAssist && (
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center px-3">
+                <span
+                  className="text-white/90 font-semibold truncate max-w-full"
+                  style={{ fontSize: '1em', textShadow: '0 2px 10px rgba(0,0,0,0.75)' }}
+                >
+                  ▶ {stageVideoName}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -642,7 +718,19 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
             )}
             <div className="flex-1 flex flex-col items-center justify-center px-1.5 py-0.5 overflow-hidden"
             >
-              {nextSlideData && live ? (
+              {showVideoCountdownInNextPanel ? (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 px-1.5 text-center">
+                  <span className="uppercase tracking-widest font-semibold" style={{ color: nextColor, fontSize: '0.45em' }}>
+                    Video en reproducción
+                  </span>
+                  <span className="font-mono font-bold tabular-nums" style={{ color: nextColor, fontSize: '1.4em' }}>
+                    {videoRemainingSec == null ? '--:--' : fmtTimer(videoRemainingSec)}
+                  </span>
+                  <span className="truncate max-w-full" style={{ color: `${nextColor}bb`, fontSize: '0.9em' }}>
+                    {nextStageMediaPrefix} {nextStageMediaName}
+                  </span>
+                </div>
+              ) : nextSlideData && live ? (
                 <MiniSlideContent
                   slideData={nextSlideData}
                   lyricsColor={nextLyricsColor}
@@ -676,7 +764,7 @@ export function StagePreview({ stageBgStyle, slideData, nextSlideData, isBlank, 
 
       {/* Bottom bar — solo nextSong + reloj, igual que StagePage */}
       <div className="shrink-0 flex items-center px-1.5 py-0.5 bg-black/30 border-t border-white/10"
-        style={{ minHeight: '1.7em' }}>
+        style={{ minHeight: '1.7em', zIndex: 1 }}>
         <div className="flex-1" />
         {nextSong && (
           <div className="flex flex-col items-center max-w-[70%] text-center">
