@@ -25,6 +25,38 @@ function abbr(label) {
   return SECTION_ABBR[key] ?? label;
 }
 
+function detectStructureFromSlides(slides = []) {
+  const rows = (Array.isArray(slides) ? slides : []).reduce((acc, slide) => {
+    const lbl = slide?.label?.trim();
+    if (!lbl) return acc;
+    const last = acc[acc.length - 1];
+    if (last === lbl) return acc;
+    acc.push(lbl);
+    return acc;
+  }, []);
+  return rows;
+}
+
+function resolvePdfStructure(songId, data) {
+  const allStructures = Array.isArray(data?.structures) && data.structures.length > 0
+    ? data.structures
+    : (Array.isArray(data?.structure) && data.structure.length > 0
+      ? [{ name: 'Estructura 1', items: data.structure }]
+      : []);
+
+  const rawIdx = Number(localStorage.getItem(`aio_active_struct_${songId}`));
+  const activeIdx = Number.isFinite(rawIdx)
+    ? Math.min(Math.max(rawIdx, 0), Math.max(allStructures.length - 1, 0))
+    : 0;
+
+  const activeItems = allStructures[activeIdx]?.items;
+  if (Array.isArray(activeItems) && activeItems.length > 0) return activeItems;
+
+  if (Array.isArray(data?.structure) && data.structure.length > 0) return data.structure;
+
+  return detectStructureFromSlides(data?.slides ?? []);
+}
+
 // ─── Generación de PDF ────────────────────────────────────────────────────────
 async function generateSetlistPDF(event, allItems, occurrenceDate, spotifyPlaylistUrl, bandConfig) {
   const { jsPDF } = await import('jspdf');
@@ -809,7 +841,7 @@ export default function CancioneroEventDetail() {
   const handleGeneratePDF = async () => {
     setGeneratingPdf(true);
     try {
-      // Enriquecer canciones con bpm, time_sig y structure desde la API
+      // Enriquecer canciones con bpm/time_sig y estructura activa del modo cancionero
       const enriched = await Promise.all(
         allItems.map(async (item) => {
           if (item.item_type === 'separator' || !item.song_id) return item;
@@ -817,10 +849,7 @@ export default function CancioneroEventDetail() {
             const res = await fetch(`${API}/api/songs/${item.song_id}`, { headers: authHeaders() });
             if (!res.ok) return item;
             const data = await res.json();
-            // Usar structure guardada; si no existe, derivar desde slides (labels únicos en orden)
-            const structure = Array.isArray(data.structure) && data.structure.length > 0
-              ? data.structure
-              : (data.slides ?? []).map(sl => sl.label).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+            const structure = resolvePdfStructure(item.song_id, data);
             return { ...item, bpm: data.bpm, time_sig: data.time_sig, _structure: structure };
           } catch { return item; }
         })
